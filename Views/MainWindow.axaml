@@ -11,6 +11,7 @@
         Title="Termox - Professional SSH Client"
         Width="1050" Height="700"
         Background="#2d2d30"
+        FontFamily="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
         WindowStartupLocation="CenterScreen">
 
     <Design.DataContext>
@@ -55,8 +56,8 @@
                     <Border DockPanel.Dock="Right" HorizontalAlignment="Right" VerticalAlignment="Center" 
                             Background="#18181A" BorderBrush="#333" BorderThickness="1" CornerRadius="15" Padding="15,6">
                         <StackPanel Orientation="Horizontal" Spacing="8">
-                            <Ellipse Width="8" Height="8" Fill="{Binding StatusColor}" />
-                            <TextBlock Text="{Binding Status}" Foreground="#e0e0e0" FontSize="12" FontWeight="Medium" VerticalAlignment="Center"/>
+                            <Ellipse Width="8" Height="8" Fill="{Binding SelectedTab.StatusColor, FallbackValue='#888888'}" />
+                            <TextBlock Text="{Binding SelectedTab.Status, FallbackValue='Disconnected'}" Foreground="#e0e0e0" FontSize="12" FontWeight="Medium" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Border>
                 </DockPanel>
@@ -93,14 +94,21 @@
                                         <ListBox.ItemTemplate>
                                             <DataTemplate>
                                                 <Grid ColumnDefinitions="Auto, *, Auto" Margin="0,4" Background="Transparent" ToolTip.Tip="{Binding Host}">
+                                                    <Grid.ContextMenu>
+                                                        <ContextMenu>
+                                                            <MenuItem Header="Connect" Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).ConnectProfileCommand}" CommandParameter="{Binding}" />
+                                                            <Separator />
+                                                            <MenuItem Header="Delete" Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).DeleteProfileCommand}" CommandParameter="{Binding}" Foreground="#f44336" />
+                                                        </ContextMenu>
+                                                    </Grid.ContextMenu>
                                                     <PathIcon Grid.Column="0" Data="M4 4h16v12H5.17L4 17.17V4m0-2c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2H4zm10 10H6v-2h8v2z" Width="16" Height="16" Foreground="#007acc" Margin="0,0,10,0"/>
                                                     <TextBlock Grid.Column="1" Text="{Binding Name}" Foreground="#e0e0e0" FontSize="13" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
                                                     
                                                     <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="5">
-                                                        <Button Command="{Binding ((vm:MainViewModel)DataContext).ConnectProfileCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}" Background="#3e3e42" Foreground="#007acc" Padding="4,2" CornerRadius="3" ToolTip.Tip="Connect">
+                                                        <Button Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).ConnectProfileCommand}" CommandParameter="{Binding}" Background="#3e3e42" Foreground="#007acc" Padding="4,2" CornerRadius="3" ToolTip.Tip="Connect">
                                                             <TextBlock Text="▶" FontSize="10"/>
                                                         </Button>
-                                                        <Button Command="{Binding ((vm:MainViewModel)DataContext).DeleteProfileCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}" Background="#3e3e42" Foreground="#c52a2a" Padding="4,2" CornerRadius="3" ToolTip.Tip="Delete">
+                                                        <Button Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).DeleteProfileCommand}" CommandParameter="{Binding}" Background="#3e3e42" Foreground="#c52a2a" Padding="4,2" CornerRadius="3" ToolTip.Tip="Delete">
                                                             <TextBlock Text="✕" FontSize="10"/>
                                                         </Button>
                                                     </StackPanel>
@@ -122,22 +130,32 @@
                 
                 <!-- Terminal Area with Tab -->
                 <Border Grid.Column="2" Background="#1e1e1e">
-                    <TabControl>
-                        <TabItem Header="Terminal">
-                            <Border Background="#0c0c0c" Padding="5">
-                                <terminal:TerminalControl Model="{Binding TerminalModel}" FontFamily="Consolas, Fira Code, Cascadia Code, Courier New, monospace" FontSize="15">
-                                    <terminal:TerminalControl.ContextMenu>
-                                        <ContextMenu Background="#2d2d30" Foreground="#e0e0e0">
-                                            <MenuItem Header="Copy" Click="CopyMenu_Click">
-                                                <MenuItem.Icon>
-                                                    <PathIcon Data="M19 2h-4.18C14.4.84 13.3 0 12 0c-1.3 0-2.4.84-2.82 2H5c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-7 0c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm7 18H5V4h2v3h10V4h2v16z" Width="14" Height="14" Foreground="#e0e0e0"/>
-                                                </MenuItem.Icon>
-                                            </MenuItem>
-                                        </ContextMenu>
-                                    </terminal:TerminalControl.ContextMenu>
-                                </terminal:TerminalControl>
-                            </Border>
-                        </TabItem>
+                    <TabControl ItemsSource="{Binding Tabs}" SelectedItem="{Binding SelectedTab}">
+                        <TabControl.ItemTemplate>
+                            <DataTemplate DataType="vm:TerminalTabViewModel">
+                                <StackPanel Orientation="Horizontal" Spacing="10">
+                                    <TextBlock Text="{Binding Title}" VerticalAlignment="Center" FontFamily="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" FontSize="13"/>
+                                    <Button Content="✕" Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).RequestCloseTabCommand}" CommandParameter="{Binding}" Classes="closeTabBtn" Foreground="#888" Background="Transparent" BorderThickness="0" Padding="2" FontSize="10" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </DataTemplate>
+                        </TabControl.ItemTemplate>
+                        <TabControl.ContentTemplate>
+                            <DataTemplate DataType="vm:TerminalTabViewModel">
+                                <Border Background="#0c0c0c" Padding="5">
+                                    <terminal:TerminalControl Model="{Binding TerminalModel}" FontFamily="Consolas, Fira Code, Cascadia Code, Courier New, monospace" FontSize="15">
+                                        <terminal:TerminalControl.ContextMenu>
+                                            <ContextMenu Background="#2d2d30" Foreground="#e0e0e0">
+                                                <MenuItem Header="Copy" Click="CopyMenu_Click">
+                                                    <MenuItem.Icon>
+                                                        <PathIcon Data="M19 2h-4.18C14.4.84 13.3 0 12 0c-1.3 0-2.4.84-2.82 2H5c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-7 0c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm7 18H5V4h2v3h10V4h2v16z" Width="14" Height="14" Foreground="#e0e0e0"/>
+                                                    </MenuItem.Icon>
+                                                </MenuItem>
+                                            </ContextMenu>
+                                        </terminal:TerminalControl.ContextMenu>
+                                    </terminal:TerminalControl>
+                                </Border>
+                            </DataTemplate>
+                        </TabControl.ContentTemplate>
                     </TabControl>
                 </Border>
             </Grid>
@@ -189,6 +207,46 @@
                             <Button Content="Test Connection" Command="{Binding TestConnectionCommand}" Background="#5bc0de" Foreground="White" Padding="15,8" CornerRadius="4"/>
                             <Button Content="Save Connection" Command="{Binding SaveConnectionCommand}" IsEnabled="{Binding IsTestSuccessful}" Background="#20a53a" Foreground="White" Padding="15,8" CornerRadius="4"/>
                         </StackPanel>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </Border>
+
+        <!-- Delete Confirmation Modal -->
+        <Border Background="#99000000" IsVisible="{Binding IsDeleteConfirmModalVisible}" ZIndex="101">
+            <Border Background="#2d2d30" BorderBrush="#444" BorderThickness="1" CornerRadius="8" 
+                    HorizontalAlignment="Center" VerticalAlignment="Center" 
+                    Width="350" Padding="25" BoxShadow="0 10 30 0 #55000000">
+                <StackPanel Spacing="20">
+                    <TextBlock Text="Delete Connection?" FontWeight="Bold" FontSize="18" Foreground="#e0e0e0" />
+                    <TextBlock Foreground="#aaaaaa" FontSize="14" TextWrapping="Wrap">
+                        <Run Text="Are you sure you want to delete '"/>
+                        <Run Text="{Binding ProfileToDelete.Name}" FontWeight="SemiBold" Foreground="#e0e0e0"/>
+                        <Run Text="'?"/>
+                    </TextBlock>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10" Margin="0,10,0,0">
+                        <Button Content="Cancel" Command="{Binding CancelDeleteCommand}" Background="#444" Foreground="#e0e0e0" Padding="15,8" CornerRadius="4"/>
+                        <Button Content="Delete" Command="{Binding ConfirmDeleteCommand}" Background="#f44336" Foreground="White" Padding="15,8" CornerRadius="4"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </Border>
+
+        <!-- Close Tab Confirmation Modal -->
+        <Border Background="#99000000" IsVisible="{Binding IsCloseConfirmModalVisible}" ZIndex="102">
+            <Border Background="#2d2d30" BorderBrush="#444" BorderThickness="1" CornerRadius="8" 
+                    HorizontalAlignment="Center" VerticalAlignment="Center" 
+                    Width="350" Padding="25" BoxShadow="0 10 30 0 #55000000">
+                <StackPanel Spacing="20">
+                    <TextBlock Text="Close Terminal Session?" FontWeight="Bold" FontSize="18" Foreground="#e0e0e0" />
+                    <TextBlock Foreground="#aaaaaa" FontSize="14" TextWrapping="Wrap">
+                        <Run Text="Are you sure you want to close the connection to '"/>
+                        <Run Text="{Binding TabToClose.Title}" FontWeight="SemiBold" Foreground="#e0e0e0"/>
+                        <Run Text="'?"/>
+                    </TextBlock>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10" Margin="0,10,0,0">
+                        <Button Content="Cancel" Command="{Binding CancelCloseTabCommand}" Background="#444" Foreground="#e0e0e0" Padding="15,8" CornerRadius="4"/>
+                        <Button Content="Close Session" Command="{Binding ConfirmCloseTabCommand}" Background="#f44336" Foreground="White" Padding="15,8" CornerRadius="4"/>
                     </StackPanel>
                 </StackPanel>
             </Border>

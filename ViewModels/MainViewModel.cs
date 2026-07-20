@@ -36,7 +36,14 @@ public class MainViewModel : INotifyPropertyChanged
 
     public ObservableCollection<SshConnectionProfile> SavedConnections { get; } = new();
 
-    public TerminalControlModel TerminalModel { get; } = new TerminalControlModel();
+    public ObservableCollection<TerminalTabViewModel> Tabs { get; } = new();
+
+    private TerminalTabViewModel? _selectedTab;
+    public TerminalTabViewModel? SelectedTab
+    {
+        get => _selectedTab;
+        set { _selectedTab = value; OnPropertyChanged(); }
+    }
 
     private string _connectionName = "New Connection";
     public string ConnectionName
@@ -80,18 +87,32 @@ public class MainViewModel : INotifyPropertyChanged
         set { _privateKeyPath = value; IsTestSuccessful = false; OnPropertyChanged(); }
     }
 
-    private string _status = "Disconnected";
-    public string Status
+    private bool _isDeleteConfirmModalVisible;
+    public bool IsDeleteConfirmModalVisible
     {
-        get => _status;
-        set { _status = value; OnPropertyChanged(); }
+        get => _isDeleteConfirmModalVisible;
+        set { _isDeleteConfirmModalVisible = value; OnPropertyChanged(); }
     }
 
-    private string _statusColor = "#888888";
-    public string StatusColor
+    private SshConnectionProfile? _profileToDelete;
+    public SshConnectionProfile? ProfileToDelete
     {
-        get => _statusColor;
-        set { _statusColor = value; OnPropertyChanged(); }
+        get => _profileToDelete;
+        set { _profileToDelete = value; OnPropertyChanged(); }
+    }
+
+    private bool _isCloseConfirmModalVisible;
+    public bool IsCloseConfirmModalVisible
+    {
+        get => _isCloseConfirmModalVisible;
+        set { _isCloseConfirmModalVisible = value; OnPropertyChanged(); }
+    }
+
+    private TerminalTabViewModel? _tabToClose;
+    public TerminalTabViewModel? TabToClose
+    {
+        get => _tabToClose;
+        set { _tabToClose = value; OnPropertyChanged(); }
     }
 
     private string _testStatus = "";
@@ -115,6 +136,11 @@ public class MainViewModel : INotifyPropertyChanged
     public ICommand SaveConnectionCommand { get; }
     public ICommand ConnectProfileCommand { get; }
     public ICommand DeleteProfileCommand { get; }
+    public ICommand ConfirmDeleteCommand { get; }
+    public ICommand CancelDeleteCommand { get; }
+    public ICommand RequestCloseTabCommand { get; }
+    public ICommand ConfirmCloseTabCommand { get; }
+    public ICommand CancelCloseTabCommand { get; }
     public ICommand TestConnectionCommand { get; }
 
     private string _configPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Termox", "connections.json");
@@ -122,25 +148,22 @@ public class MainViewModel : INotifyPropertyChanged
     public MainViewModel()
     {
         ConnectCommand = new RelayCommand(Connect);
-        DisconnectCommand = new RelayCommand(Disconnect);
+        DisconnectCommand = new RelayCommand(() => SelectedTab?.DisconnectCommand.Execute(null));
         ShowConnectionModalCommand = new RelayCommand(() => { IsConnectionModalVisible = true; TestStatus = ""; TestStatusColor = "#5bc0de"; IsTestSuccessful = false; });
         HideConnectionModalCommand = new RelayCommand(() => IsConnectionModalVisible = false);
         SaveConnectionCommand = new RelayCommand(SaveConnection);
         ConnectProfileCommand = new RelayCommand<SshConnectionProfile>(ConnectProfile);
-        DeleteProfileCommand = new RelayCommand<SshConnectionProfile>(DeleteProfile);
+        DeleteProfileCommand = new RelayCommand<SshConnectionProfile>(p => { ProfileToDelete = p; IsDeleteConfirmModalVisible = true; });
+        ConfirmDeleteCommand = new RelayCommand(ConfirmDelete);
+        CancelDeleteCommand = new RelayCommand(() => IsDeleteConfirmModalVisible = false);
+        RequestCloseTabCommand = new RelayCommand<TerminalTabViewModel>(t => { TabToClose = t; IsCloseConfirmModalVisible = true; });
+        ConfirmCloseTabCommand = new RelayCommand(ConfirmCloseTab);
+        CancelCloseTabCommand = new RelayCommand(() => IsCloseConfirmModalVisible = false);
         TestConnectionCommand = new RelayCommand(TestConnection);
 
         LoadConnections();
 
-        TerminalModel.UserInput += (_, e) =>
-        {
-            if (_shellStream != null && _sshClient != null && _sshClient.IsConnected)
-            {
-                var bytes = e.Data.ToArray();
-                _shellStream.Write(bytes, 0, bytes.Length);
-                _shellStream.Flush();
-            }
-        };
+
     }
 
     private void LoadConnections()
@@ -240,107 +263,37 @@ public class MainViewModel : INotifyPropertyChanged
         Connect();
     }
 
-    private void DeleteProfile(SshConnectionProfile profile)
+    private void ConfirmDelete()
     {
-        if (profile != null)
+        if (ProfileToDelete != null)
         {
-            SavedConnections.Remove(profile);
+            SavedConnections.Remove(ProfileToDelete);
             try { File.WriteAllText(_configPath, JsonSerializer.Serialize(SavedConnections)); } catch { }
         }
+        IsDeleteConfirmModalVisible = false;
+        ProfileToDelete = null;
+    }
+
+    private void ConfirmCloseTab()
+    {
+        if (TabToClose != null)
+        {
+            TabToClose.CloseTabCommand.Execute(null);
+        }
+        IsCloseConfirmModalVisible = false;
+        TabToClose = null;
     }
 
     private void Connect()
     {
         IsConnectionModalVisible = false;
         
-        if (_sshClient != null && _sshClient.IsConnected) return;
+        var tab = new TerminalTabViewModel(t => Tabs.Remove(t));
+        Tabs.Add(tab);
+        SelectedTab = tab;
 
-        Status = "Connecting...";
-        StatusColor = "#f39c12";
-        
-        Dispatcher.UIThread.Post(() => TerminalModel.Feed($"\r\n\u001b[33m[Termox] Connecting to {Host} on port {Port}...\u001b[0m\r\n"));
-
-        Task.Run(() =>
-        {
-            try
-            {
-                if (!int.TryParse(Port, out int portNumber)) portNumber = 22;
-
-                var safeUsername = Username ?? "";
-                var safePassword = Password ?? "";
-                
-                if (!string.IsNullOrWhiteSpace(PrivateKeyPath) && System.IO.File.Exists(PrivateKeyPath))
-                {
-                    var keyFile = new PrivateKeyFile(PrivateKeyPath, string.IsNullOrEmpty(safePassword) ? null : safePassword);
-                    _sshClient = new SshClient(Host ?? "", portNumber, safeUsername, new[] { keyFile });
-                }
-                else
-                {
-                    _sshClient = new SshClient(Host ?? "", portNumber, safeUsername, safePassword);
-                }
-                
-                _sshClient.Connect();
-
-                _shellStream = _sshClient.CreateShellStream("xterm", 80, 24, 800, 600, 1024);
-
-                Status = "Connected to " + Host;
-                StatusColor = "#4caf50";
-                
-                Dispatcher.UIThread.Post(() => TerminalModel.Feed($"\u001b[32m[Termox] Connection established successfully.\u001b[0m\r\n"));
-
-                ReadOutputAsync();
-            }
-            catch (Exception ex)
-            {
-                Status = "Error: " + ex.Message;
-                StatusColor = "#f44336";
-                Dispatcher.UIThread.Post(() => TerminalModel.Feed($"\u001b[31m[Termox] Connection Failed: {ex.Message}\u001b[0m\r\n"));
-            }
-        });
-    }
-
-    private void Disconnect()
-    {
-        try
-        {
-            _shellStream?.Dispose();
-            _sshClient?.Disconnect();
-            _sshClient?.Dispose();
-        }
-        catch { }
-        finally
-        {
-            _shellStream = null;
-            _sshClient = null;
-            Status = "Disconnected";
-            StatusColor = "#888888";
-        }
-    }
-
-    private async void ReadOutputAsync()
-    {
-        var buffer = new byte[4096];
-        try
-        {
-            while (_sshClient != null && _sshClient.IsConnected && _shellStream != null)
-            {
-                int read = await _shellStream.ReadAsync(buffer, 0, buffer.Length);
-                if (read > 0)
-                {
-                    string text = Encoding.UTF8.GetString(buffer, 0, read);
-                    Dispatcher.UIThread.Post(() => TerminalModel.Feed(text));
-                }
-                else
-                {
-                    break;
-                }
-            }
-        }
-        catch
-        {
-            // stream closed or error
-        }
-        Disconnect();
+        if (!int.TryParse(Port, out int portNumber)) portNumber = 22;
+        tab.Connect(Host ?? "", portNumber, Username ?? "", Password ?? "", PrivateKeyPath ?? "");
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;

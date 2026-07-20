@@ -43,14 +43,14 @@ public partial class MainWindow : Window
 
     private async void CopyMenu_Click(object? sender, RoutedEventArgs e)
     {
-        if (DataContext is MainViewModel vm && vm.TerminalModel.HasSelection)
+        if (DataContext is MainViewModel vm && vm.SelectedTab != null)
         {
-            var text = vm.TerminalModel.SelectedText;
+            var text = vm.SelectedTab.TerminalModel.SelectedText;
             var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
             if (clipboard != null && !string.IsNullOrEmpty(text))
             {
                 await clipboard.SetTextAsync(text);
-                vm.TerminalModel.ClearSelection();
+                vm.SelectedTab.TerminalModel.ClearSelection();
             }
         }
     }
