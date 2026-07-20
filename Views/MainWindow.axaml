@@ -1,0 +1,210 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Termox.ViewModels"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:terminal="using:AvaloniaTerminal"
+        mc:Ignorable="d" d:DesignWidth="1050" d:DesignHeight="700"
+        x:Class="Termox.Views.MainWindow"
+        x:DataType="vm:MainViewModel"
+        Icon="/Assets/avalonia-logo.ico"
+        Title="Termox - Professional SSH Client"
+        Width="1050" Height="700"
+        Background="#2d2d30"
+        WindowStartupLocation="CenterScreen">
+
+    <Design.DataContext>
+        <vm:MainViewModel />
+    </Design.DataContext>
+
+    <Panel>
+        <!-- Base Layout using DockPanel -->
+        <DockPanel>
+            
+            <!-- Top Toolbar mimicking a sleek ribbon interface -->
+            <Border DockPanel.Dock="Top" Background="#212124" BorderBrush="#111" BorderThickness="0,0,0,1" Padding="15,10">
+                <DockPanel>
+                    <!-- Left side tools -->
+                    <StackPanel Orientation="Horizontal" Spacing="2" DockPanel.Dock="Left">
+                        
+                        <Button Classes="ribbonBtn" Command="{Binding ShowConnectionModalCommand}">
+                            <StackPanel Spacing="6" HorizontalAlignment="Center" Margin="10,5">
+                                <PathIcon Data="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" Width="20" Height="20" Foreground="#4caf50"/>
+                                <TextBlock Text="NEW SESSION" FontSize="10" FontWeight="SemiBold" Foreground="#b0b0b0" HorizontalAlignment="Center" LetterSpacing="0.5"/>
+                            </StackPanel>
+                        </Button>
+                        
+                        <Border Width="1" Background="#333" Margin="8,8"/>
+                        
+                        <Button Classes="ribbonBtn" Command="{Binding ConnectCommand}">
+                            <StackPanel Spacing="6" HorizontalAlignment="Center" Margin="10,5">
+                                <PathIcon Data="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z" Width="20" Height="20" Foreground="#2196f3"/>
+                                <TextBlock Text="RECONNECT" FontSize="10" FontWeight="SemiBold" Foreground="#b0b0b0" HorizontalAlignment="Center" LetterSpacing="0.5"/>
+                            </StackPanel>
+                        </Button>
+                        
+                        <Button Classes="ribbonBtn" Command="{Binding DisconnectCommand}">
+                            <StackPanel Spacing="6" HorizontalAlignment="Center" Margin="10,5">
+                                <PathIcon Data="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 11H7v-2h10v2z" Width="20" Height="20" Foreground="#f44336"/>
+                                <TextBlock Text="DISCONNECT" FontSize="10" FontWeight="SemiBold" Foreground="#b0b0b0" HorizontalAlignment="Center" LetterSpacing="0.5"/>
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+
+                    <!-- Right side status badge -->
+                    <Border DockPanel.Dock="Right" HorizontalAlignment="Right" VerticalAlignment="Center" 
+                            Background="#18181A" BorderBrush="#333" BorderThickness="1" CornerRadius="15" Padding="15,6">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Ellipse Width="8" Height="8" Fill="{Binding StatusColor}" />
+                            <TextBlock Text="{Binding Status}" Foreground="#e0e0e0" FontSize="12" FontWeight="Medium" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Border>
+                </DockPanel>
+            </Border>
+            
+            <!-- Status Bar at the bottom -->
+            <Border DockPanel.Dock="Bottom" Background="#007acc" Padding="10,2">
+                <DockPanel>
+                    <TextBlock Text="Ready" Foreground="White" FontSize="12" DockPanel.Dock="Left"/>
+                    <TextBlock Text="Termox v1.0" Foreground="White" FontSize="12" DockPanel.Dock="Right" HorizontalAlignment="Right"/>
+                </DockPanel>
+            </Border>
+
+            <!-- Main Content Area -->
+            <Grid ColumnDefinitions="280, 5, *">
+                <!-- Sidebar (Sessions/Tools) -->
+                <Border Grid.Column="0" Background="#252526" BorderBrush="#1e1e1e" BorderThickness="0,0,1,0">
+                    <TabControl Background="Transparent" Padding="0">
+                        <TabControl.Styles>
+                            <Style Selector="TabItem">
+                                <Setter Property="FontSize" Value="13"/>
+                                <Setter Property="MinHeight" Value="35"/>
+                            </Style>
+                        </TabControl.Styles>
+                        
+                        <TabItem Header="Sessions">
+                            <ScrollViewer>
+                                <StackPanel Margin="15" Spacing="15">
+                                    <Button Content="New Connection" Command="{Binding ShowConnectionModalCommand}" Background="#333337" Foreground="#e0e0e0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Padding="10" CornerRadius="4"/>
+                                    
+                                    <TextBlock Text="Saved Sessions" FontWeight="SemiBold" FontSize="13" Foreground="#888" Margin="0,10,0,0"/>
+                                    
+                                    <ListBox ItemsSource="{Binding SavedConnections}" Background="Transparent" BorderThickness="0" Padding="0">
+                                        <ListBox.ItemTemplate>
+                                            <DataTemplate>
+                                                <Grid ColumnDefinitions="Auto, *, Auto" Margin="0,4" Background="Transparent" ToolTip.Tip="{Binding Host}">
+                                                    <PathIcon Grid.Column="0" Data="M4 4h16v12H5.17L4 17.17V4m0-2c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2H4zm10 10H6v-2h8v2z" Width="16" Height="16" Foreground="#007acc" Margin="0,0,10,0"/>
+                                                    <TextBlock Grid.Column="1" Text="{Binding Name}" Foreground="#e0e0e0" FontSize="13" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                                    
+                                                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="5">
+                                                        <Button Command="{Binding ((vm:MainViewModel)DataContext).ConnectProfileCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}" Background="#3e3e42" Foreground="#007acc" Padding="4,2" CornerRadius="3" ToolTip.Tip="Connect">
+                                                            <TextBlock Text="▶" FontSize="10"/>
+                                                        </Button>
+                                                        <Button Command="{Binding ((vm:MainViewModel)DataContext).DeleteProfileCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}" Background="#3e3e42" Foreground="#c52a2a" Padding="4,2" CornerRadius="3" ToolTip.Tip="Delete">
+                                                            <TextBlock Text="✕" FontSize="10"/>
+                                                        </Button>
+                                                    </StackPanel>
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ListBox.ItemTemplate>
+                                    </ListBox>
+                                </StackPanel>
+                            </ScrollViewer>
+                        </TabItem>
+                        <TabItem Header="Tools">
+                            <TextBlock Text="Network tools coming soon..." Foreground="#888" Margin="15" FontSize="12"/>
+                        </TabItem>
+                    </TabControl>
+                </Border>
+                
+                <!-- Splitter -->
+                <GridSplitter Grid.Column="1" Background="#333" Width="5" HorizontalAlignment="Center" VerticalAlignment="Stretch"/>
+                
+                <!-- Terminal Area with Tab -->
+                <Border Grid.Column="2" Background="#1e1e1e">
+                    <TabControl>
+                        <TabItem Header="Terminal">
+                            <Border Background="#0c0c0c" Padding="5">
+                                <terminal:TerminalControl Model="{Binding TerminalModel}" FontFamily="Consolas, Fira Code, Cascadia Code, Courier New, monospace" FontSize="15">
+                                    <terminal:TerminalControl.ContextMenu>
+                                        <ContextMenu Background="#2d2d30" Foreground="#e0e0e0">
+                                            <MenuItem Header="Copy" Click="CopyMenu_Click">
+                                                <MenuItem.Icon>
+                                                    <PathIcon Data="M19 2h-4.18C14.4.84 13.3 0 12 0c-1.3 0-2.4.84-2.82 2H5c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-7 0c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm7 18H5V4h2v3h10V4h2v16z" Width="14" Height="14" Foreground="#e0e0e0"/>
+                                                </MenuItem.Icon>
+                                            </MenuItem>
+                                        </ContextMenu>
+                                    </terminal:TerminalControl.ContextMenu>
+                                </terminal:TerminalControl>
+                            </Border>
+                        </TabItem>
+                    </TabControl>
+                </Border>
+            </Grid>
+        </DockPanel>
+
+        <!-- Connection Modal Overlay -->
+        <Border Background="#99000000" IsVisible="{Binding IsConnectionModalVisible}" ZIndex="100">
+            <Border Background="#2d2d30" BorderBrush="#444" BorderThickness="1" CornerRadius="8" 
+                    HorizontalAlignment="Center" VerticalAlignment="Center" 
+                    Width="450" Padding="25" BoxShadow="0 10 30 0 #55000000">
+                <StackPanel Spacing="15">
+                    <Grid>
+                        <TextBlock Text="New Connection Profile" FontWeight="Bold" FontSize="18" Foreground="#e0e0e0" VerticalAlignment="Center"/>
+                        <Button Content="✕" Command="{Binding HideConnectionModalCommand}" Background="Transparent" Foreground="#888" HorizontalAlignment="Right" FontSize="16" BorderThickness="0"/>
+                    </Grid>
+                    
+                    <Rectangle Height="1" Fill="#444" Margin="0,5,0,10"/>
+                    
+                    <TextBlock Text="Connection Name" Foreground="#aaaaaa" FontSize="13"/>
+                    <TextBox Text="{Binding ConnectionName}" Background="#1e1e1e" Foreground="#e0e0e0" BorderThickness="1" BorderBrush="#555" Padding="8" CornerRadius="4" PlaceholderText="My Server"/>
+
+                    <TextBlock Text="Remote Host" Foreground="#aaaaaa" FontSize="13" Margin="0,5,0,0"/>
+                    <TextBox Text="{Binding Host}" Background="#1e1e1e" Foreground="#e0e0e0" BorderThickness="1" BorderBrush="#555" Padding="8" CornerRadius="4" PlaceholderText="e.g., example.com"/>
+                    
+                    <Grid ColumnDefinitions="*, 15, *">
+                        <StackPanel Grid.Column="0" Spacing="5">
+                            <TextBlock Text="Username" Foreground="#aaaaaa" FontSize="13"/>
+                            <TextBox Text="{Binding Username}" Background="#1e1e1e" Foreground="#e0e0e0" BorderThickness="1" BorderBrush="#555" Padding="8" CornerRadius="4" PlaceholderText="user"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="2" Spacing="5">
+                            <TextBlock Text="Port" Foreground="#aaaaaa" FontSize="13"/>
+                            <TextBox Text="{Binding Port}" Background="#1e1e1e" Foreground="#e0e0e0" BorderThickness="1" BorderBrush="#555" Padding="8" CornerRadius="4" PlaceholderText="22"/>
+                        </StackPanel>
+                    </Grid>
+
+                    <TextBlock Text="Password" Foreground="#aaaaaa" FontSize="13" Margin="0,5,0,0"/>
+                    <TextBox Text="{Binding Password}" Background="#1e1e1e" Foreground="#e0e0e0" BorderThickness="1" BorderBrush="#555" Padding="8" CornerRadius="4" PasswordChar="•" ToolTip.Tip="Leave blank if key has no password"/>
+                    
+                    <TextBlock Text="Private Key File (Optional)" Foreground="#aaaaaa" FontSize="13" Margin="0,5,0,0"/>
+                    <Grid ColumnDefinitions="*, Auto">
+                        <TextBox Grid.Column="0" Text="{Binding PrivateKeyPath}" Background="#1e1e1e" Foreground="#e0e0e0" BorderThickness="1" BorderBrush="#555" Padding="8" CornerRadius="4" PlaceholderText="/path/to/id_rsa"/>
+                        <Button Grid.Column="1" Content="Browse..." Click="BrowsePrivateKey_Click" Background="#444" Foreground="#e0e0e0" Padding="12,8" Margin="8,0,0,0" CornerRadius="4" ToolTip.Tip="Browse for Private Key"/>
+                    </Grid>
+                    
+                    <StackPanel Margin="0,15,0,0" Spacing="15">
+                        <TextBlock Text="{Binding TestStatus}" Foreground="{Binding TestStatusColor}" TextWrapping="Wrap" HorizontalAlignment="Left" FontSize="13" FontWeight="Medium"/>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10">
+                            <Button Content="Cancel" Command="{Binding HideConnectionModalCommand}" Background="#444" Foreground="#e0e0e0" Padding="15,8" CornerRadius="4"/>
+                            <Button Content="Test Connection" Command="{Binding TestConnectionCommand}" Background="#5bc0de" Foreground="White" Padding="15,8" CornerRadius="4"/>
+                            <Button Content="Save Connection" Command="{Binding SaveConnectionCommand}" IsEnabled="{Binding IsTestSuccessful}" Background="#20a53a" Foreground="White" Padding="15,8" CornerRadius="4"/>
+                        </StackPanel>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </Border>
+    </Panel>
+
+    <!-- Styles -->
+    <Window.Styles>
+        <Style Selector="Button.ribbonBtn">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="Padding" Value="5"/>
+        </Style>
+        <Style Selector="Button.ribbonBtn:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="#333336"/>
+        </Style>
+    </Window.Styles>
+</Window>

@@ -1,0 +1,46 @@
+# Windows image file caches
+Thumbs.db
+ehthumbs.db
+
+# Folder config file
+Desktop.ini
+
+# Recycle Bin used on file shares
+$RECYCLE.BIN/
+
+# Mac OS X hidden files
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Visual Studio / Rider
+.vs/
+.idea/
+.vscode/
+*.user
+*.userosscache
+*.sln.docstates
+*.suo
+
+# Build results
+[Bb]in/
+[Oo]bj/
+[Oo]ut/
+TestResults/
+*.dll
+*.exe
+*.pdb
+*.mdb
+*.ilk
+
+# NuGet Packages
+*.nupkg
+*.snupkg
+**/[Pp]ackages/*
+!**/[Pp]ackages/build/
+*.nuget.props
+*.nuget.targets
+
+# Crash reports
+crash.log
+crash.txt
