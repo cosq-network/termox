@@ -33,10 +33,10 @@ public class MainViewModel : INotifyPropertyChanged
 
     public ObservableCollection<SshConnectionProfile> SavedConnections { get; } = new();
 
-    public ObservableCollection<TerminalTabViewModel> Tabs { get; } = new();
+    public ObservableCollection<ITabViewModel> Tabs { get; } = new();
 
-    private TerminalTabViewModel? _selectedTab;
-    public TerminalTabViewModel? SelectedTab
+    private ITabViewModel? _selectedTab;
+    public ITabViewModel? SelectedTab
     {
         get => _selectedTab;
         set { _selectedTab = value; OnPropertyChanged(); }
@@ -105,8 +105,8 @@ public class MainViewModel : INotifyPropertyChanged
         set { _isCloseConfirmModalVisible = value; OnPropertyChanged(); }
     }
 
-    private TerminalTabViewModel? _tabToClose;
-    public TerminalTabViewModel? TabToClose
+    private ITabViewModel? _tabToClose;
+    public ITabViewModel? TabToClose
     {
         get => _tabToClose;
         set { _tabToClose = value; OnPropertyChanged(); }
@@ -132,6 +132,7 @@ public class MainViewModel : INotifyPropertyChanged
     public ICommand HideConnectionModalCommand { get; }
     public ICommand SaveConnectionCommand { get; }
     public ICommand ConnectProfileCommand { get; }
+    public ICommand ConnectSftpProfileCommand { get; }
     public ICommand DeleteProfileCommand { get; }
     public ICommand ConfirmDeleteCommand { get; }
     public ICommand CancelDeleteCommand { get; }
@@ -150,10 +151,11 @@ public class MainViewModel : INotifyPropertyChanged
         HideConnectionModalCommand = new RelayCommand(() => IsConnectionModalVisible = false);
         SaveConnectionCommand = new RelayCommand(SaveConnection);
         ConnectProfileCommand = new RelayCommand<SshConnectionProfile>(ConnectProfile);
+        ConnectSftpProfileCommand = new RelayCommand<SshConnectionProfile>(ConnectSftpProfile);
         DeleteProfileCommand = new RelayCommand<SshConnectionProfile>(p => { ProfileToDelete = p; IsDeleteConfirmModalVisible = true; });
         ConfirmDeleteCommand = new RelayCommand(ConfirmDelete);
         CancelDeleteCommand = new RelayCommand(() => IsDeleteConfirmModalVisible = false);
-        RequestCloseTabCommand = new RelayCommand<TerminalTabViewModel>(t => { TabToClose = t; IsCloseConfirmModalVisible = true; });
+        RequestCloseTabCommand = new RelayCommand<ITabViewModel>(t => { TabToClose = t; IsCloseConfirmModalVisible = true; });
         ConfirmCloseTabCommand = new RelayCommand(ConfirmCloseTab);
         CancelCloseTabCommand = new RelayCommand(() => IsCloseConfirmModalVisible = false);
         TestConnectionCommand = new RelayCommand(TestConnection);
@@ -264,6 +266,15 @@ public class MainViewModel : INotifyPropertyChanged
         Password = profile.Password;
         PrivateKeyPath = profile.PrivateKeyPath;
         Connect();
+    }
+
+    private void ConnectSftpProfile(SshConnectionProfile profile)
+    {
+        var tab = new SftpTabViewModel(t => Tabs.Remove(t));
+        Tabs.Add(tab);
+        SelectedTab = tab;
+
+        tab.Connect(profile.Host, profile.Port, profile.Username, profile.Password, profile.PrivateKeyPath);
     }
 
     private void ConfirmDelete()

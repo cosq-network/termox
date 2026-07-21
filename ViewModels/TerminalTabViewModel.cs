@@ -10,7 +10,7 @@ using Avalonia.Threading;
 
 namespace Termox.ViewModels;
 
-public class TerminalTabViewModel : INotifyPropertyChanged
+public class TerminalTabViewModel : INotifyPropertyChanged, ITabViewModel
 {
     private SshClient? _sshClient;
     private ShellStream? _shellStream;
