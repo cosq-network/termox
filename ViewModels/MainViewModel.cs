@@ -6,7 +6,7 @@ using System.Collections.ObjectModel;
 using System.IO;
 using System.Text.Json;
 using System.Linq;
-using AvaloniaTerminal;
+using SvcSystems.UI.Terminal;
 using Renci.SshNet;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
@@ -17,9 +17,6 @@ namespace Termox.ViewModels;
 
 public class MainViewModel : INotifyPropertyChanged
 {
-    private SshClient? _sshClient;
-    private ShellStream? _shellStream;
-
     private bool _isConnectionModalVisible;
     public bool IsConnectionModalVisible
     {
@@ -180,7 +177,10 @@ public class MainViewModel : INotifyPropertyChanged
                 }
             }
         }
-        catch { }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to load connections: {ex.Message}");
+        }
     }
 
     private void SaveConnection()
@@ -206,7 +206,10 @@ public class MainViewModel : INotifyPropertyChanged
             if (dir != null && !Directory.Exists(dir)) Directory.CreateDirectory(dir);
             File.WriteAllText(_configPath, JsonSerializer.Serialize(SavedConnections));
         }
-        catch { }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to save connection: {ex.Message}");
+        }
         
         IsConnectionModalVisible = false;
     }
@@ -268,7 +271,8 @@ public class MainViewModel : INotifyPropertyChanged
         if (ProfileToDelete != null)
         {
             SavedConnections.Remove(ProfileToDelete);
-            try { File.WriteAllText(_configPath, JsonSerializer.Serialize(SavedConnections)); } catch { }
+            try { File.WriteAllText(_configPath, JsonSerializer.Serialize(SavedConnections)); } 
+            catch (Exception ex) { Console.WriteLine($"Failed to update connections file on delete: {ex.Message}"); }
         }
         IsDeleteConfirmModalVisible = false;
         ProfileToDelete = null;
@@ -314,7 +318,9 @@ public class RelayCommand : ICommand
         _canExecute = canExecute;
     }
 
+#pragma warning disable CS0067
     public event EventHandler? CanExecuteChanged;
+#pragma warning restore CS0067
 
     public bool CanExecute(object? parameter) => _canExecute == null || _canExecute();
 
@@ -332,7 +338,9 @@ public class RelayCommand<T> : ICommand
         _canExecute = canExecute;
     }
 
+#pragma warning disable CS0067
     public event EventHandler? CanExecuteChanged;
+#pragma warning restore CS0067
 
     public bool CanExecute(object? parameter) => _canExecute == null || (parameter is T t && _canExecute(t));
 

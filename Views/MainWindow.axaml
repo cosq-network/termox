@@ -3,7 +3,7 @@
         xmlns:vm="using:Termox.ViewModels"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:terminal="using:AvaloniaTerminal"
+        xmlns:terminal="using:SvcSystems.UI.Terminal"
         mc:Ignorable="d" d:DesignWidth="1050" d:DesignHeight="700"
         x:Class="Termox.Views.MainWindow"
         x:DataType="vm:MainViewModel"
@@ -22,46 +22,7 @@
         <!-- Base Layout using DockPanel -->
         <DockPanel>
             
-            <!-- Top Toolbar mimicking a sleek ribbon interface -->
-            <Border DockPanel.Dock="Top" Background="#212124" BorderBrush="#111" BorderThickness="0,0,0,1" Padding="15,10">
-                <DockPanel>
-                    <!-- Left side tools -->
-                    <StackPanel Orientation="Horizontal" Spacing="2" DockPanel.Dock="Left">
-                        
-                        <Button Classes="ribbonBtn" Command="{Binding ShowConnectionModalCommand}">
-                            <StackPanel Spacing="6" HorizontalAlignment="Center" Margin="10,5">
-                                <PathIcon Data="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" Width="20" Height="20" Foreground="#4caf50"/>
-                                <TextBlock Text="NEW SESSION" FontSize="10" FontWeight="SemiBold" Foreground="#b0b0b0" HorizontalAlignment="Center" LetterSpacing="0.5"/>
-                            </StackPanel>
-                        </Button>
-                        
-                        <Border Width="1" Background="#333" Margin="8,8"/>
-                        
-                        <Button Classes="ribbonBtn" Command="{Binding ConnectCommand}">
-                            <StackPanel Spacing="6" HorizontalAlignment="Center" Margin="10,5">
-                                <PathIcon Data="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z" Width="20" Height="20" Foreground="#2196f3"/>
-                                <TextBlock Text="RECONNECT" FontSize="10" FontWeight="SemiBold" Foreground="#b0b0b0" HorizontalAlignment="Center" LetterSpacing="0.5"/>
-                            </StackPanel>
-                        </Button>
-                        
-                        <Button Classes="ribbonBtn" Command="{Binding DisconnectCommand}">
-                            <StackPanel Spacing="6" HorizontalAlignment="Center" Margin="10,5">
-                                <PathIcon Data="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 11H7v-2h10v2z" Width="20" Height="20" Foreground="#f44336"/>
-                                <TextBlock Text="DISCONNECT" FontSize="10" FontWeight="SemiBold" Foreground="#b0b0b0" HorizontalAlignment="Center" LetterSpacing="0.5"/>
-                            </StackPanel>
-                        </Button>
-                    </StackPanel>
 
-                    <!-- Right side status badge -->
-                    <Border DockPanel.Dock="Right" HorizontalAlignment="Right" VerticalAlignment="Center" 
-                            Background="#18181A" BorderBrush="#333" BorderThickness="1" CornerRadius="15" Padding="15,6">
-                        <StackPanel Orientation="Horizontal" Spacing="8">
-                            <Ellipse Width="8" Height="8" Fill="{Binding SelectedTab.StatusColor, FallbackValue='#888888'}" />
-                            <TextBlock Text="{Binding SelectedTab.Status, FallbackValue='Disconnected'}" Foreground="#e0e0e0" FontSize="12" FontWeight="Medium" VerticalAlignment="Center"/>
-                        </StackPanel>
-                    </Border>
-                </DockPanel>
-            </Border>
             
             <!-- Status Bar at the bottom -->
             <Border DockPanel.Dock="Bottom" Background="#007acc" Padding="10,2">
@@ -93,7 +54,7 @@
                                     <ListBox ItemsSource="{Binding SavedConnections}" Background="Transparent" BorderThickness="0" Padding="0">
                                         <ListBox.ItemTemplate>
                                             <DataTemplate>
-                                                <Grid ColumnDefinitions="Auto, *, Auto" Margin="0,4" Background="Transparent" ToolTip.Tip="{Binding Host}">
+                                                <Grid ColumnDefinitions="Auto, *" Margin="0,4" Background="Transparent" ToolTip.Tip="{Binding Host}">
                                                     <Grid.ContextMenu>
                                                         <ContextMenu>
                                                             <MenuItem Header="Connect" Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).ConnectProfileCommand}" CommandParameter="{Binding}" />
@@ -101,17 +62,13 @@
                                                             <MenuItem Header="Delete" Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).DeleteProfileCommand}" CommandParameter="{Binding}" Foreground="#f44336" />
                                                         </ContextMenu>
                                                     </Grid.ContextMenu>
-                                                    <PathIcon Grid.Column="0" Data="M4 4h16v12H5.17L4 17.17V4m0-2c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2H4zm10 10H6v-2h8v2z" Width="16" Height="16" Foreground="#007acc" Margin="0,0,10,0"/>
-                                                    <TextBlock Grid.Column="1" Text="{Binding Name}" Foreground="#e0e0e0" FontSize="13" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-                                                    
-                                                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="5">
-                                                        <Button Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).ConnectProfileCommand}" CommandParameter="{Binding}" Background="#3e3e42" Foreground="#007acc" Padding="4,2" CornerRadius="3" ToolTip.Tip="Connect">
-                                                            <TextBlock Text="▶" FontSize="10"/>
-                                                        </Button>
-                                                        <Button Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).DeleteProfileCommand}" CommandParameter="{Binding}" Background="#3e3e42" Foreground="#c52a2a" Padding="4,2" CornerRadius="3" ToolTip.Tip="Delete">
-                                                            <TextBlock Text="✕" FontSize="10"/>
-                                                        </Button>
+                                                    <PathIcon Grid.Column="0" Data="M4 4h16v12H5.17L4 17.17V4m0-2c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2H4zm10 10H6v-2h8v2z" Width="16" Height="16" Foreground="#007acc" Margin="0,0,10,0" VerticalAlignment="Center"/>
+                                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding Name}" Foreground="#e0e0e0" FontSize="13" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                                        <TextBlock Text="{Binding Host}" Foreground="#888888" FontSize="11" TextTrimming="CharacterEllipsis"/>
                                                     </StackPanel>
+                                                    
+
                                                 </Grid>
                                             </DataTemplate>
                                         </ListBox.ItemTemplate>
@@ -253,16 +210,5 @@
         </Border>
     </Panel>
 
-    <!-- Styles -->
-    <Window.Styles>
-        <Style Selector="Button.ribbonBtn">
-            <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="CornerRadius" Value="6"/>
-            <Setter Property="Padding" Value="5"/>
-        </Style>
-        <Style Selector="Button.ribbonBtn:pointerover /template/ ContentPresenter">
-            <Setter Property="Background" Value="#333336"/>
-        </Style>
-    </Window.Styles>
+
 </Window>

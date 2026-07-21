@@ -1,4 +1,4 @@
-using AvaloniaTerminal;
+using SvcSystems.UI.Terminal;
 using Renci.SshNet;
 using System;
 using System.ComponentModel;
@@ -98,7 +98,10 @@ public class TerminalTabViewModel : INotifyPropertyChanged
             _sshClient?.Disconnect();
             _sshClient?.Dispose();
         }
-        catch { }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error during disconnect: {ex.Message}");
+        }
         finally
         {
             _shellStream = null;
@@ -127,7 +130,10 @@ public class TerminalTabViewModel : INotifyPropertyChanged
                 }
             }
         }
-        catch { }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error reading output: {ex.Message}");
+        }
         Disconnect();
     }
 
