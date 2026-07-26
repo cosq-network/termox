@@ -78,12 +78,6 @@
                                             Background="#333337" Foreground="#e0e0e0" Padding="12,6"
                                             CornerRadius="4" FontSize="11"
                                             HorizontalAlignment="Left" />
-                                        <Button Content="Tools"
-                                            Command="{Binding OpenToolsTabCommand}"
-                                            Background="#333337" Foreground="#e0e0e0" Padding="12,6"
-                                            CornerRadius="4" FontSize="11"
-                                            HorizontalAlignment="Left"
-                                            ToolTip.Tip="Network &amp; SSH utilities" />
                                         <Button Content="About"
                                             Command="{Binding ShowAboutDialogCommand}"
                                             Background="#333337" Foreground="#e0e0e0" Padding="12,6"
@@ -165,40 +159,42 @@
                             </ScrollViewer>
                         </TabItem>
                         <TabItem Header="Tools">
-                            <StackPanel Margin="15" Spacing="10">
-                                <TextBlock Text="Network &amp; SSH Utilities"
-                                    Foreground="#888" FontSize="12" />
+                            <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                HorizontalScrollBarVisibility="Disabled">
+                                <WrapPanel Margin="15" Orientation="Horizontal"
+                                    HorizontalAlignment="Left">
                                 <Button Content="Port Scanner"
                                     Command="{Binding OpenPortScannerTabCommand}"
                                     Background="#333337" Foreground="#e0e0e0"
-                                    Padding="10,6" CornerRadius="4"
-                                    FontSize="11" HorizontalAlignment="Left"
+                                    Padding="12,7" Margin="0,0,8,8" CornerRadius="16"
+                                    FontSize="11"
                                     ToolTip.Tip="Open the dedicated port scanner tab" />
                                 <Button Content="Ping Test"
                                     Command="{Binding OpenPingTestTabCommand}"
                                     Background="#333337" Foreground="#e0e0e0"
-                                    Padding="10,6" CornerRadius="4"
-                                    FontSize="11" HorizontalAlignment="Left"
+                                    Padding="12,7" Margin="0,0,8,8" CornerRadius="16"
+                                    FontSize="11"
                                     ToolTip.Tip="Open the dedicated ping test tab" />
                                 <Button Content="SSH Key Generator"
                                     Command="{Binding OpenSshKeyGeneratorTabCommand}"
                                     Background="#333337" Foreground="#e0e0e0"
-                                    Padding="10,6" CornerRadius="4"
-                                    FontSize="11" HorizontalAlignment="Left"
+                                    Padding="12,7" Margin="0,0,8,8" CornerRadius="16"
+                                    FontSize="11"
                                     ToolTip.Tip="Open the dedicated SSH key generator tab" />
                                 <Button Content="Connection Tester"
                                     Command="{Binding OpenConnectionTesterTabCommand}"
                                     Background="#333337" Foreground="#e0e0e0"
-                                    Padding="10,6" CornerRadius="4"
-                                    FontSize="11" HorizontalAlignment="Left"
+                                    Padding="12,7" Margin="0,0,8,8" CornerRadius="16"
+                                    FontSize="11"
                                     ToolTip.Tip="Test all saved connections" />
                                 <Button Content="SSH Endpoint Test"
                                     Command="{Binding OpenSshEndpointTestTabCommand}"
                                     Background="#333337" Foreground="#e0e0e0"
-                                    Padding="10,6" CornerRadius="4"
-                                    FontSize="11" HorizontalAlignment="Left"
+                                    Padding="12,7" Margin="0,0,8,8" CornerRadius="16"
+                                    FontSize="11"
                                     ToolTip.Tip="Test SSH endpoint performance" />
-                            </StackPanel>
+                                </WrapPanel>
+                            </ScrollViewer>
                         </TabItem>
                     </TabControl>
                 </Border>
