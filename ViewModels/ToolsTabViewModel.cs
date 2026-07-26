@@ -10,6 +10,7 @@ using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Input;
 using Avalonia;
@@ -444,16 +445,20 @@ public class ToolsTabViewModel : INotifyPropertyChanged, ITabViewModel
             SshClient testClient;
             var safeUsername = profile.Username ?? "";
             var safePassword = profile.Password ?? "";
+            SshSecurity.EnsurePrivateKeyExists(profile.PrivateKeyPath);
 
             if (!string.IsNullOrWhiteSpace(profile.PrivateKeyPath) && System.IO.File.Exists(profile.PrivateKeyPath))
             {
                 var keyFile = new PrivateKeyFile(profile.PrivateKeyPath, string.IsNullOrEmpty(safePassword) ? null : safePassword);
                 testClient = new SshClient(profile.Host ?? "", profile.Port, safeUsername, new[] { keyFile });
             }
+
             else
             {
                 testClient = new SshClient(profile.Host ?? "", profile.Port, safeUsername, safePassword);
             }
+
+            testClient.ConnectionInfo.Timeout = SshSecurity.ConnectionTimeout;
 
             SshSecurity.ConfigureHostKeyPolicy(testClient, profile.HostKeyFingerprint, null);
 
@@ -461,7 +466,7 @@ public class ToolsTabViewModel : INotifyPropertyChanged, ITabViewModel
             {
                 try
                 {
-                    testClient.Connect();
+                    testClient.ConnectAsync(CancellationToken.None).GetAwaiter().GetResult();
                 }
                 finally
                 {

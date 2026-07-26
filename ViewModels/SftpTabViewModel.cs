@@ -166,6 +166,7 @@ public class SftpTabViewModel : INotifyPropertyChanged, ITabViewModel
             try
             {
                 if (cancellation.IsCancellationRequested) return;
+                SshSecurity.EnsurePrivateKeyExists(privateKeyPath);
                 var safeUsername = username ?? "";
                 var safePassword = password ?? "";
 
@@ -179,6 +180,7 @@ public class SftpTabViewModel : INotifyPropertyChanged, ITabViewModel
                     client = new SftpClient(host, port, safeUsername, safePassword);
                 }
 
+                client.ConnectionInfo.Timeout = SshSecurity.ConnectionTimeout;
                 SshSecurity.ConfigureHostKeyPolicy(client, hostKeyFingerprint, firstSeenHostKey);
                 lock (_connectionLock)
                 {
@@ -186,7 +188,7 @@ public class SftpTabViewModel : INotifyPropertyChanged, ITabViewModel
                     _sftpClient = client;
                 }
 
-                _sftpClient.Connect();
+                client.ConnectAsync(cancellation.Token).GetAwaiter().GetResult();
                 connected = true;
                 if (cancellation.IsCancellationRequested)
                 {
@@ -201,6 +203,7 @@ public class SftpTabViewModel : INotifyPropertyChanged, ITabViewModel
             }
             catch (Exception ex)
             {
+                if (cancellation.IsCancellationRequested) return;
                 lock (_connectionLock)
                 {
                     if (ReferenceEquals(_sftpClient, client)) _sftpClient = null;
@@ -595,6 +598,7 @@ public class SftpTabViewModel : INotifyPropertyChanged, ITabViewModel
 
         Task.Run(() =>
         {
+            _operationGate.Wait();
             try
             {
                 int successCount = 0;
@@ -645,6 +649,10 @@ public class SftpTabViewModel : INotifyPropertyChanged, ITabViewModel
                     StatusColor = "#f44336";
                 });
             }
+            finally
+            {
+                _operationGate.Release();
+            }
         });
     }
 
@@ -681,6 +689,7 @@ public class SftpTabViewModel : INotifyPropertyChanged, ITabViewModel
 
         Task.Run(() =>
         {
+            _operationGate.Wait();
             try
             {
                 _sftpClient.ChangePermissions(file.FullName, newMode);
@@ -700,6 +709,10 @@ public class SftpTabViewModel : INotifyPropertyChanged, ITabViewModel
                 });
                 Console.WriteLine($"SFTP Permission Change Error: {ex.Message}");
             }
+            finally
+            {
+                _operationGate.Release();
+            }
         });
     }
 
@@ -707,6 +720,7 @@ public class SftpTabViewModel : INotifyPropertyChanged, ITabViewModel
     {
         if (_sftpClient == null || !_sftpClient.IsConnected) return;
 
+        _operationGate.Wait();
         try
         {
             // Only preview text files
@@ -742,6 +756,10 @@ public class SftpTabViewModel : INotifyPropertyChanged, ITabViewModel
                 mainVm.FilePreviewName = file.Name;
             });
         }
+        finally
+        {
+            _operationGate.Release();
+        }
     }
 
     private void DeleteSelectedFile(RemoteFileModel selectedFile)
@@ -750,6 +768,7 @@ public class SftpTabViewModel : INotifyPropertyChanged, ITabViewModel
 
         Task.Run(() =>
         {
+            _operationGate.Wait();
             try
             {
                 if (selectedFile.IsDirectory && !selectedFile.IsSymbolicLink)
@@ -781,6 +800,10 @@ public class SftpTabViewModel : INotifyPropertyChanged, ITabViewModel
                     StatusColor = "#f44336";
                 });
                 Console.WriteLine($"SFTP Delete Error: {ex.Message}");
+            }
+            finally
+            {
+                _operationGate.Release();
             }
         });
     }
@@ -836,6 +859,7 @@ public class SftpTabViewModel : INotifyPropertyChanged, ITabViewModel
 
         Task.Run(() =>
         {
+            _operationGate.Wait();
             try
             {
                 int lastSlash = _selectedFile.FullName.LastIndexOf('/');
@@ -861,6 +885,10 @@ public class SftpTabViewModel : INotifyPropertyChanged, ITabViewModel
                     _renameNewName = null;
                 });
                 Console.WriteLine($"SFTP Rename Error: {ex.Message}");
+            }
+            finally
+            {
+                _operationGate.Release();
             }
         });
     }

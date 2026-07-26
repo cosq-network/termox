@@ -1,10 +1,19 @@
 using System;
+using System.IO;
 using Renci.SshNet;
 
 namespace Termox.Services;
 
 public static class SshSecurity
 {
+    public static readonly TimeSpan ConnectionTimeout = TimeSpan.FromSeconds(10);
+
+    public static void EnsurePrivateKeyExists(string? privateKeyPath)
+    {
+        if (!string.IsNullOrWhiteSpace(privateKeyPath) && !File.Exists(privateKeyPath))
+            throw new FileNotFoundException("The configured private key file was not found.", privateKeyPath);
+    }
+
     public static void ConfigureHostKeyPolicy(IBaseClient client, string? expectedFingerprint, Action<string>? firstSeen)
     {
         client.HostKeyReceived += (_, args) =>

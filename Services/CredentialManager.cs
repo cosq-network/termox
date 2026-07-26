@@ -130,10 +130,19 @@ public static class CredentialManager
         // Update an existing item without putting the password in a process argument.
         if (status == ErrSecDuplicateItem)
         {
+            IntPtr existingPasswordData = IntPtr.Zero;
             status = SecKeychainFindGenericPassword(IntPtr.Zero, (uint)service.Length, service,
-                (uint)account.Length, account, out _, out _, out item);
-            if (status == 0)
-                status = SecKeychainItemModifyAttributesAndData(item, IntPtr.Zero, (uint)password.Length, password);
+                (uint)account.Length, account, out _, out existingPasswordData, out item);
+            try
+            {
+                if (status == 0)
+                    status = SecKeychainItemModifyAttributesAndData(item, IntPtr.Zero, (uint)password.Length, password);
+            }
+            finally
+            {
+                if (existingPasswordData != IntPtr.Zero)
+                    SecKeychainItemFreeContent(IntPtr.Zero, existingPasswordData);
+            }
         }
 
         if (item != IntPtr.Zero) CFRelease(item);
@@ -204,9 +213,16 @@ public static class CredentialManager
             process.StandardInput.Close();
         }
 
-        var output = process.StandardOutput.ReadToEnd().Trim();
-        var error = process.StandardError.ReadToEnd().Trim();
-        process.WaitForExit();
+        var outputTask = process.StandardOutput.ReadToEndAsync();
+        var errorTask = process.StandardError.ReadToEndAsync();
+        if (!process.WaitForExit(15_000))
+        {
+            try { process.Kill(entireProcessTree: true); } catch { }
+            throw new TimeoutException($"Secure credential store command '{command}' timed out.");
+        }
+
+        var output = outputTask.GetAwaiter().GetResult().Trim();
+        var error = errorTask.GetAwaiter().GetResult().Trim();
         if (process.ExitCode != 0)
             throw new InvalidOperationException(string.IsNullOrWhiteSpace(error) ? $"{command} failed." : error);
         return output;

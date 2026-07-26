@@ -1,5 +1,6 @@
 using System;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Input;
 using System.Collections.ObjectModel;
@@ -324,6 +325,7 @@ public class MainViewModel : INotifyPropertyChanged
             TestStatus = $"Could not save credentials securely: {ex.Message}";
             TestStatusColor = "#f44336";
             Console.WriteLine($"Failed to save connection: {ex.Message}");
+            return;
         }
 
         IsConnectionModalVisible = false;
@@ -352,22 +354,26 @@ public class MainViewModel : INotifyPropertyChanged
                 SshClient testClient;
                 var safeUsername = Username ?? "";
                 var safePassword = Password ?? "";
+                SshSecurity.EnsurePrivateKeyExists(PrivateKeyPath);
 
                 if (!string.IsNullOrWhiteSpace(PrivateKeyPath) && File.Exists(PrivateKeyPath))
                 {
                     var keyFile = new PrivateKeyFile(PrivateKeyPath, string.IsNullOrEmpty(safePassword) ? null : safePassword);
                     testClient = new SshClient(Host ?? "", portNumber, safeUsername, new[] { keyFile });
                 }
+
                 else
                 {
                     testClient = new SshClient(Host ?? "", portNumber, safeUsername, safePassword);
                 }
 
+                testClient.ConnectionInfo.Timeout = SshSecurity.ConnectionTimeout;
+
                 SshSecurity.ConfigureHostKeyPolicy(testClient, HostKeyFingerprint,
                     fingerprint => HostKeyFingerprint = fingerprint);
                 var connectTask = Task.Run(() =>
                 {
-                    try { testClient.Connect(); }
+                    try { testClient.ConnectAsync(CancellationToken.None).GetAwaiter().GetResult(); }
                     finally
                     {
                         try { testClient.Disconnect(); } catch { }

@@ -4,6 +4,7 @@ using System;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Input;
 using Avalonia.Threading;
@@ -15,6 +16,8 @@ public class TerminalTabViewModel : INotifyPropertyChanged, ITabViewModel
 {
     private SshClient? _sshClient;
     private ShellStream? _shellStream;
+    private readonly object _connectionLock = new();
+    private CancellationTokenSource? _connectionCancellation;
 
     public TerminalControlModel TerminalModel { get; } = new TerminalControlModel();
 
@@ -54,6 +57,12 @@ public class TerminalTabViewModel : INotifyPropertyChanged, ITabViewModel
     public void Connect(string host, int port, string username, string password, string privateKeyPath,
         string? hostKeyFingerprint = null, Action<string>? firstSeenHostKey = null)
     {
+        lock (_connectionLock)
+        {
+            _connectionCancellation?.Cancel();
+            _connectionCancellation = new CancellationTokenSource();
+        }
+        var cancellation = _connectionCancellation;
         ConnectionHost = host;
         ConnectionPort = port;
         ConnectionUsername = username;
@@ -65,26 +74,36 @@ public class TerminalTabViewModel : INotifyPropertyChanged, ITabViewModel
 
         Task.Run(() =>
         {
+            SshClient? client = null;
+            var connected = false;
             try
             {
+                SshSecurity.EnsurePrivateKeyExists(privateKeyPath);
                 var safeUsername = username ?? "";
                 var safePassword = password ?? "";
 
                 if (!string.IsNullOrWhiteSpace(privateKeyPath) && System.IO.File.Exists(privateKeyPath))
                 {
                     var keyFile = new PrivateKeyFile(privateKeyPath, string.IsNullOrEmpty(safePassword) ? null : safePassword);
-                    _sshClient = new SshClient(host, port, safeUsername, new[] { keyFile });
+                    client = new SshClient(host, port, safeUsername, new[] { keyFile });
                 }
                 else
                 {
-                    _sshClient = new SshClient(host, port, safeUsername, safePassword);
+                    client = new SshClient(host, port, safeUsername, safePassword);
                 }
 
-                SshSecurity.ConfigureHostKeyPolicy(_sshClient, hostKeyFingerprint, firstSeenHostKey);
+                client.ConnectionInfo.Timeout = SshSecurity.ConnectionTimeout;
+                SshSecurity.ConfigureHostKeyPolicy(client, hostKeyFingerprint, firstSeenHostKey);
+                lock (_connectionLock)
+                {
+                    if (cancellation.IsCancellationRequested) return;
+                    _sshClient = client;
+                }
 
-                _sshClient.Connect();
+                client.ConnectAsync(cancellation.Token).GetAwaiter().GetResult();
+                connected = true;
 
-                _shellStream = _sshClient.CreateShellStream("xterm", 80, 24, 800, 600, 1024);
+                _shellStream = client.CreateShellStream("xterm", 80, 24, 800, 600, 1024);
 
                 Status = "Connected to " + host;
                 StatusColor = "#4caf50";
@@ -95,20 +114,42 @@ public class TerminalTabViewModel : INotifyPropertyChanged, ITabViewModel
             }
             catch (Exception ex)
             {
+                if (cancellation.IsCancellationRequested) return;
+                lock (_connectionLock)
+                {
+                    if (ReferenceEquals(_sshClient, client)) _sshClient = null;
+                }
                 Status = "Error: " + ex.Message;
                 StatusColor = "#f44336";
                 Dispatcher.UIThread.Post(() => TerminalModel.Feed($"\u001b[31m[Termox] Connection Failed: {ex.Message}\u001b[0m\r\n"));
+            }
+            finally
+            {
+                if (!connected)
+                {
+                    try { client?.Dispose(); } catch { }
+                }
             }
         });
     }
 
     private void Disconnect()
     {
+        lock (_connectionLock) _connectionCancellation?.Cancel();
         try
         {
-            _shellStream?.Dispose();
-            _sshClient?.Disconnect();
-            _sshClient?.Dispose();
+            ShellStream? shell;
+            SshClient? client;
+            lock (_connectionLock)
+            {
+                shell = _shellStream;
+                client = _sshClient;
+                _shellStream = null;
+                _sshClient = null;
+            }
+            shell?.Dispose();
+            client?.Disconnect();
+            client?.Dispose();
         }
         catch (Exception ex)
         {
@@ -116,8 +157,6 @@ public class TerminalTabViewModel : INotifyPropertyChanged, ITabViewModel
         }
         finally
         {
-            _shellStream = null;
-            _sshClient = null;
             Status = "Disconnected";
             StatusColor = "#888888";
         }

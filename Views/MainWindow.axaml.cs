@@ -40,70 +40,80 @@ public partial class MainWindow : Window
 
     private async void BrowsePrivateKey_Click(object? sender, RoutedEventArgs e)
     {
-        var sshDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".ssh");
-        IStorageFolder? startLocation = null;
-        if (Directory.Exists(sshDir))
+        try
         {
-            startLocation = await StorageProvider.TryGetFolderFromPathAsync(new Uri($"file://{sshDir}"));
-        }
+            var sshDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".ssh");
+            IStorageFolder? startLocation = null;
+            if (Directory.Exists(sshDir))
+                startLocation = await StorageProvider.TryGetFolderFromPathAsync(new Uri($"file://{sshDir}"));
 
-        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
-        {
-            Title = "Select Private Key File",
-            AllowMultiple = false,
-            SuggestedStartLocation = startLocation
-        });
-
-        if (files.Count >= 1)
-        {
-            if (DataContext is MainViewModel vm)
+            var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
             {
+                Title = "Select Private Key File",
+                AllowMultiple = false,
+                SuggestedStartLocation = startLocation
+            });
+
+            if (files.Count >= 1 && DataContext is MainViewModel vm)
                 vm.PrivateKeyPath = files[0].Path.LocalPath;
-            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Private key picker failed: {ex.Message}");
         }
     }
 
     private async void CopyMenu_Click(object? sender, RoutedEventArgs e)
     {
-        if (DataContext is MainViewModel vm && vm.SelectedTab is TerminalTabViewModel termTab)
+        try
         {
-            var text = termTab.TerminalModel.SelectedText;
-            var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
-            if (clipboard != null && !string.IsNullOrEmpty(text))
+            if (DataContext is MainViewModel vm && vm.SelectedTab is TerminalTabViewModel termTab)
             {
-                await clipboard.SetTextAsync(text);
-                termTab.TerminalModel.ClearSelection();
+                var text = termTab.TerminalModel.SelectedText;
+                var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
+                if (clipboard != null && !string.IsNullOrEmpty(text))
+                {
+                    await clipboard.SetTextAsync(text);
+                    termTab.TerminalModel.ClearSelection();
+                }
             }
         }
+        catch (Exception ex) { Console.WriteLine($"Clipboard copy failed: {ex.Message}"); }
     }
 
     private async void DownloadFile_Click(object? sender, RoutedEventArgs e)
     {
-        if (sender is Button btn && btn.DataContext is SftpTabViewModel vm)
+        try
         {
-            var selectedItems = btn.CommandParameter as System.Collections.IList;
-            if (selectedItems == null || selectedItems.Count == 0) return;
-
-            var folder = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions { Title = "Select Download Destination" });
-            if (folder.Count > 0)
+            if (sender is Button btn && btn.DataContext is SftpTabViewModel vm)
             {
-                await vm.DownloadFilesAsync(selectedItems, folder[0].Path.LocalPath);
+                var selectedItems = btn.CommandParameter as System.Collections.IList;
+                if (selectedItems == null || selectedItems.Count == 0) return;
+
+                var folder = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions { Title = "Select Download Destination" });
+                if (folder.Count > 0)
+                    await vm.DownloadFilesAsync(selectedItems, folder[0].Path.LocalPath);
             }
         }
+        catch (Exception ex) { Console.WriteLine($"Download action failed: {ex.Message}"); }
     }
 
     private async void UploadFile_Click(object? sender, RoutedEventArgs e)
     {
-        if (sender is Button btn && btn.DataContext is SftpTabViewModel vm)
+        try
         {
-            var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions { AllowMultiple = true, Title = "Select Files to Upload" });
-            if (files.Count > 0)
+            if (sender is Button btn && btn.DataContext is SftpTabViewModel vm)
             {
-                var paths = new System.Collections.Generic.List<string>();
-                foreach (var f in files) paths.Add(f.Path.LocalPath);
-                await vm.UploadFilesAsync(paths);
+                var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions { AllowMultiple = true, Title = "Select Files to Upload" });
+                if (files.Count > 0)
+                {
+                    var paths = new System.Collections.Generic.List<string>();
+                    foreach (var f in files) paths.Add(f.Path.LocalPath);
+                    await vm.UploadFilesAsync(paths);
+                }
             }
         }
+        catch (Exception ex) { Console.WriteLine($"Upload action failed: {ex.Message}"); }
     }
 
     private void SftpFileList_DoubleTapped(object? sender, Avalonia.Input.TappedEventArgs e)

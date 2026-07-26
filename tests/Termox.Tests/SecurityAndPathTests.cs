@@ -70,4 +70,11 @@ public class SecurityAndPathTests
 
         Assert.True(raised);
     }
+
+    [Fact]
+    public void MissingPrivateKeyIsReportedClearly()
+    {
+        Assert.Throws<FileNotFoundException>(() =>
+            SshSecurity.EnsurePrivateKeyExists(Path.Combine(Path.GetTempPath(), "missing-termox-key")));
+    }
 }
