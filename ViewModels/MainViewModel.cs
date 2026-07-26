@@ -10,13 +10,18 @@ using SvcSystems.UI.Terminal;
 using Renci.SshNet;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using System.Reflection;
 using Termox.Models;
+using Termox.Services;
 using Avalonia.Threading;
 
 namespace Termox.ViewModels;
 
 public class MainViewModel : INotifyPropertyChanged
 {
+    public string ApplicationVersion { get; } =
+        Assembly.GetEntryAssembly()?.GetName().Version?.ToString(3) ?? "1.0.0";
+
     private bool _isConnectionModalVisible;
     public bool IsConnectionModalVisible
     {
@@ -32,6 +37,8 @@ public class MainViewModel : INotifyPropertyChanged
     }
 
     public ObservableCollection<SshConnectionProfile> SavedConnections { get; } = new();
+
+    public ObservableCollection<string> Bookmarks { get; } = new();
 
     public ObservableCollection<ITabViewModel> Tabs { get; } = new();
 
@@ -84,6 +91,13 @@ public class MainViewModel : INotifyPropertyChanged
         set { _privateKeyPath = value; IsTestSuccessful = false; OnPropertyChanged(); }
     }
 
+    private string _hostKeyFingerprint = "";
+    public string HostKeyFingerprint
+    {
+        get => _hostKeyFingerprint;
+        set { _hostKeyFingerprint = value; OnPropertyChanged(); }
+    }
+
     private bool _isDeleteConfirmModalVisible;
     public bool IsDeleteConfirmModalVisible
     {
@@ -110,6 +124,69 @@ public class MainViewModel : INotifyPropertyChanged
     {
         get => _tabToClose;
         set { _tabToClose = value; OnPropertyChanged(); }
+    }
+
+    private bool _isRenameModalVisible;
+    public bool IsRenameModalVisible
+    {
+        get => _isRenameModalVisible;
+        set { _isRenameModalVisible = value; OnPropertyChanged(); }
+    }
+
+    private string _renameModalText = "";
+    public string RenameModalText
+    {
+        get => _renameModalText;
+        set { _renameModalText = value; OnPropertyChanged(); }
+    }
+
+    private bool _isFilePropertiesModalVisible;
+    public bool IsFilePropertiesModalVisible
+    {
+        get => _isFilePropertiesModalVisible;
+        set { _isFilePropertiesModalVisible = value; OnPropertyChanged(); }
+    }
+
+    private RemoteFileModel? _selectedFileProperties;
+    public RemoteFileModel? SelectedFileProperties
+    {
+        get => _selectedFileProperties;
+        set { _selectedFileProperties = value; OnPropertyChanged(); }
+    }
+
+    private bool _isFilePreviewModalVisible;
+    public bool IsFilePreviewModalVisible
+    {
+        get => _isFilePreviewModalVisible;
+        set { _isFilePreviewModalVisible = value; OnPropertyChanged(); }
+    }
+
+    private string _filePreviewContent = "";
+    public string FilePreviewContent
+    {
+        get => _filePreviewContent;
+        set { _filePreviewContent = value; OnPropertyChanged(); }
+    }
+
+    private string _filePreviewName = "";
+    public string FilePreviewName
+    {
+        get => _filePreviewName;
+        set { _filePreviewName = value; OnPropertyChanged(); }
+    }
+
+    private bool _isPermissionsModalVisible;
+    public bool IsPermissionsModalVisible
+    {
+        get => _isPermissionsModalVisible;
+        set { _isPermissionsModalVisible = value; OnPropertyChanged(); }
+    }
+
+    private RemoteFileModel? _selectedFileForPermissions;
+    public RemoteFileModel? SelectedFileForPermissions
+    {
+        get => _selectedFileForPermissions;
+        set { _selectedFileForPermissions = value; OnPropertyChanged(); }
     }
 
     private string _testStatus = "";
@@ -140,12 +217,20 @@ public class MainViewModel : INotifyPropertyChanged
     public ICommand ConfirmCloseTabCommand { get; }
     public ICommand CancelCloseTabCommand { get; }
     public ICommand TestConnectionCommand { get; }
+    public ICommand AddBookmarkCommand { get; }
+    public ICommand RemoveBookmarkCommand { get; }
+    public ICommand ClearAllBookmarksCommand { get; }
+    public ICommand ShowFilePropertiesCommand { get; }
+    public ICommand PreviewFileCommand { get; }
+    public ICommand EditFilePermissionsCommand { get; }
 
     private string _configPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Termox", "connections.json");
+    private string _bookmarksPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Termox", "bookmarks.json");
+    private string _sessionsPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Termox", "sessions.json");
 
     public MainViewModel()
     {
-        ConnectCommand = new RelayCommand(Connect);
+        ConnectCommand = new RelayCommand(() => Connect());
         DisconnectCommand = new RelayCommand(() => SelectedTab?.DisconnectCommand.Execute(null));
         ShowConnectionModalCommand = new RelayCommand(() => { IsConnectionModalVisible = true; TestStatus = ""; TestStatusColor = "#5bc0de"; IsTestSuccessful = false; });
         HideConnectionModalCommand = new RelayCommand(() => IsConnectionModalVisible = false);
@@ -159,10 +244,18 @@ public class MainViewModel : INotifyPropertyChanged
         ConfirmCloseTabCommand = new RelayCommand(ConfirmCloseTab);
         CancelCloseTabCommand = new RelayCommand(() => IsCloseConfirmModalVisible = false);
         TestConnectionCommand = new RelayCommand(TestConnection);
+        AddBookmarkCommand = new RelayCommand<string>(AddBookmark);
+        RemoveBookmarkCommand = new RelayCommand<string>(RemoveBookmark);
+        ClearAllBookmarksCommand = new RelayCommand(ClearAllBookmarks);
+        ShowFilePropertiesCommand = new RelayCommand<RemoteFileModel>(ShowFileProperties);
+        PreviewFileCommand = new RelayCommand<RemoteFileModel>(PreviewFile);
+        EditFilePermissionsCommand = new RelayCommand<RemoteFileModel>(EditFilePermissions);
+        OpenToolsTabCommand = new RelayCommand(OpenToolsTab);
+        ShowAboutDialogCommand = new RelayCommand(() => IsAboutDialogVisible = true);
 
         LoadConnections();
-
-
+        LoadBookmarks();
+        LoadAndRestoreSessions();
     }
 
     private void LoadConnections()
@@ -175,7 +268,12 @@ public class MainViewModel : INotifyPropertyChanged
                 var profiles = JsonSerializer.Deserialize<SshConnectionProfile[]>(json);
                 if (profiles != null)
                 {
-                    foreach (var p in profiles) SavedConnections.Add(p);
+                    foreach (var p in profiles)
+                    {
+                        // Decrypt passwords after loading
+                        var decrypted = CredentialManager.DecryptProfile(p);
+                        SavedConnections.Add(decrypted);
+                    }
                 }
             }
         }
@@ -187,37 +285,61 @@ public class MainViewModel : INotifyPropertyChanged
 
     private void SaveConnection()
     {
+        if (string.IsNullOrWhiteSpace(Host) || !int.TryParse(Port, out var parsedPort) || parsedPort is < 1 or > 65535 ||
+            string.IsNullOrWhiteSpace(Username))
+        {
+            TestStatus = "Host, username, and a valid port (1-65535) are required.";
+            TestStatusColor = "#f44336";
+            return;
+        }
+
         var profile = new SshConnectionProfile
         {
             Name = string.IsNullOrWhiteSpace(ConnectionName) ? Host : ConnectionName,
             Host = Host,
-            Port = int.TryParse(Port, out int p) ? p : 22,
+            Port = parsedPort,
             Username = Username,
             Password = Password,
-            PrivateKeyPath = PrivateKeyPath
+            PrivateKeyPath = PrivateKeyPath,
+            HostKeyFingerprint = HostKeyFingerprint
         };
 
         var existing = SavedConnections.FirstOrDefault(c => c.Name == profile.Name && c.Host == profile.Host);
         if (existing != null) SavedConnections.Remove(existing);
-        
+
         SavedConnections.Add(profile);
 
         try
         {
             var dir = Path.GetDirectoryName(_configPath);
             if (dir != null && !Directory.Exists(dir)) Directory.CreateDirectory(dir);
-            File.WriteAllText(_configPath, JsonSerializer.Serialize(SavedConnections));
+
+            // Encrypt passwords before saving
+            SaveProfilesToDisk();
         }
         catch (Exception ex)
         {
+            SavedConnections.Remove(profile);
+            if (existing != null) SavedConnections.Add(existing);
+            TestStatus = $"Could not save credentials securely: {ex.Message}";
+            TestStatusColor = "#f44336";
             Console.WriteLine($"Failed to save connection: {ex.Message}");
         }
-        
+
         IsConnectionModalVisible = false;
     }
 
     private void TestConnection()
     {
+        if (string.IsNullOrWhiteSpace(Host) || string.IsNullOrWhiteSpace(Username) ||
+            !int.TryParse(Port, out var parsedPort) || parsedPort is < 1 or > 65535)
+        {
+            TestStatus = "Host, username, and a valid port (1-65535) are required.";
+            TestStatusColor = "#f44336";
+            IsTestSuccessful = false;
+            return;
+        }
+
         TestStatus = "Testing connection...";
         TestStatusColor = "#f39c12";
         IsTestSuccessful = false;
@@ -225,12 +347,12 @@ public class MainViewModel : INotifyPropertyChanged
         {
             try
             {
-                if (!int.TryParse(Port, out int portNumber)) portNumber = 22;
+                int portNumber = parsedPort;
 
                 SshClient testClient;
                 var safeUsername = Username ?? "";
                 var safePassword = Password ?? "";
-                
+
                 if (!string.IsNullOrWhiteSpace(PrivateKeyPath) && File.Exists(PrivateKeyPath))
                 {
                     var keyFile = new PrivateKeyFile(PrivateKeyPath, string.IsNullOrEmpty(safePassword) ? null : safePassword);
@@ -240,10 +362,28 @@ public class MainViewModel : INotifyPropertyChanged
                 {
                     testClient = new SshClient(Host ?? "", portNumber, safeUsername, safePassword);
                 }
-                
-                testClient.Connect();
-                testClient.Disconnect();
-                testClient.Dispose();
+
+                SshSecurity.ConfigureHostKeyPolicy(testClient, HostKeyFingerprint,
+                    fingerprint => HostKeyFingerprint = fingerprint);
+                var connectTask = Task.Run(() =>
+                {
+                    try { testClient.Connect(); }
+                    finally
+                    {
+                        try { testClient.Disconnect(); } catch { }
+                        testClient.Dispose();
+                    }
+                });
+                var completed = Task.WhenAny(connectTask, Task.Delay(TimeSpan.FromSeconds(10))).GetAwaiter().GetResult();
+                if (completed != connectTask)
+                {
+                    try { testClient.Dispose(); } catch { }
+                    _ = connectTask.ContinueWith(t => _ = t.Exception, TaskContinuationOptions.OnlyOnFaulted);
+                    TestStatus = "Test timed out after 10 seconds.";
+                    TestStatusColor = "#f39c12";
+                    return;
+                }
+                connectTask.GetAwaiter().GetResult();
 
                 TestStatus = "Test Successful!";
                 TestStatusColor = "#4caf50";
@@ -265,16 +405,20 @@ public class MainViewModel : INotifyPropertyChanged
         Username = profile.Username;
         Password = profile.Password;
         PrivateKeyPath = profile.PrivateKeyPath;
-        Connect();
+        HostKeyFingerprint = profile.HostKeyFingerprint;
+        Connect(profile.Id);
     }
 
     private void ConnectSftpProfile(SshConnectionProfile profile)
     {
-        var tab = new SftpTabViewModel(t => Tabs.Remove(t));
+        var tab = new SftpTabViewModel(t => { Tabs.Remove(t); SaveCurrentSessions(); });
         Tabs.Add(tab);
         SelectedTab = tab;
 
-        tab.Connect(profile.Host, profile.Port, profile.Username, profile.Password, profile.PrivateKeyPath);
+        tab.ConnectionProfileId = profile.Id;
+        tab.Connect(profile.Host, profile.Port, profile.Username, profile.Password, profile.PrivateKeyPath,
+            profile.HostKeyFingerprint, fingerprint => RememberHostKey(profile, fingerprint));
+        SaveCurrentSessions();
     }
 
     private void ConfirmDelete()
@@ -282,7 +426,10 @@ public class MainViewModel : INotifyPropertyChanged
         if (ProfileToDelete != null)
         {
             SavedConnections.Remove(ProfileToDelete);
-            try { File.WriteAllText(_configPath, JsonSerializer.Serialize(SavedConnections)); } 
+            try
+            {
+                SaveProfilesToDisk();
+            }
             catch (Exception ex) { Console.WriteLine($"Failed to update connections file on delete: {ex.Message}"); }
         }
         IsDeleteConfirmModalVisible = false;
@@ -297,25 +444,251 @@ public class MainViewModel : INotifyPropertyChanged
         }
         IsCloseConfirmModalVisible = false;
         TabToClose = null;
+        SaveCurrentSessions();
     }
 
-    private void Connect()
+    private void Connect(string? profileId = null)
     {
+        if (string.IsNullOrWhiteSpace(Host) || string.IsNullOrWhiteSpace(Username) ||
+            !int.TryParse(Port, out var portNumber) || portNumber is < 1 or > 65535)
+        {
+            TestStatus = "Host, username, and a valid port (1-65535) are required.";
+            TestStatusColor = "#f44336";
+            return;
+        }
+
         IsConnectionModalVisible = false;
-        
-        var tab = new TerminalTabViewModel(t => Tabs.Remove(t));
+
+        var tab = new TerminalTabViewModel(t => { Tabs.Remove(t); SaveCurrentSessions(); });
+        tab.ConnectionProfileId = profileId;
         Tabs.Add(tab);
         SelectedTab = tab;
 
-        if (!int.TryParse(Port, out int portNumber)) portNumber = 22;
-        tab.Connect(Host ?? "", portNumber, Username ?? "", Password ?? "", PrivateKeyPath ?? "");
+        tab.Connect(Host ?? "", portNumber, Username ?? "", Password ?? "", PrivateKeyPath ?? "",
+            HostKeyFingerprint, fingerprint =>
+            {
+                HostKeyFingerprint = fingerprint;
+                if (profileId != null)
+                {
+                    var profile = SavedConnections.FirstOrDefault(p => p.Id == profileId);
+                    if (profile != null) RememberHostKey(profile, fingerprint);
+                }
+            });
+        SaveCurrentSessions();
+    }
+
+    public ICommand OpenToolsTabCommand { get; private set; }
+    public ICommand ShowAboutDialogCommand { get; }
+
+    private bool _isAboutDialogVisible;
+    public bool IsAboutDialogVisible
+    {
+        get => _isAboutDialogVisible;
+        set { _isAboutDialogVisible = value; OnPropertyChanged(); }
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
     protected void OnPropertyChanged([CallerMemberName] string? propertyName = null)
     {
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        var args = new PropertyChangedEventArgs(propertyName);
+        if (Dispatcher.UIThread.CheckAccess()) PropertyChanged?.Invoke(this, args);
+        else Dispatcher.UIThread.Post(() => PropertyChanged?.Invoke(this, args));
     }
+
+    private void LoadBookmarks()
+    {
+        try
+        {
+            if (File.Exists(_bookmarksPath))
+            {
+                var json = File.ReadAllText(_bookmarksPath);
+                var bookmarks = JsonSerializer.Deserialize<string[]>(json);
+                if (bookmarks != null)
+                {
+                    foreach (var b in bookmarks) Bookmarks.Add(b);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to load bookmarks: {ex.Message}");
+        }
+    }
+
+    private void SaveBookmarks()
+    {
+        try
+        {
+            var dir = Path.GetDirectoryName(_bookmarksPath);
+            if (dir != null && !Directory.Exists(dir)) Directory.CreateDirectory(dir);
+            File.WriteAllText(_bookmarksPath, JsonSerializer.Serialize(Bookmarks.ToList()));
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to save bookmarks: {ex.Message}");
+        }
+    }
+
+    private void AddBookmark(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || Bookmarks.Contains(path)) return;
+        Bookmarks.Add(path);
+        SaveBookmarks();
+    }
+
+    private void RemoveBookmark(string path)
+    {
+        if (Bookmarks.Contains(path))
+        {
+            Bookmarks.Remove(path);
+            SaveBookmarks();
+        }
+    }
+
+    private void ClearAllBookmarks()
+    {
+        Bookmarks.Clear();
+        SaveBookmarks();
+    }
+
+    private void LoadAndRestoreSessions()
+    {
+        try
+        {
+            if (File.Exists(_sessionsPath))
+            {
+                var json = File.ReadAllText(_sessionsPath);
+                var sessions = JsonSerializer.Deserialize<SessionData[]>(json);
+                if (sessions != null && sessions.Length > 0)
+                {
+                    foreach (var session in sessions)
+                    {
+                        if (session.Type == "terminal")
+                        {
+                            var profile = FindSessionProfile(session);
+                            if (profile != null)
+                            {
+                                ConnectProfile(profile);
+                            }
+                        }
+                        else if (session.Type == "sftp")
+                        {
+                            var profile = FindSessionProfile(session);
+                            if (profile != null)
+                            {
+                                ConnectSftpProfile(profile);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to restore sessions: {ex.Message}");
+        }
+    }
+
+    private void SaveCurrentSessions()
+    {
+        try
+        {
+            var sessions = new System.Collections.Generic.List<SessionData>();
+            foreach (var tab in Tabs)
+            {
+                if (tab is TerminalTabViewModel termTab && !string.IsNullOrWhiteSpace(termTab.ConnectionHost))
+                {
+                    sessions.Add(new SessionData
+                    {
+                        Type = "terminal", ProfileId = termTab.ConnectionProfileId,
+                        Host = termTab.ConnectionHost, Port = termTab.ConnectionPort,
+                        Username = termTab.ConnectionUsername
+                    });
+                }
+                else if (tab is SftpTabViewModel sftpTab && !string.IsNullOrWhiteSpace(sftpTab.ConnectionHost))
+                {
+                    sessions.Add(new SessionData
+                    {
+                        Type = "sftp", ProfileId = sftpTab.ConnectionProfileId,
+                        Host = sftpTab.ConnectionHost, Port = sftpTab.ConnectionPort,
+                        Username = sftpTab.ConnectionUsername
+                    });
+                }
+            }
+
+            var dir = Path.GetDirectoryName(_sessionsPath);
+            if (dir != null && !Directory.Exists(dir)) Directory.CreateDirectory(dir);
+            File.WriteAllText(_sessionsPath, JsonSerializer.Serialize(sessions));
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to save sessions: {ex.Message}");
+        }
+    }
+
+    private void ShowFileProperties(RemoteFileModel? file)
+    {
+        if (file == null) return;
+        SelectedFileProperties = file;
+        IsFilePropertiesModalVisible = true;
+    }
+
+    private void PreviewFile(RemoteFileModel? file)
+    {
+        if (file == null || file.IsDirectory) return;
+
+        if (SelectedTab is SftpTabViewModel vm)
+        {
+            Task.Run(() => vm.PreviewFile(file, this));
+        }
+    }
+
+    private void EditFilePermissions(RemoteFileModel? file)
+    {
+        if (file == null) return;
+        SelectedFileForPermissions = file;
+        IsPermissionsModalVisible = true;
+    }
+
+    private void OpenToolsTab()
+    {
+        var toolsTab = new ToolsTabViewModel(t => { Tabs.Remove(t); SaveCurrentSessions(); });
+        toolsTab.SetConnections(SavedConnections);
+        Tabs.Add(toolsTab);
+        SelectedTab = toolsTab;
+    }
+
+    private void RememberHostKey(SshConnectionProfile profile, string fingerprint)
+    {
+        profile.HostKeyFingerprint = fingerprint;
+        SaveProfilesToDisk();
+    }
+
+    private void SaveProfilesToDisk()
+    {
+        var dir = Path.GetDirectoryName(_configPath);
+        if (dir != null && !Directory.Exists(dir)) Directory.CreateDirectory(dir);
+        var profilesToSave = SavedConnections.Select(p => CredentialManager.EncryptProfile(p)).ToList();
+        File.WriteAllText(_configPath, JsonSerializer.Serialize(profilesToSave));
+    }
+
+    private SshConnectionProfile? FindSessionProfile(SessionData session)
+    {
+        return (!string.IsNullOrWhiteSpace(session.ProfileId)
+                ? SavedConnections.FirstOrDefault(c => c.Id == session.ProfileId)
+                : null)
+            ?? SavedConnections.FirstOrDefault(c =>
+                c.Host == session.Host && c.Port == session.Port && c.Username == session.Username);
+    }
+}
+
+public class SessionData
+{
+    public string Type { get; set; } = ""; // "terminal" or "sftp"
+    public string? ProfileId { get; set; }
+    public string Host { get; set; } = "";
+    public int Port { get; set; } = 22;
+    public string Username { get; set; } = "";
 }
 
 public class RelayCommand : ICommand
@@ -329,9 +702,9 @@ public class RelayCommand : ICommand
         _canExecute = canExecute;
     }
 
-#pragma warning disable CS0067
     public event EventHandler? CanExecuteChanged;
-#pragma warning restore CS0067
+
+    public void RaiseCanExecuteChanged() => CanExecuteChanged?.Invoke(this, EventArgs.Empty);
 
     public bool CanExecute(object? parameter) => _canExecute == null || _canExecute();
 
@@ -349,9 +722,9 @@ public class RelayCommand<T> : ICommand
         _canExecute = canExecute;
     }
 
-#pragma warning disable CS0067
     public event EventHandler? CanExecuteChanged;
-#pragma warning restore CS0067
+
+    public void RaiseCanExecuteChanged() => CanExecuteChanged?.Invoke(this, EventArgs.Empty);
 
     public bool CanExecute(object? parameter) => _canExecute == null || (parameter is T t && _canExecute(t));
 

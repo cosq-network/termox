@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Termox
+Comment=SSH and SFTP workspace
+Exec=Termox
+Icon=termox-icon
+Terminal=false
+Categories=Network;RemoteAccess;Utility;
+StartupWMClass=Termox

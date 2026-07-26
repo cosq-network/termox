@@ -27,6 +27,7 @@ $RECYCLE.BIN/
 [Oo]bj/
 [Oo]ut/
 TestResults/
+artifacts/
 *.dll
 *.exe
 *.pdb

@@ -7,6 +7,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Input;
 using Avalonia.Threading;
+using Termox.Services;
 
 namespace Termox.ViewModels;
 
@@ -19,6 +20,11 @@ public class TerminalTabViewModel : INotifyPropertyChanged, ITabViewModel
 
     private string _title = "New Tab";
     public string Title { get => _title; set { _title = value; OnPropertyChanged(); } }
+
+    public string ConnectionHost { get; private set; } = "";
+    public int ConnectionPort { get; private set; } = 22;
+    public string ConnectionUsername { get; private set; } = "";
+    public string? ConnectionProfileId { get; set; }
 
     private string _status = "Disconnected";
     public string Status { get => _status; set { _status = value; OnPropertyChanged(); } }
@@ -45,12 +51,16 @@ public class TerminalTabViewModel : INotifyPropertyChanged, ITabViewModel
         };
     }
 
-    public void Connect(string host, int port, string username, string password, string privateKeyPath)
+    public void Connect(string host, int port, string username, string password, string privateKeyPath,
+        string? hostKeyFingerprint = null, Action<string>? firstSeenHostKey = null)
     {
+        ConnectionHost = host;
+        ConnectionPort = port;
+        ConnectionUsername = username;
         Title = host;
         Status = "Connecting...";
         StatusColor = "#f39c12";
-        
+
         Dispatcher.UIThread.Post(() => TerminalModel.Feed($"\r\n\u001b[33m[Termox] Connecting to {host} on port {port}...\u001b[0m\r\n"));
 
         Task.Run(() =>
@@ -59,7 +69,7 @@ public class TerminalTabViewModel : INotifyPropertyChanged, ITabViewModel
             {
                 var safeUsername = username ?? "";
                 var safePassword = password ?? "";
-                
+
                 if (!string.IsNullOrWhiteSpace(privateKeyPath) && System.IO.File.Exists(privateKeyPath))
                 {
                     var keyFile = new PrivateKeyFile(privateKeyPath, string.IsNullOrEmpty(safePassword) ? null : safePassword);
@@ -69,17 +79,19 @@ public class TerminalTabViewModel : INotifyPropertyChanged, ITabViewModel
                 {
                     _sshClient = new SshClient(host, port, safeUsername, safePassword);
                 }
-                
+
+                SshSecurity.ConfigureHostKeyPolicy(_sshClient, hostKeyFingerprint, firstSeenHostKey);
+
                 _sshClient.Connect();
 
                 _shellStream = _sshClient.CreateShellStream("xterm", 80, 24, 800, 600, 1024);
 
                 Status = "Connected to " + host;
                 StatusColor = "#4caf50";
-                
+
                 Dispatcher.UIThread.Post(() => TerminalModel.Feed($"\u001b[32m[Termox] Connection established successfully.\u001b[0m\r\n"));
 
-                ReadOutputAsync();
+                _ = ReadOutputAsync();
             }
             catch (Exception ex)
             {
@@ -111,7 +123,7 @@ public class TerminalTabViewModel : INotifyPropertyChanged, ITabViewModel
         }
     }
 
-    private async void ReadOutputAsync()
+    private async Task ReadOutputAsync()
     {
         var buffer = new byte[4096];
         try
@@ -140,6 +152,8 @@ public class TerminalTabViewModel : INotifyPropertyChanged, ITabViewModel
     public event PropertyChangedEventHandler? PropertyChanged;
     protected void OnPropertyChanged([CallerMemberName] string? propertyName = null)
     {
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        var args = new PropertyChangedEventArgs(propertyName);
+        if (Dispatcher.UIThread.CheckAccess()) PropertyChanged?.Invoke(this, args);
+        else Dispatcher.UIThread.Post(() => PropertyChanged?.Invoke(this, args));
     }
 }
