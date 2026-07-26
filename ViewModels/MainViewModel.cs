@@ -224,6 +224,11 @@ public class MainViewModel : INotifyPropertyChanged
     public ICommand ShowFilePropertiesCommand { get; }
     public ICommand PreviewFileCommand { get; }
     public ICommand EditFilePermissionsCommand { get; }
+    public ICommand OpenPortScannerTabCommand { get; }
+    public ICommand OpenPingTestTabCommand { get; }
+    public ICommand OpenSshKeyGeneratorTabCommand { get; }
+    public ICommand OpenConnectionTesterTabCommand { get; }
+    public ICommand OpenSshEndpointTestTabCommand { get; }
 
     private string _configPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Termox", "connections.json");
     private string _bookmarksPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Termox", "bookmarks.json");
@@ -252,6 +257,11 @@ public class MainViewModel : INotifyPropertyChanged
         PreviewFileCommand = new RelayCommand<RemoteFileModel>(PreviewFile);
         EditFilePermissionsCommand = new RelayCommand<RemoteFileModel>(EditFilePermissions);
         OpenToolsTabCommand = new RelayCommand(OpenToolsTab);
+        OpenPortScannerTabCommand = new RelayCommand(OpenPortScannerTab);
+        OpenPingTestTabCommand = new RelayCommand(OpenPingTestTab);
+        OpenSshKeyGeneratorTabCommand = new RelayCommand(OpenSshKeyGeneratorTab);
+        OpenConnectionTesterTabCommand = new RelayCommand(OpenConnectionTesterTab);
+        OpenSshEndpointTestTabCommand = new RelayCommand(OpenSshEndpointTestTab);
         ShowAboutDialogCommand = new RelayCommand(() => IsAboutDialogVisible = true);
 
         LoadConnections();
@@ -662,6 +672,65 @@ public class MainViewModel : INotifyPropertyChanged
         toolsTab.SetConnections(SavedConnections);
         Tabs.Add(toolsTab);
         SelectedTab = toolsTab;
+    }
+
+    private void OpenPortScannerTab()
+    {
+        var scannerTab = new PortScannerTabViewModel(tab =>
+        {
+            Tabs.Remove(tab);
+            SaveCurrentSessions();
+        }, SavedConnections);
+        Tabs.Add(scannerTab);
+        SelectedTab = scannerTab;
+    }
+
+    private void OpenPingTestTab()
+    {
+        var pingTab = new PingTestTabViewModel(tab =>
+        {
+            Tabs.Remove(tab);
+            SaveCurrentSessions();
+        });
+        pingTab.SetConnections(SavedConnections);
+        Tabs.Add(pingTab);
+        SelectedTab = pingTab;
+    }
+
+    private void OpenSshKeyGeneratorTab()
+    {
+        var keyTab = new SshKeyGeneratorTabViewModel(tab =>
+        {
+            Tabs.Remove(tab);
+            SaveCurrentSessions();
+        });
+        keyTab.SetConnections(SavedConnections);
+        Tabs.Add(keyTab);
+        SelectedTab = keyTab;
+    }
+
+    private void OpenConnectionTesterTab()
+    {
+        var testerTab = new ConnectionTesterTabViewModel(tab =>
+        {
+            Tabs.Remove(tab);
+            SaveCurrentSessions();
+        });
+        testerTab.SetConnections(SavedConnections);
+        Tabs.Add(testerTab);
+        SelectedTab = testerTab;
+    }
+
+    private void OpenSshEndpointTestTab()
+    {
+        var endpointTab = new SshEndpointTestTabViewModel(tab =>
+        {
+            Tabs.Remove(tab);
+            SaveCurrentSessions();
+        });
+        endpointTab.SetConnections(SavedConnections);
+        Tabs.Add(endpointTab);
+        SelectedTab = endpointTab;
     }
 
     private void RememberHostKey(SshConnectionProfile profile, string fingerprint)
