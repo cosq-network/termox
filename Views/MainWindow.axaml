@@ -246,7 +246,7 @@
                             <DataTemplate DataType="vm:SftpTabViewModel">
                                 <Border Background="#1e1e1e" Padding="10">
                                     <Panel>
-                                    <Grid RowDefinitions="Auto, Auto, *, Auto">
+                                    <Grid RowDefinitions="Auto, Auto, Auto, *, Auto">
                                         <Grid Grid.Row="0" ColumnDefinitions="Auto, *, Auto, Auto"
                                             Margin="0,0,0,10">
                                             <Button Grid.Column="0" Content="↑"
@@ -267,7 +267,87 @@
                                                 ToolTip.Tip="Reload directory contents" />
                                         </Grid>
 
-                                        <Grid Grid.Row="1" ColumnDefinitions="*, Auto"
+                                        <!-- File actions stay directly below the address bar. -->
+                                        <Grid Grid.Row="1"
+                                            ColumnDefinitions="*, Auto, Auto, Auto, Auto, Auto, Auto, Auto, Auto"
+                                            Margin="0,0,0,10">
+                                            <TextBlock Grid.Column="0" Text="{Binding Status}"
+                                                Foreground="{Binding StatusColor}"
+                                                VerticalAlignment="Center"
+                                                TextTrimming="CharacterEllipsis"
+                                                ToolTip.Tip="{Binding Status}" Margin="0,0,10,0" />
+                                            <Button Grid.Column="1"
+                                                Click="UploadFile_Click" Background="#3a3a3a"
+                                                Foreground="White" Padding="12,6" CornerRadius="4"
+                                                Cursor="Hand" ToolTip.Tip="Upload local files"
+                                                Margin="0,0,3,0"
+                                                IsVisible="{Binding !IsTransferring}" FontSize="12">
+                                                <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="&#xE2C6;" />
+                                            </Button>
+                                            <Button Grid.Column="2"
+                                                Click="DownloadFile_Click"
+                                                CommandParameter="{Binding #SftpListBox.SelectedItems}"
+                                                Background="#3a3a3a" Foreground="White"
+                                                Padding="12,6" CornerRadius="4" Cursor="Hand"
+                                                ToolTip.Tip="Download selected"
+                                                IsEnabled="{Binding CanDownload}"
+                                                IsVisible="{Binding !IsTransferring}"
+                                                Margin="0,0,3,0" FontSize="12">
+                                                <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="&#xE2C4;" />
+                                            </Button>
+                                            <Button Grid.Column="3"
+                                                Command="{Binding DeleteFileCommand}"
+                                                Background="#3a3a3a" Foreground="White"
+                                                Padding="12,6" CornerRadius="4" Cursor="Hand"
+                                                ToolTip.Tip="Delete selected file"
+                                                IsEnabled="{Binding SelectedFile, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                                IsVisible="{Binding !IsTransferring}"
+                                                Margin="0,0,3,0" FontSize="12">
+                                                <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="&#xE872;" />
+                                            </Button>
+                                            <Button Grid.Column="4"
+                                                Click="RenameFile_Click" Background="#3a3a3a"
+                                                Foreground="White" Padding="12,6" CornerRadius="4"
+                                                Cursor="Hand" ToolTip.Tip="Rename file"
+                                                IsEnabled="{Binding SelectedFile, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                                IsVisible="{Binding !IsTransferring}"
+                                                Margin="0,0,3,0" FontSize="12">
+                                                <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="&#xE3C9;" />
+                                            </Button>
+                                            <Button Grid.Column="5"
+                                                Click="EditPermissions_Click" Background="#3a3a3a"
+                                                Foreground="White" Padding="12,6" CornerRadius="4"
+                                                Cursor="Hand" ToolTip.Tip="Edit file permissions"
+                                                IsEnabled="{Binding SelectedFile, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                                IsVisible="{Binding !IsTransferring}"
+                                                Margin="0,0,3,0" FontSize="12">
+                                                <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="&#xE897;" />
+                                            </Button>
+                                            <Button Grid.Column="6"
+                                                Command="{Binding BulkDeleteCommand}"
+                                                Background="#3a3a3a" Foreground="White"
+                                                Padding="12,6" CornerRadius="4" Cursor="Hand"
+                                                ToolTip.Tip="Delete all selected files"
+                                                IsEnabled="{Binding CanBulkDelete}"
+                                                IsVisible="{Binding !IsTransferring}"
+                                                Margin="0,0,3,0" FontSize="12">
+                                                <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="&#xE92E;" />
+                                            </Button>
+                                            <Button Grid.Column="7"
+                                                Content="{Binding PauseButtonText}"
+                                                Command="{Binding TogglePauseCommand}"
+                                                Background="#f39c12" Foreground="White"
+                                                Padding="12,6" CornerRadius="4" Cursor="Hand"
+                                                Margin="0,0,3,0"
+                                                IsVisible="{Binding IsTransferring}" FontSize="12" />
+                                            <Button Grid.Column="8" Content="Cancel Transfer"
+                                                Command="{Binding CancelTransferCommand}"
+                                                Background="#f44336" Foreground="White"
+                                                Padding="12,6" CornerRadius="4" Cursor="Hand"
+                                                IsVisible="{Binding IsTransferring}" FontSize="12" />
+                                        </Grid>
+
+                                        <Grid Grid.Row="2" ColumnDefinitions="*, Auto"
                                             Margin="0,0,0,10">
                                             <TextBox Grid.Column="0" Text="{Binding SearchQuery}"
                                                 Background="#252526" Foreground="#ccc"
@@ -277,7 +357,7 @@
                                                 ToolTip.Tip="Filter files by name" />
                                         </Grid>
 
-                                        <ListBox x:Name="SftpListBox" Grid.Row="1"
+                                        <ListBox x:Name="SftpListBox" Grid.Row="3"
                                             ItemsSource="{Binding Files}"
                                             SelectedItem="{Binding SelectedFile}"
                                             SelectionMode="Multiple"
@@ -347,72 +427,6 @@
                                             </ListBox.ItemTemplate>
                                         </ListBox>
 
-                                        <Grid Grid.Row="2"
-                                            ColumnDefinitions="*, Auto, Auto, Auto, Auto, Auto, Auto, Auto, Auto"
-                                            Margin="0,10,0,0">
-                                            <TextBlock Grid.Column="0" Text="{Binding Status}"
-                                                Foreground="{Binding StatusColor}"
-                                                VerticalAlignment="Center"
-                                                TextTrimming="CharacterEllipsis"
-                                                ToolTip.Tip="{Binding Status}" Margin="0,0,10,0" />
-                                            <Button Grid.Column="1" Content="Upload File..."
-                                                Click="UploadFile_Click" Background="#20a53a"
-                                                Foreground="White" Padding="12,6" CornerRadius="4"
-                                                Cursor="Hand" ToolTip.Tip="Upload local files"
-                                                Margin="0,0,3,0"
-                                                IsVisible="{Binding !IsTransferring}" FontSize="12" />
-                                            <Button Grid.Column="2" Content="Download..."
-                                                Click="DownloadFile_Click"
-                                                CommandParameter="{Binding #SftpListBox.SelectedItems}"
-                                                Background="#007acc" Foreground="White"
-                                                Padding="12,6" CornerRadius="4" Cursor="Hand"
-                                                ToolTip.Tip="Download selected"
-                                                IsEnabled="{Binding CanDownload}"
-                                                IsVisible="{Binding !IsTransferring}"
-                                                Margin="0,0,3,0" FontSize="12" />
-                                            <Button Grid.Column="3" Content="Delete"
-                                                Command="{Binding DeleteFileCommand}"
-                                                Background="#e74c3c" Foreground="White"
-                                                Padding="12,6" CornerRadius="4" Cursor="Hand"
-                                                ToolTip.Tip="Delete selected file"
-                                                IsEnabled="{Binding SelectedFile, Converter={x:Static ObjectConverters.IsNotNull}}"
-                                                IsVisible="{Binding !IsTransferring}"
-                                                Margin="0,0,3,0" FontSize="12" />
-                                            <Button Grid.Column="4" Content="Rename"
-                                                Click="RenameFile_Click" Background="#f39c12"
-                                                Foreground="White" Padding="12,6" CornerRadius="4"
-                                                Cursor="Hand" ToolTip.Tip="Rename file"
-                                                IsEnabled="{Binding SelectedFile, Converter={x:Static ObjectConverters.IsNotNull}}"
-                                                IsVisible="{Binding !IsTransferring}"
-                                                Margin="0,0,3,0" FontSize="12" />
-                                            <Button Grid.Column="5" Content="Perms..."
-                                                Click="EditPermissions_Click" Background="#9c27b0"
-                                                Foreground="White" Padding="12,6" CornerRadius="4"
-                                                Cursor="Hand" ToolTip.Tip="Edit file permissions"
-                                                IsEnabled="{Binding SelectedFile, Converter={x:Static ObjectConverters.IsNotNull}}"
-                                                IsVisible="{Binding !IsTransferring}"
-                                                Margin="0,0,3,0" FontSize="12" />
-                                            <Button Grid.Column="6" Content="Bulk Del"
-                                                Command="{Binding BulkDeleteCommand}"
-                                                Background="#d32f2f" Foreground="White"
-                                                Padding="12,6" CornerRadius="4" Cursor="Hand"
-                                                ToolTip.Tip="Delete all selected files"
-                                                IsVisible="{Binding !IsTransferring}"
-                                                Margin="0,0,3,0" FontSize="12" />
-
-                                            <Button Grid.Column="7"
-                                                Content="{Binding PauseButtonText}"
-                                                Command="{Binding TogglePauseCommand}"
-                                                Background="#f39c12" Foreground="White"
-                                                Padding="12,6" CornerRadius="4" Cursor="Hand"
-                                                Margin="0,0,3,0"
-                                                IsVisible="{Binding IsTransferring}" FontSize="12" />
-                                            <Button Grid.Column="8" Content="Cancel Transfer"
-                                                Command="{Binding CancelTransferCommand}"
-                                                Background="#f44336" Foreground="White"
-                                                Padding="12,6" CornerRadius="4" Cursor="Hand"
-                                                IsVisible="{Binding IsTransferring}" FontSize="12" />
-                                        </Grid>
                                     </Grid>
                                     <Border Background="#CC000000" IsVisible="{Binding IsDeleteConfirmationVisible}"
                                         ZIndex="20" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">

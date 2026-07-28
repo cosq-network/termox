@@ -11,5 +11,20 @@
 
     <Application.Styles>
         <FluentTheme />
+
+        <!--
+            Keep the terminal's ANSI palette readable on its near-black
+            background.  Directory listings commonly use ANSI blue (color 4),
+            which is too dark in the package default palette.
+        -->
+        <StyleInclude Source="avares://SvcSystems.UI.Terminal/Styles/Colors.axaml" />
     </Application.Styles>
+
+    <Application.Resources>
+        <FontFamily x:Key="MaterialIconFont">
+            avares://Termox/Assets/Fonts#Material Icons
+        </FontFamily>
+        <SolidColorBrush x:Key="SvcSystems.UI.TerminalColor4" Color="#4F9DDE" />
+        <SolidColorBrush x:Key="SvcSystems.UI.TerminalColor12" Color="#73B7FF" />
+    </Application.Resources>
 </Application>

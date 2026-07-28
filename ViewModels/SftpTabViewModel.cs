@@ -63,6 +63,8 @@ public class SftpTabViewModel : INotifyPropertyChanged, ITabViewModel
 
     public void UpdateCanDownload(bool can) => CanDownload = can;
 
+    public bool CanBulkDelete => Files.Any(file => file.IsSelected);
+
     private bool _isTransferring;
     public bool IsTransferring { get => _isTransferring; set { _isTransferring = value; OnPropertyChanged(); } }
 
@@ -140,6 +142,8 @@ public class SftpTabViewModel : INotifyPropertyChanged, ITabViewModel
         var selected = selectedFiles.ToHashSet();
         foreach (var file in Files)
             file.IsSelected = selected.Contains(file);
+
+        OnPropertyChanged(nameof(CanBulkDelete));
     }
 
     public void Connect(string host, int port, string username, string password, string privateKeyPath,
@@ -313,6 +317,8 @@ public class SftpTabViewModel : INotifyPropertyChanged, ITabViewModel
             {
                 Files.Add(file);
             }
+
+            OnPropertyChanged(nameof(CanBulkDelete));
         });
     }
 
@@ -663,6 +669,7 @@ public class SftpTabViewModel : INotifyPropertyChanged, ITabViewModel
         {
             if (file != null) file.IsSelected = true;
         }
+        OnPropertyChanged(nameof(CanBulkDelete));
     }
 
     private void ClearAllSelections()
@@ -671,6 +678,7 @@ public class SftpTabViewModel : INotifyPropertyChanged, ITabViewModel
         {
             if (file != null) file.IsSelected = false;
         }
+        OnPropertyChanged(nameof(CanBulkDelete));
     }
 
     private static string FormatSize(long bytes)
