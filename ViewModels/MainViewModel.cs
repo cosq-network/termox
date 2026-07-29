@@ -39,7 +39,7 @@ public class MainViewModel : INotifyPropertyChanged
 
     public ObservableCollection<SshConnectionProfile> SavedConnections { get; } = new();
 
-    public ObservableCollection<string> Bookmarks { get; } = new();
+    public ObservableCollection<BookmarkModel> Bookmarks { get; } = new();
 
     public ObservableCollection<ITabViewModel> Tabs { get; } = new();
 
@@ -111,6 +111,20 @@ public class MainViewModel : INotifyPropertyChanged
     {
         get => _profileToDelete;
         set { _profileToDelete = value; OnPropertyChanged(); }
+    }
+
+    private bool _isBookmarkDeleteConfirmModalVisible;
+    public bool IsBookmarkDeleteConfirmModalVisible
+    {
+        get => _isBookmarkDeleteConfirmModalVisible;
+        set { _isBookmarkDeleteConfirmModalVisible = value; OnPropertyChanged(); }
+    }
+
+    private BookmarkModel? _bookmarkToDelete;
+    public BookmarkModel? BookmarkToDelete
+    {
+        get => _bookmarkToDelete;
+        set { _bookmarkToDelete = value; OnPropertyChanged(); }
     }
 
     private bool _isCloseConfirmModalVisible;
@@ -211,6 +225,8 @@ public class MainViewModel : INotifyPropertyChanged
     public ICommand SaveConnectionCommand { get; }
     public ICommand ConnectProfileCommand { get; }
     public ICommand ConnectSftpProfileCommand { get; }
+    public ICommand OpenBookmarkTerminalCommand { get; }
+    public ICommand OpenBookmarkSftpCommand { get; }
     public ICommand DeleteProfileCommand { get; }
     public ICommand ConfirmDeleteCommand { get; }
     public ICommand CancelDeleteCommand { get; }
@@ -220,6 +236,8 @@ public class MainViewModel : INotifyPropertyChanged
     public ICommand TestConnectionCommand { get; }
     public ICommand AddBookmarkCommand { get; }
     public ICommand RemoveBookmarkCommand { get; }
+    public ICommand ConfirmRemoveBookmarkCommand { get; }
+    public ICommand CancelRemoveBookmarkCommand { get; }
     public ICommand ClearAllBookmarksCommand { get; }
     public ICommand ShowFilePropertiesCommand { get; }
     public ICommand PreviewFileCommand { get; }
@@ -242,7 +260,9 @@ public class MainViewModel : INotifyPropertyChanged
         HideConnectionModalCommand = new RelayCommand(() => IsConnectionModalVisible = false);
         SaveConnectionCommand = new RelayCommand(SaveConnection);
         ConnectProfileCommand = new RelayCommand<SshConnectionProfile>(ConnectProfile);
-        ConnectSftpProfileCommand = new RelayCommand<SshConnectionProfile>(ConnectSftpProfile);
+        ConnectSftpProfileCommand = new RelayCommand<SshConnectionProfile>(profile => ConnectSftpProfile(profile));
+        OpenBookmarkTerminalCommand = new RelayCommand<BookmarkModel>(OpenBookmarkInTerminal);
+        OpenBookmarkSftpCommand = new RelayCommand<BookmarkModel>(OpenBookmarkInSftp);
         DeleteProfileCommand = new RelayCommand<SshConnectionProfile>(p => { ProfileToDelete = p; IsDeleteConfirmModalVisible = true; });
         ConfirmDeleteCommand = new RelayCommand(ConfirmDelete);
         CancelDeleteCommand = new RelayCommand(() => IsDeleteConfirmModalVisible = false);
@@ -251,7 +271,9 @@ public class MainViewModel : INotifyPropertyChanged
         CancelCloseTabCommand = new RelayCommand(() => IsCloseConfirmModalVisible = false);
         TestConnectionCommand = new RelayCommand(TestConnection);
         AddBookmarkCommand = new RelayCommand<string>(AddBookmark);
-        RemoveBookmarkCommand = new RelayCommand<string>(RemoveBookmark);
+        RemoveBookmarkCommand = new RelayCommand<BookmarkModel>(RequestRemoveBookmark);
+        ConfirmRemoveBookmarkCommand = new RelayCommand(ConfirmRemoveBookmark);
+        CancelRemoveBookmarkCommand = new RelayCommand(CancelRemoveBookmark);
         ClearAllBookmarksCommand = new RelayCommand(ClearAllBookmarks);
         ShowFilePropertiesCommand = new RelayCommand<RemoteFileModel>(ShowFileProperties);
         PreviewFileCommand = new RelayCommand<RemoteFileModel>(PreviewFile);
@@ -425,7 +447,34 @@ public class MainViewModel : INotifyPropertyChanged
         Connect(profile.Id);
     }
 
-    private void ConnectSftpProfile(SshConnectionProfile profile)
+    public void OpenBookmarkInTerminal(BookmarkModel bookmark)
+    {
+        if (bookmark == null || string.IsNullOrWhiteSpace(bookmark.Path) || string.IsNullOrWhiteSpace(bookmark.ProfileId)) return;
+
+        var profile = SavedConnections.FirstOrDefault(p => p.Id == bookmark.ProfileId);
+        if (profile == null) return;
+
+        Host = profile.Host;
+        Port = profile.Port.ToString();
+        Username = profile.Username;
+        Password = profile.Password;
+        PrivateKeyPath = profile.PrivateKeyPath;
+        HostKeyFingerprint = profile.HostKeyFingerprint;
+
+        var escapedPath = bookmark.Path.Replace("'", "'\\''", StringComparison.Ordinal);
+        Connect(profile.Id, $"cd '{escapedPath}'");
+    }
+
+    private void OpenBookmarkInSftp(BookmarkModel bookmark)
+    {
+        if (bookmark == null || string.IsNullOrWhiteSpace(bookmark.ProfileId)) return;
+
+        var profile = SavedConnections.FirstOrDefault(p => p.Id == bookmark.ProfileId);
+        if (profile != null)
+            ConnectSftpProfile(profile, bookmark.Path);
+    }
+
+    private void ConnectSftpProfile(SshConnectionProfile profile, string? initialPath = null)
     {
         var tab = new SftpTabViewModel(t => { Tabs.Remove(t); SaveCurrentSessions(); });
         Tabs.Add(tab);
@@ -433,7 +482,7 @@ public class MainViewModel : INotifyPropertyChanged
 
         tab.ConnectionProfileId = profile.Id;
         tab.Connect(profile.Host, profile.Port, profile.Username, profile.Password, profile.PrivateKeyPath,
-            profile.HostKeyFingerprint, fingerprint => RememberHostKey(profile, fingerprint));
+            profile.HostKeyFingerprint, fingerprint => RememberHostKey(profile, fingerprint), initialPath);
         SaveCurrentSessions();
     }
 
@@ -463,7 +512,7 @@ public class MainViewModel : INotifyPropertyChanged
         SaveCurrentSessions();
     }
 
-    private void Connect(string? profileId = null)
+    private void Connect(string? profileId = null, string? initialCommand = null)
     {
         if (string.IsNullOrWhiteSpace(Host) || string.IsNullOrWhiteSpace(Username) ||
             !int.TryParse(Port, out var portNumber) || portNumber is < 1 or > 65535)
@@ -489,7 +538,7 @@ public class MainViewModel : INotifyPropertyChanged
                     var profile = SavedConnections.FirstOrDefault(p => p.Id == profileId);
                     if (profile != null) RememberHostKey(profile, fingerprint);
                 }
-            });
+            }, initialCommand);
         SaveCurrentSessions();
     }
 
@@ -518,10 +567,23 @@ public class MainViewModel : INotifyPropertyChanged
             if (File.Exists(_bookmarksPath))
             {
                 var json = File.ReadAllText(_bookmarksPath);
-                var bookmarks = JsonSerializer.Deserialize<string[]>(json);
-                if (bookmarks != null)
+                try
                 {
-                    foreach (var b in bookmarks) Bookmarks.Add(b);
+                    var bookmarks = JsonSerializer.Deserialize<BookmarkModel[]>(json);
+                    if (bookmarks != null)
+                    {
+                        foreach (var bookmark in bookmarks) Bookmarks.Add(bookmark);
+                    }
+                }
+                catch (JsonException)
+                {
+                    // Migrate the previous path-only bookmark format.
+                    var paths = JsonSerializer.Deserialize<string[]>(json);
+                    if (paths != null)
+                    {
+                        foreach (var path in paths)
+                            Bookmarks.Add(new BookmarkModel { Path = path });
+                    }
                 }
             }
         }
@@ -547,18 +609,71 @@ public class MainViewModel : INotifyPropertyChanged
 
     private void AddBookmark(string path)
     {
-        if (string.IsNullOrWhiteSpace(path) || Bookmarks.Contains(path)) return;
-        Bookmarks.Add(path);
+        if (string.IsNullOrWhiteSpace(path)) return;
+
+        var sftpTab = SelectedTab as SftpTabViewModel;
+        if (sftpTab?.ConnectionProfileId == null) return;
+
+        AddBookmarkForProfile(path, sftpTab.ConnectionProfileId);
+    }
+
+    public void AddBookmarkForProfile(string path, string profileId)
+    {
+        if (!IsValidRemoteDirectory(path) || string.IsNullOrWhiteSpace(profileId)) return;
+
+        var profile = SavedConnections.FirstOrDefault(p => p.Id == profileId);
+        if (profile == null || Bookmarks.Any(b => b.Path == path && b.ProfileId == profile.Id)) return;
+
+        Bookmarks.Add(new BookmarkModel
+        {
+            Path = path,
+            ProfileId = profile.Id,
+            SessionName = profile.Name
+        });
         SaveBookmarks();
     }
 
-    private void RemoveBookmark(string path)
+    public void OpenSftpFromTerminal(TerminalTabViewModel terminal, string path)
     {
-        if (Bookmarks.Contains(path))
+        if (string.IsNullOrWhiteSpace(terminal.ConnectionProfileId) || !IsValidRemoteDirectory(path)) return;
+
+        var profile = SavedConnections.FirstOrDefault(p => p.Id == terminal.ConnectionProfileId);
+        if (profile != null)
+            ConnectSftpProfile(profile, path);
+    }
+
+    private static bool IsValidRemoteDirectory(string? path)
+    {
+        return !string.IsNullOrWhiteSpace(path) &&
+            path.StartsWith("/", StringComparison.Ordinal) &&
+            !path.Contains("%s", StringComparison.Ordinal) &&
+            !path.Contains("$PWD", StringComparison.Ordinal) &&
+            !path.Contains("\\n", StringComparison.Ordinal);
+    }
+
+    private void RequestRemoveBookmark(BookmarkModel bookmark)
+    {
+        if (bookmark == null || !Bookmarks.Contains(bookmark)) return;
+        BookmarkToDelete = bookmark;
+        IsBookmarkDeleteConfirmModalVisible = true;
+    }
+
+    private void ConfirmRemoveBookmark()
+    {
+        if (BookmarkToDelete != null && Bookmarks.Contains(BookmarkToDelete))
         {
-            Bookmarks.Remove(path);
+            Bookmarks.Remove(BookmarkToDelete);
             SaveBookmarks();
         }
+
+        IsBookmarkDeleteConfirmModalVisible = false;
+        BookmarkToDelete = null;
+    }
+
+    private void CancelRemoveBookmark()
+    {
+        IsBookmarkDeleteConfirmModalVisible = false;
+        BookmarkToDelete = null;
     }
 
     private void ClearAllBookmarks()

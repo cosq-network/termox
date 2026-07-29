@@ -18,6 +18,10 @@ public class TerminalTabViewModel : INotifyPropertyChanged, ITabViewModel
     private ShellStream? _shellStream;
     private readonly object _connectionLock = new();
     private CancellationTokenSource? _connectionCancellation;
+    private readonly object _directoryProbeLock = new();
+    private TaskCompletionSource<string?>? _directoryProbe;
+    private string? _directoryProbeMarker;
+    private string _directoryProbeBuffer = "";
 
     public TerminalControlModel TerminalModel { get; } = new TerminalControlModel();
 
@@ -38,6 +42,56 @@ public class TerminalTabViewModel : INotifyPropertyChanged, ITabViewModel
     public ICommand DisconnectCommand { get; }
     public ICommand CloseTabCommand { get; }
 
+    public async Task<string?> GetCurrentDirectoryAsync()
+    {
+        ShellStream? shell;
+        TaskCompletionSource<string?> probe;
+        string marker;
+
+        lock (_connectionLock)
+        {
+            shell = _shellStream;
+            if (_sshClient == null || !_sshClient.IsConnected || shell == null)
+                return null;
+        }
+
+        lock (_directoryProbeLock)
+        {
+            if (_directoryProbe != null) return null;
+            marker = $"__TERMOX_PWD_{Guid.NewGuid():N}__";
+            probe = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
+            _directoryProbe = probe;
+            _directoryProbeMarker = marker;
+            _directoryProbeBuffer = "";
+        }
+
+        try
+        {
+            // Split the marker in the shell command so it does not occur
+            // contiguously in the command echo. The parser can then only
+            // match the marker from printf's actual output.
+            var commandMarker = marker.Replace("PWD", "'PWD", StringComparison.Ordinal) + "'";
+            var command = Encoding.UTF8.GetBytes($"printf '\\n{commandMarker}%s\\n' \"$PWD\"\n");
+            shell.Write(command, 0, command.Length);
+            shell.Flush();
+
+            var completed = await Task.WhenAny(probe.Task, Task.Delay(TimeSpan.FromSeconds(3)));
+            return completed == probe.Task ? await probe.Task : null;
+        }
+        finally
+        {
+            lock (_directoryProbeLock)
+            {
+                if (ReferenceEquals(_directoryProbe, probe))
+                {
+                    _directoryProbe = null;
+                    _directoryProbeMarker = null;
+                    _directoryProbeBuffer = "";
+                }
+            }
+        }
+    }
+
     public TerminalTabViewModel(Action<TerminalTabViewModel> onClose)
     {
         DisconnectCommand = new RelayCommand(Disconnect);
@@ -55,7 +109,8 @@ public class TerminalTabViewModel : INotifyPropertyChanged, ITabViewModel
     }
 
     public void Connect(string host, int port, string username, string password, string privateKeyPath,
-        string? hostKeyFingerprint = null, Action<string>? firstSeenHostKey = null)
+        string? hostKeyFingerprint = null, Action<string>? firstSeenHostKey = null,
+        string? initialCommand = null)
     {
         lock (_connectionLock)
         {
@@ -104,6 +159,15 @@ public class TerminalTabViewModel : INotifyPropertyChanged, ITabViewModel
                 connected = true;
 
                 _shellStream = client.CreateShellStream("xterm", 80, 24, 800, 600, 1024);
+
+                if (!string.IsNullOrWhiteSpace(initialCommand))
+                {
+                    var commandBytes = Encoding.UTF8.GetBytes(initialCommand.EndsWith("\n", StringComparison.Ordinal)
+                        ? initialCommand
+                        : initialCommand + "\n");
+                    _shellStream.Write(commandBytes, 0, commandBytes.Length);
+                    _shellStream.Flush();
+                }
 
                 Status = "Connected to " + host;
                 StatusColor = "#4caf50";
@@ -173,6 +237,7 @@ public class TerminalTabViewModel : INotifyPropertyChanged, ITabViewModel
                 if (read > 0)
                 {
                     string text = Encoding.UTF8.GetString(buffer, 0, read);
+                    ResolveDirectoryProbe(text);
                     Dispatcher.UIThread.Post(() => TerminalModel.Feed(text));
                 }
                 else
@@ -186,6 +251,27 @@ public class TerminalTabViewModel : INotifyPropertyChanged, ITabViewModel
             Console.WriteLine($"Error reading output: {ex.Message}");
         }
         Disconnect();
+    }
+
+    private void ResolveDirectoryProbe(string text)
+    {
+        lock (_directoryProbeLock)
+        {
+            if (_directoryProbe == null || string.IsNullOrWhiteSpace(_directoryProbeMarker)) return;
+
+            _directoryProbeBuffer += text;
+            // Interactive shells echo the probe command before printing its
+            // result. The last marker is therefore the actual $PWD output.
+            var markerIndex = _directoryProbeBuffer.LastIndexOf(_directoryProbeMarker, StringComparison.Ordinal);
+            if (markerIndex < 0) return;
+
+            var pathStart = markerIndex + _directoryProbeMarker.Length;
+            var lineEnd = _directoryProbeBuffer.IndexOfAny(new[] { '\r', '\n' }, pathStart);
+            if (lineEnd < 0) return;
+
+            var path = _directoryProbeBuffer[pathStart..lineEnd].Trim();
+            _directoryProbe.TrySetResult(string.IsNullOrWhiteSpace(path) ? null : path);
+        }
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;

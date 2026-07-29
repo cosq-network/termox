@@ -38,6 +38,26 @@ public partial class MainWindow : Window
         }
     }
 
+    private void SavedSession_DoubleTapped(object? sender, TappedEventArgs e)
+    {
+        if (sender is Control control &&
+            control.DataContext is SshConnectionProfile profile &&
+            DataContext is MainViewModel vm)
+        {
+            vm.ConnectProfileCommand.Execute(profile);
+        }
+    }
+
+    private void Bookmark_DoubleTapped(object? sender, TappedEventArgs e)
+    {
+        if (sender is Control control &&
+            control.DataContext is BookmarkModel bookmark &&
+            DataContext is MainViewModel vm)
+        {
+            vm.OpenBookmarkInTerminal(bookmark);
+        }
+    }
+
     private async void BrowsePrivateKey_Click(object? sender, RoutedEventArgs e)
     {
         try
@@ -79,6 +99,27 @@ public partial class MainWindow : Window
             }
         }
         catch (Exception ex) { Console.WriteLine($"Clipboard copy failed: {ex.Message}"); }
+    }
+
+    private async void OpenSftpFromTerminal_Click(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainViewModel mainVm || mainVm.SelectedTab is not TerminalTabViewModel terminal)
+            return;
+
+        var path = await terminal.GetCurrentDirectoryAsync();
+        if (!string.IsNullOrWhiteSpace(path))
+            mainVm.OpenSftpFromTerminal(terminal, path);
+    }
+
+    private async void AddTerminalDirectoryBookmark_Click(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainViewModel mainVm || mainVm.SelectedTab is not TerminalTabViewModel terminal ||
+            string.IsNullOrWhiteSpace(terminal.ConnectionProfileId))
+            return;
+
+        var path = await terminal.GetCurrentDirectoryAsync();
+        if (!string.IsNullOrWhiteSpace(path))
+            mainVm.AddBookmarkForProfile(path, terminal.ConnectionProfileId);
     }
 
     private async void DownloadFile_Click(object? sender, RoutedEventArgs e)
@@ -166,9 +207,9 @@ public partial class MainWindow : Window
 
     private void RemoveBookmark_Click(object? sender, RoutedEventArgs e)
     {
-        if (sender is Button btn && DataContext is MainViewModel vm && btn.CommandParameter is string path)
+        if (sender is Button btn && DataContext is MainViewModel vm && btn.CommandParameter is BookmarkModel bookmark)
         {
-            vm.RemoveBookmarkCommand.Execute(path);
+            vm.RemoveBookmarkCommand.Execute(bookmark);
         }
     }
 

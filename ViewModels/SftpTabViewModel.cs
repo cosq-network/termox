@@ -147,7 +147,8 @@ public class SftpTabViewModel : INotifyPropertyChanged, ITabViewModel
     }
 
     public void Connect(string host, int port, string username, string password, string privateKeyPath,
-        string? hostKeyFingerprint = null, Action<string>? firstSeenHostKey = null)
+        string? hostKeyFingerprint = null, Action<string>? firstSeenHostKey = null,
+        string? initialPath = null)
     {
         lock (_connectionLock)
         {
@@ -199,7 +200,9 @@ public class SftpTabViewModel : INotifyPropertyChanged, ITabViewModel
                     _sftpClient.Disconnect();
                     return;
                 }
-                CurrentPath = _sftpClient.WorkingDirectory;
+                CurrentPath = string.IsNullOrWhiteSpace(initialPath)
+                    ? _sftpClient.WorkingDirectory
+                    : initialPath;
 
                 Status = "Connected to " + host;
                 StatusColor = "#4caf50";
