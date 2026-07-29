@@ -26,15 +26,18 @@ Open Settings → Actions → General:
    permits it.
 3. Keep pull-request write permissions disabled unless explicitly needed.
 
-The release workflow declares:
+The workflows default to read-only contents access. Only the `publish` job in
+the release workflow declares:
 
 ```yaml
 permissions:
   contents: write
 ```
 
-This permits the workflow to push the release tag and publish the GitHub
-Release. CI uses read-only contents permission.
+This permits only the final release job to push the release tag and publish
+the GitHub Release. CI and all packaging jobs use read-only contents access.
+The release workflow also refuses to run unless it was dispatched from the
+repository's default branch.
 
 ### Branch protection
 
@@ -134,26 +137,28 @@ Before starting:
 4. Confirm the signing certificate has not expired.
 5. Confirm no conflicting vX.Y.Z tag already exists.
 
-Run the workflow from Actions → Release → Run workflow, select the branch,
+Run the workflow from Actions → Release → Run workflow on the default branch,
 choose patch, minor, or major, and start it.
 
 Sequence:
 
 ```text
 Calculate version → run tests → build Windows/Linux/macOS
-→ download artifacts → create and push vX.Y.Z
+→ download artifacts → verify downloaded artifacts → create and push vX.Y.Z
 → generate SHA256SUMS.txt → publish GitHub Release
 ```
 
 The tag is created only after tests and all platform packaging jobs succeed.
-Failed builds therefore do not consume a release tag.
+Every release artifact upload and publish input is checked for expected files.
+If a later publish step fails after the tag is pushed, the cleanup step removes
+the incomplete release tag when possible.
 
 ## 6. Release artifacts
 
 | Platform | Artifacts |
 | --- | --- |
 | Windows | Termox-X.Y.Z-windows-x64.exe, an Inno Setup installer. |
-| Linux | Termox-X.Y.Z-linux-x64.deb and Termox-X.Y.Z-linux-x64.tar.gz. The Debian package targets amd64. |
+| Linux | Termox-X.Y.Z-linux-x64.deb and Termox-X.Y.Z-linux-x64.tar.gz. The packaging script maps linux-x64 to amd64, linux-arm64 to arm64, and linux-arm to armhf. |
 | macOS | Termox-X.Y.Z-osx-x64.dmg and .zip, plus equivalent osx-arm64 files. |
 
 macOS DMGs are signed, notarized, and stapled. ZIPs are created from the
@@ -237,10 +242,10 @@ runner includes it; the .tar.gz archive remains the portable fallback.
 - Rotate Apple app-specific passwords when maintainers change.
 - Replace the .p12 secret before certificate expiration.
 - Restrict release workflow execution to trusted maintainers.
+- Keep third-party GitHub Actions pinned to reviewed commit SHAs.
 - Keep contents: write limited to the release workflow.
 - Never echo secret values or put them in artifact names.
 - Review third-party actions and update major versions deliberately.
 - Verify checksums after downloads.
 - Keep published release tags immutable.
 - Test both macOS architectures after native dependency changes.
-

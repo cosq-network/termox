@@ -15,10 +15,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
         with:
           dotnet-version: '10.0.x'
 
@@ -29,11 +29,11 @@ jobs:
         run: dotnet test tests/Termox.Tests/Termox.Tests.csproj --no-restore --configuration Release --collect:"XPlat Code Coverage"
 
       - name: Build application
-        run: dotnet build Termox.csproj --no-restore --configuration Release -p:VersionPrefix=1.0.0 -p:Version=1.0.0
+        run: dotnet build Termox.csproj --no-restore --configuration Release
 
       - name: Upload coverage
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: coverage
           path: '**/TestResults/**/coverage.cobertura.xml'

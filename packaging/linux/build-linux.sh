@@ -3,6 +3,12 @@ set -euo pipefail
 
 VERSION="${1:?version required}"
 RID="${2:-linux-x64}"
+case "$RID" in
+  linux-x64) ARCH="amd64" ;;
+  linux-arm64) ARCH="arm64" ;;
+  linux-arm) ARCH="armhf" ;;
+  *) echo "Unsupported Linux RID: $RID" >&2; exit 1 ;;
+esac
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 PUBLISH="$ROOT/artifacts/publish/$RID"
 RELEASE="$ROOT/artifacts/release"
@@ -30,7 +36,7 @@ Package: termox
 Version: $VERSION
 Section: net
 Priority: optional
-Architecture: amd64
+Architecture: $ARCH
 Maintainer: Termox Project <contact@cosqnetwork.com>
 Description: Cross-platform SSH and SFTP workspace
  Termox provides SSH terminal sessions, SFTP file management, and network utilities.

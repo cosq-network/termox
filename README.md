@@ -1,242 +1,150 @@
-# Termox - Professional SSH/SFTP Client
+# Termox
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
-![Status](https://img.shields.io/badge/status-production--ready-brightgreen.svg)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue.svg)
 
-**Termox** is an enterprise-grade SSH and SFTP client built with modern UI/UX principles, developed and maintained by **COSQ NETWORK PRIVATE LIMITED**.
+Termox is a cross-platform SSH terminal and SFTP client for managing remote
+servers from one desktop application. It combines interactive terminal
+sessions, remote file management, saved connection profiles, bookmarks, and
+network diagnostics in a focused Avalonia UI.
 
-## 🎯 Overview
+Termox is developed and maintained by COSQ NETWORK PRIVATE LIMITED.
 
-Termox transforms remote SSH management with a comprehensive suite of features for system administrators, DevOps engineers, and developers. Combining terminal emulation, SFTP file management, and advanced network utilities into a single, elegant application.
+## Features
 
-**From code to cloud** – Termox equips your remote access workflows with the tools you need to thrive.
+### SSH terminal
 
-## ✨ Key Features
+- Open SSH connections in separate terminal tabs.
+- Save connection profiles with a name, host, port, username, password, and
+  optional private key path.
+- Support password and private-key authentication through SSH.NET.
+- Test connection details before saving a profile.
+- Restore active terminal and SFTP sessions when the application starts.
+- Open a terminal from a saved session or a bookmark.
+- Use terminal context-menu actions to open SFTP at the current remote
+  directory or add that directory to bookmarks.
+- Display terminal output with ANSI color support and a dark theme.
 
-### 🔐 SSH Terminal Access
-- Full SSH shell access with terminal emulation
-- Multi-tab terminal sessions
-- Real-time output streaming
-- Command history integration
-- ANSI color support
+### SFTP browser
 
-### 📁 SFTP File Management
-- Browse remote filesystems
-- Upload/download files and directories
-- Recursive directory operations
-- Drag-and-drop support (framework ready)
-- File permissions editor
-- Real-time search and filtering
-- Bulk file operations
-- File preview and properties
+- Browse the remote filesystem and navigate through directories.
+- Keep SFTP tabs separate from terminal tabs.
+- Open SFTP from a saved session or bookmark at a selected path.
+- Upload files through the file picker.
+- Download selected files.
+- Rename files and directories.
+- Delete one selected item with confirmation.
+- Delete multiple selected items with bulk-delete confirmation.
+- Edit Unix file permissions.
+- Show file name, type, size, modification time, permissions, and full path.
+- Preview supported text files without downloading them first.
+- Filter the current directory listing with case-insensitive search.
+- Refresh the current directory and navigate to its parent.
+- Use toolbar icons, keyboard shortcuts, and right-click context menus for file
+  operations.
 
-### 🔒 Security Features
-- Password encryption using DPAPI (Windows) / secure storage (other platforms)
-- SSH key-based authentication support
-- Saved connection profiles with secure credential storage
-- Connection validation
+Drag-and-drop upload and in-place text editing are not currently available.
+File preview is read-only and limited to supported text files.
 
-### 🎨 Advanced File Operations
-- Single-click file deletion with recursive support
-- File renaming with modal dialogs
-- Permission management (Unix permissions editor)
-- Bulk delete operations with success tracking
-- File metadata display (size, permissions, modified date)
+### Sessions and bookmarks
 
-### 🔍 Navigation & Discovery
-- Bookmark system for quick directory access
-- File search and filtering in real-time
-- Quick-access navigation
-- Connection history
+- Store saved sessions in a dedicated Sessions tab.
+- Store bookmarks in a dedicated Bookmarks tab.
+- Associate each bookmark with its saved session and remote path.
+- Open a bookmark in either a new SSH terminal or a new SFTP tab.
+- Delete bookmarks with confirmation.
+- Persist sessions and bookmarks between application runs.
 
-### ⌨️ User-Friendly Interface
-- Keyboard shortcuts (F2, Ctrl+U, Ctrl+D, Ctrl+Del, Ctrl+S)
-- Right-click context menus
-- File preview for text files (15+ formats)
-- Professional dark theme
-- Color-coded status indicators
+### Network and SSH tools
 
-### 🛠️ Network & SSH Utilities
-- **Port Scanner**: Check open/closed ports on remote hosts
-- **Ping Test**: ICMP connectivity testing with latency measurement
-- **SSH Key Generator**: Create RSA and ED25519 keypairs
-- **Connection Batch Tester**: Test all saved connections simultaneously
-- **Speed Test**: Framework for SFTP benchmark testing
+The Tools tab provides the following utilities:
 
-## 🚀 Getting Started
+- Port Scanner: test TCP reachability for a host and a list of ports.
+- Ping Test: send ICMP requests and display response times.
+- SSH Key Generator: create RSA or ED25519 key pairs using the system
+  `ssh-keygen` command and copy the generated keys.
+- Connection Tester: test all saved SSH connection profiles and report status
+  and response time.
+- SSH Endpoint Test: provide an endpoint testing interface for SSH and SFTP
+  responsiveness.
 
-### System Requirements
-- **OS**: Windows, macOS, or Linux
-- **Development**: .NET 10.0 SDK
-- **Release users**: Self-contained installers; no separate .NET runtime required
-- **Memory**: 256 MB minimum
-- **Disk Space**: 100 MB for installation
-
-### Installation
-
-#### Windows
-1. Download the latest release from [GitHub Releases](https://github.com/cosqnetwork/termox/releases)
-2. Run the installer
-3. Launch Termox from Start Menu
-
-#### macOS
-1. Download the DMG file from [GitHub Releases](https://github.com/cosqnetwork/termox/releases)
-2. Drag Termox to Applications folder
-3. Launch from Applications or Spotlight
-
-#### Linux
-```bash
-# Ubuntu/Debian: download the .deb from GitHub Releases, then run:
-sudo apt install ./Termox-X.Y.Z-linux-x64.deb
-
-# Or extract the portable .tar.gz archive
-```
-
-### Releases and versioning
-
-GitHub Actions publishes self-contained, versioned installers for Windows,
-Linux, and macOS. Maintainers run **Actions → Release → Run workflow** and
-choose a `patch`, `minor`, or `major` increment. CI creates the next `vX.Y.Z`
-tag, builds every platform, generates `SHA256SUMS.txt`, and publishes the
-GitHub Release automatically. Pull requests and pushes to the main branch run
-build and test validation without creating a release.
-
-See the [CI/CD integration guide](docs/CI-CD-INTEGRATION.md) for repository
-permissions, Apple signing secrets, release procedures, and troubleshooting.
-
-### First Connection
-1. Click "New Connection" in the Sessions tab
-2. Enter SSH server details:
-   - **Connection Name**: Descriptive name
-   - **Remote Host**: hostname or IP
-   - **Username**: SSH username
-   - **Port**: SSH port (default: 22)
-   - **Authentication**: Password or Private Key
-3. Click "Test Connection" to verify
-4. Click "Save Connection" to store profile
-
-## 📖 Usage Guide
-
-### SSH Terminal Access
-- **New Tab**: Use "New Connection" to open terminal
-- **Multiple Sessions**: Open multiple SSH connections in tabs
-- **Copy/Paste**: Right-click for context menu
-
-### SFTP File Management
-- **Browse**: Click "Open SFTP Browser" on any connection
-- **Upload**: Click "Upload File..." or use Ctrl+U
-- **Download**: Select files, click "Download..." or use Ctrl+D
-- **Rename**: Click "Rename" or press F2
-- **Delete**: Select and press Delete or Ctrl+Del
-- **Permissions**: Click "Perms..." to edit file permissions
-
-### Network Tools
-- Click "Tools" in Sessions tab to access utilities
-- **Port Scanner**: Check service availability
-- **Ping Test**: Verify network connectivity
-- **Connection Tester**: Batch test all saved profiles
-- **Key Generator**: Create SSH keypairs
-
-## ⌨️ Keyboard Shortcuts
+## Keyboard shortcuts
 
 | Shortcut | Action |
-|----------|--------|
-| F2 | Rename selected file |
+| --- | --- |
+| F2 | Rename the selected remote file or directory |
 | Ctrl+U | Upload files |
 | Ctrl+D | Download selected files |
-| Ctrl+Del | Delete selected file |
-| Ctrl+S | Save current path as bookmark |
+| Delete | Delete the selected remote item |
+| Ctrl+Delete | Delete the selected remote item |
+| Ctrl+S | Add the current SFTP directory to bookmarks |
 
-## 🔐 Security
+## Security
 
-- **Credentials**: Stored using Windows DPAPI, macOS Keychain, or the Linux Secret Service
-- **SSH Keys**: Supports RSA, ED25519, ECDSA key algorithms
-- **Host verification**: SSH host fingerprints are trusted on first use and pinned for subsequent connections
-- **No Telemetry**: Completely private, no data collection
+- SSH host fingerprints are recorded and checked on later connections.
+- Passwords and saved connection data use platform application-data storage and
+  the application's credential management services.
+- Private key authentication is supported with optional key passphrases.
+- SSH keys generated by the Tools tab are created locally.
+- No analytics or application telemetry is intentionally collected by Termox.
 
-### Best Practices
-1. Always use key-based authentication when possible
-2. Regularly update SSH keys
-3. Use strong passphrases for private keys
-4. Restrict access to saved connection profiles
-5. Keep software updated for security patches
+Review the security implementation in [Services/SshSecurity.cs](Services/SshSecurity.cs),
+[Services/CredentialManager.cs](Services/CredentialManager.cs), and
+[Services/LocalPathSafety.cs](Services/LocalPathSafety.cs).
 
-## 📊 Features by Category
+## Installation
 
-### Session Management
-✅ Save connection profiles  
-✅ Password encryption  
-✅ Session persistence  
-✅ Auto-reconnect  
-✅ Connection history  
+Release packages are available on the
+[GitHub Releases page](https://github.com/cosqnetwork/termox/releases).
+Release packages are self-contained and do not require a separate .NET runtime.
 
-### File Operations
-✅ Upload/download  
-✅ Rename files  
-✅ Delete files/folders  
-✅ Edit permissions  
-✅ Bulk operations  
-✅ File preview  
+### Windows
 
-### User Experience
-✅ Keyboard shortcuts  
-✅ Context menus  
-✅ Dark theme  
-✅ Bookmarks  
-✅ Search/filter  
-✅ Status indicators  
+Download and run the Windows installer, then launch Termox from the Start menu.
 
-### Network Tools
-✅ Port scanner  
-✅ Ping test  
-✅ Connection tester  
-✅ Key generator  
-✅ Speed test framework  
+### macOS
 
-## 🏢 About COSQ NETWORK
+Download the DMG, open it, and drag Termox to the Applications folder. The
+release workflow signs and notarizes macOS packages when the required Apple
+credentials are configured.
 
-**COSQ NETWORK PRIVATE LIMITED** is a leading technology company specializing in AI, Cloud, and DevOps solutions.
+### Linux
 
-**Motto**: "From code to cloud, we equip your business with the software and IT infrastructure it needs to thrive."
+Install the Debian package on Debian-based systems:
 
-**Services**:
-- AI Chatbot Integration
-- Machine Learning Operations (MLOps)
-- Artificial Intelligence & Data Solutions
-- Cloud & DevOps Architecture
-- Data Engineering & Analytics
-- Emerging Technologies & Automation
+```bash
+sudo apt install ./Termox-X.Y.Z-linux-x64.deb
+```
 
-**Contact**:
-- 📍 TC 15/4247-4, 2nd Floor, Horizon Tower, Pattom, Thiruvananthapuram, Kerala 695004
-- 📞 +91 8078078789
-- 🌐 https://cosqnetwork.com/
+Alternatively, extract the portable tar archive:
 
-## 📄 License
+```bash
+tar -xzf Termox-X.Y.Z-linux-x64.tar.gz
+```
 
-Termox is released under the **MIT License**. See [LICENSE](LICENSE) file for details.
+The Linux packaging script supports `linux-x64`, `linux-arm64`, and `linux-arm`
+runtime identifiers. The release workflow currently publishes the x64 package.
 
-Copyright © 2026 **COSQ NETWORK PRIVATE LIMITED**. All Rights Reserved.
+## First connection
 
-### MIT License Summary
-- ✅ **Use**: Commercial and private use
-- ✅ **Modify**: Create derivative works
-- ✅ **Distribute**: Distribute under original or modified form
-- ⚠️ **Condition**: Must include original license and copyright
-- ❌ **Liability**: Software provided as-is without warranty
+1. Open the Sessions tab and select New Connection.
+2. Enter a connection name, host, username, and SSH port.
+3. Enter a password, choose a private key, or use both as appropriate.
+4. Select Test Connection to validate the connection details.
+5. Select Save Connection to store the profile.
+6. Open the saved session to create a new SSH terminal tab.
+7. Use Open SFTP Browser from the session menu to create an SFTP tab.
 
-## 🤝 Contributing
+## Development
 
-We welcome contributions! To contribute:
+### Requirements
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+- .NET 10.0 SDK
+- Windows, macOS, or Linux
+- A working SSH server for manual connection testing
 
-### Development Setup
+### Build and test
+
 ```bash
 git clone https://github.com/cosqnetwork/termox.git
 cd termox
@@ -246,107 +154,58 @@ dotnet build Termox.csproj --configuration Release
 dotnet run
 ```
 
-### Technology Stack
-- **Language**: C#
-- **Framework**: Avalonia UI (cross-platform)
-- **SSH**: SSH.NET (Renci.SshNet)
-- **Target**: .NET 10.0
+The project uses MVVM with Avalonia UI. SSH and SFTP functionality is provided
+by SSH.NET. Automated tests are located in `tests/Termox.Tests`.
 
-## 🐛 Reporting Issues
+## CI/CD and releases
 
-Found a bug? Have a feature request? Please open an [issue](https://github.com/cosqnetwork/termox/issues) with:
-- Clear description of the issue
-- Steps to reproduce (for bugs)
-- Expected vs actual behavior
-- System information (OS, .NET version)
+GitHub Actions runs CI for pull requests and pushes to `main` or `master`. CI
+restores dependencies, runs tests, builds the application, and uploads coverage
+when available.
 
-## 📚 Documentation
+The Release workflow is manually started from the default branch. It accepts a
+`patch`, `minor`, or `major` bump, finds the newest `vX.Y.Z` tag, calculates the
+next version, builds Windows, Linux, and macOS packages, verifies artifacts,
+generates `SHA256SUMS.txt`, and publishes a GitHub Release.
 
-- [CI/CD Integration Guide](docs/CI-CD-INTEGRATION.md)
-- [Implemented Features](FEATURES_IMPLEMENTED.md)
-- [Enterprise Features](FEATURES_ENTERPRISE.md)
-- [Advanced Features](FEATURES_ADVANCED.md)
-- [Network Tools](FEATURES_NETWORK_TOOLS.md)
-- [Packaging Notes](packaging/README.md)
+See the [CI/CD integration guide](docs/CI-CD-INTEGRATION.md) for repository
+permissions, Apple signing secrets, release procedures, and troubleshooting.
 
-## 🎯 Roadmap
+## Project structure
 
-### Planned Features
-- [ ] Drag & drop file uploads
-- [x] Cross-platform credential manager integration
-- [ ] Connection profiles import/export
-- [ ] Bulk file operations (copy, move, rename patterns)
-- [ ] Syntax highlighting in file preview
-- [ ] Permission calculator UI
-- [ ] Port forwarding / tunneling
-- [ ] Multi-server command execution
-- [ ] Activity log / audit trail
+```text
+Views/          Avalonia windows and controls
+ViewModels/     MVVM application and tab logic
+Models/         Connection, bookmark, and remote file models
+Services/       Credential, host-key, and path-safety services
+Assets/         Application icons and font resources
+packaging/      Windows, Linux, and macOS packaging scripts
+tests/          Automated tests
+```
 
-## 💡 Tips & Tricks
+## Contributing
 
-### Optimize Performance
-1. Use key-based authentication (faster than passwords)
-2. Bookmark frequently-used directories
-3. Batch test connections during off-peak hours
+1. Fork the repository.
+2. Create a feature branch.
+3. Make the change and add or update tests where appropriate.
+4. Run the build and test commands locally.
+5. Open a pull request with a clear description and testing notes.
 
-### Keyboard Efficiency
-- Master keyboard shortcuts to work faster
-- Use Ctrl+S to quickly bookmark important paths
-- Press F2 to rename files without mouse
+For bug reports, include the operating system, Termox version, connection type,
+steps to reproduce, expected behavior, and actual behavior. Do not include
+passwords, private keys, or other sensitive connection information.
 
-### Network Troubleshooting
-1. Use Port Scanner to verify firewall rules
-2. Run Ping Test to check latency
-3. Use Connection Tester before critical operations
+## License
 
-## 📞 Support
+Termox is released under the MIT License. See [LICENSE](LICENSE) for details.
 
-**Issues & Bugs**: [GitHub Issues](https://github.com/cosqnetwork/termox/issues)  
-**Email**: contact@cosqnetwork.com  
-**Website**: https://cosqnetwork.com/
+Copyright 2026 COSQ NETWORK PRIVATE LIMITED.
 
-## 📝 Changelog
+## Contact
 
-### Release history
+COSQ NETWORK PRIVATE LIMITED
 
-Release versions are generated from Git tags by GitHub Actions. See the
-[CI/CD integration guide](docs/CI-CD-INTEGRATION.md) for the versioning policy
-and release process.
-
-### Baseline 1.0.0
-- Initial product baseline
-- SSH terminal access
-- SFTP file management
-- Network & SSH utilities
-- Advanced file operations
-- Security features (encryption, bookmarks, session persistence)
-
-## ⭐ Show Your Support
-
-If Termox helps you with your remote access workflows, please:
-- ⭐ Star this repository
-- 🔗 Share with colleagues
-- 📝 Leave feedback
-- 🐛 Report issues
-- 🤝 Contribute code
-
-## 🙏 Acknowledgments
-
-Termox is built with:
-- [Avalonia UI](https://avaloniaui.net/) - Cross-platform UI framework
-- [SSH.NET](https://github.com/sshnet/SSH.NET) - SSH library
-- [.NET 10.0](https://dotnet.microsoft.com/) - Runtime platform
-
-## 📄 Legal
-
-© 2026 **COSQ NETWORK PRIVATE LIMITED**. All Rights Reserved.
-
-Termox is provided under the MIT License. See LICENSE file for full terms.
-
----
-
-**Made with ❤️ by COSQ NETWORK PRIVATE LIMITED**
-
-*From code to cloud, we equip your business with the software and IT infrastructure it needs to thrive.*
-
-Visit us: https://cosqnetwork.com/
+- Website: https://cosqnetwork.com/
+- Address: TC 15/4247-4, 2nd Floor, Horizon Tower, Pattom,
+  Thiruvananthapuram, Kerala 695004
+- Phone: +91 8078078789
