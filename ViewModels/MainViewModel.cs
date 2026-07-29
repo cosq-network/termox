@@ -278,7 +278,6 @@ public class MainViewModel : INotifyPropertyChanged
         ShowFilePropertiesCommand = new RelayCommand<RemoteFileModel>(ShowFileProperties);
         PreviewFileCommand = new RelayCommand<RemoteFileModel>(PreviewFile);
         EditFilePermissionsCommand = new RelayCommand<RemoteFileModel>(EditFilePermissions);
-        OpenToolsTabCommand = new RelayCommand(OpenToolsTab);
         OpenPortScannerTabCommand = new RelayCommand(OpenPortScannerTab);
         OpenPingTestTabCommand = new RelayCommand(OpenPingTestTab);
         OpenSshKeyGeneratorTabCommand = new RelayCommand(OpenSshKeyGeneratorTab);
@@ -542,7 +541,6 @@ public class MainViewModel : INotifyPropertyChanged
         SaveCurrentSessions();
     }
 
-    public ICommand OpenToolsTabCommand { get; private set; }
     public ICommand ShowAboutDialogCommand { get; }
 
     private bool _isAboutDialogVisible;
@@ -779,14 +777,6 @@ public class MainViewModel : INotifyPropertyChanged
         if (file == null) return;
         SelectedFileForPermissions = file;
         IsPermissionsModalVisible = true;
-    }
-
-    private void OpenToolsTab()
-    {
-        var toolsTab = new ToolsTabViewModel(t => { Tabs.Remove(t); SaveCurrentSessions(); });
-        toolsTab.SetConnections(SavedConnections);
-        Tabs.Add(toolsTab);
-        SelectedTab = toolsTab;
     }
 
     private void OpenPortScannerTab()

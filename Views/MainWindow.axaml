@@ -30,13 +30,9 @@
                     <Separator />
                     <MenuItem Header="Exit Termox" Click="ExitTermox_Click" />
                 </MenuItem>
-                <MenuItem Header="_File">
+                <MenuItem Header="_Session">
                     <MenuItem Header="New Connection"
                         Command="{Binding ShowConnectionModalCommand}" />
-                    <MenuItem Header="Open Tools"
-                        Command="{Binding OpenToolsTabCommand}" />
-                </MenuItem>
-                <MenuItem Header="_Session">
                     <MenuItem Header="Disconnect Current Tab"
                         Command="{Binding DisconnectCommand}" />
                 </MenuItem>
@@ -78,11 +74,6 @@
                                             Background="#333337" Foreground="#e0e0e0" Padding="12,6"
                                             CornerRadius="4" FontSize="11"
                                             HorizontalAlignment="Left" />
-                                        <Button Content="About"
-                                            Command="{Binding ShowAboutDialogCommand}"
-                                            Background="#333337" Foreground="#e0e0e0" Padding="12,6"
-                                            CornerRadius="4" FontSize="11"
-                                            HorizontalAlignment="Left" ToolTip.Tip="About Termox" />
                                     </StackPanel>
 
                                     <TextBlock Text="Saved Sessions" FontWeight="SemiBold"
@@ -94,10 +85,11 @@
                                             <DataTemplate>
                                                 <Grid ColumnDefinitions="Auto, *" Margin="0,4"
                                                     Background="Transparent"
-                                                    ToolTip.Tip="{Binding Host}">
+                                                    ToolTip.Tip="{Binding Host}"
+                                                    DoubleTapped="SavedSession_DoubleTapped">
                                                     <Grid.ContextMenu>
                                                         <ContextMenu>
-                                                            <MenuItem Header="Connect"
+                                                            <MenuItem Header="Open SSH Terminal"
                                                                 Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).ConnectProfileCommand}"
                                                                 CommandParameter="{Binding}" />
                                                             <MenuItem Header="Open SFTP Browser"
@@ -189,36 +181,36 @@
                                 HorizontalScrollBarVisibility="Disabled">
                                 <WrapPanel Margin="15" Orientation="Horizontal"
                                     HorizontalAlignment="Left">
-                                <Button Content="Port Scanner"
-                                    Command="{Binding OpenPortScannerTabCommand}"
-                                    Background="#333337" Foreground="#e0e0e0"
-                                    Padding="12,7" Margin="0,0,8,8" CornerRadius="16"
-                                    FontSize="11"
-                                    ToolTip.Tip="Open the dedicated port scanner tab" />
-                                <Button Content="Ping Test"
-                                    Command="{Binding OpenPingTestTabCommand}"
-                                    Background="#333337" Foreground="#e0e0e0"
-                                    Padding="12,7" Margin="0,0,8,8" CornerRadius="16"
-                                    FontSize="11"
-                                    ToolTip.Tip="Open the dedicated ping test tab" />
-                                <Button Content="SSH Key Generator"
-                                    Command="{Binding OpenSshKeyGeneratorTabCommand}"
-                                    Background="#333337" Foreground="#e0e0e0"
-                                    Padding="12,7" Margin="0,0,8,8" CornerRadius="16"
-                                    FontSize="11"
-                                    ToolTip.Tip="Open the dedicated SSH key generator tab" />
-                                <Button Content="Connection Tester"
-                                    Command="{Binding OpenConnectionTesterTabCommand}"
-                                    Background="#333337" Foreground="#e0e0e0"
-                                    Padding="12,7" Margin="0,0,8,8" CornerRadius="16"
-                                    FontSize="11"
-                                    ToolTip.Tip="Test all saved connections" />
-                                <Button Content="SSH Endpoint Test"
-                                    Command="{Binding OpenSshEndpointTestTabCommand}"
-                                    Background="#333337" Foreground="#e0e0e0"
-                                    Padding="12,7" Margin="0,0,8,8" CornerRadius="16"
-                                    FontSize="11"
-                                    ToolTip.Tip="Test SSH endpoint performance" />
+                                    <Button Content="Port Scanner"
+                                        Command="{Binding OpenPortScannerTabCommand}"
+                                        Background="#333337" Foreground="#e0e0e0"
+                                        Padding="12,7" Margin="0,0,8,8" CornerRadius="16"
+                                        FontSize="11"
+                                        ToolTip.Tip="Open the dedicated port scanner tab" />
+                                    <Button Content="Ping Test"
+                                        Command="{Binding OpenPingTestTabCommand}"
+                                        Background="#333337" Foreground="#e0e0e0"
+                                        Padding="12,7" Margin="0,0,8,8" CornerRadius="16"
+                                        FontSize="11"
+                                        ToolTip.Tip="Open the dedicated ping test tab" />
+                                    <Button Content="SSH Key Generator"
+                                        Command="{Binding OpenSshKeyGeneratorTabCommand}"
+                                        Background="#333337" Foreground="#e0e0e0"
+                                        Padding="12,7" Margin="0,0,8,8" CornerRadius="16"
+                                        FontSize="11"
+                                        ToolTip.Tip="Open the dedicated SSH key generator tab" />
+                                    <Button Content="Connection Tester"
+                                        Command="{Binding OpenConnectionTesterTabCommand}"
+                                        Background="#333337" Foreground="#e0e0e0"
+                                        Padding="12,7" Margin="0,0,8,8" CornerRadius="16"
+                                        FontSize="11"
+                                        ToolTip.Tip="Test all saved connections" />
+                                    <Button Content="SSH Endpoint Test"
+                                        Command="{Binding OpenSshEndpointTestTabCommand}"
+                                        Background="#333337" Foreground="#e0e0e0"
+                                        Padding="12,7" Margin="0,0,8,8" CornerRadius="16"
+                                        FontSize="11"
+                                        ToolTip.Tip="Test SSH endpoint performance" />
                                 </WrapPanel>
                             </ScrollViewer>
                         </TabItem>
@@ -264,9 +256,9 @@
                                                     </MenuItem.Icon>
                                                 </MenuItem>
                                                 <Separator />
-                                                <MenuItem Header="Open SFTP Browser Here"
+                                                <MenuItem Header="Open SFTP"
                                                     Click="OpenSftpFromTerminal_Click" />
-                                                <MenuItem Header="Add Current Directory to Bookmarks"
+                                                <MenuItem Header="Add to Bookmarks"
                                                     Click="AddTerminalDirectoryBookmark_Click" />
                                             </ContextMenu>
                                         </terminal:TerminalControl.ContextMenu>
@@ -1575,15 +1567,6 @@
                                 <Run Text="&#10;" />
                                 <Run Text="Built for developers, operators, and anyone who works across remote systems." />
                             </TextBlock>
-                        </StackPanel>
-
-                        <!-- Features -->
-                        <StackPanel Spacing="8" Margin="0,15,0,0">
-                            <TextBlock Text="Key Features" Foreground="#888" FontSize="12"
-                                FontWeight="SemiBold" />
-                            <TextBlock
-                                Text="✓ SSH Terminal Access&#10;✓ SFTP File Management&#10;✓ Password Encryption&#10;✓ Network Utilities&#10;✓ Bulk File Operations&#10;✓ Keyboard Shortcuts&#10;✓ File Permissions Editor"
-                                Foreground="#ccc" FontSize="11" LineHeight="18" />
                         </StackPanel>
 
                         <!-- Tech Stack -->
