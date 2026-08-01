@@ -13,6 +13,26 @@
     <Application.Styles>
         <FluentTheme />
 
+        <Style Selector="Button.toolButton">
+            <Setter Property="Background" Value="#333337" />
+            <Setter Property="Foreground" Value="#e5e7eb" />
+            <Setter Property="Padding" Value="12,8" />
+            <Setter Property="Margin" Value="0,0,8,8" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="FontSize" Value="11" />
+        </Style>
+        <Style Selector="Button.toolButton:pointerover">
+            <Setter Property="Background" Value="#414750" />
+        </Style>
+        <Style Selector="Button.primaryButton">
+            <Setter Property="Background" Value="#1769aa" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="CornerRadius" Value="6" />
+        </Style>
+        <Style Selector="Button.primaryButton:pointerover">
+            <Setter Property="Background" Value="#2185c5" />
+        </Style>
+
         <!--
             Keep the terminal's ANSI palette readable on its near-black
             background.  Directory listings commonly use ANSI blue (color 4),
@@ -22,6 +42,14 @@
     </Application.Styles>
 
     <Application.Resources>
+        <!-- Shared visual language for the workspace. These resources are presentation-only. -->
+        <SolidColorBrush x:Key="TermoxSurfaceBrush" Color="#252526" />
+        <SolidColorBrush x:Key="TermoxSurfaceRaisedBrush" Color="#2d2d30" />
+        <SolidColorBrush x:Key="TermoxSurfaceHoverBrush" Color="#30343b" />
+        <SolidColorBrush x:Key="TermoxSelectionBrush" Color="#264f78" />
+        <SolidColorBrush x:Key="TermoxAccentBrush" Color="#4f9dde" />
+        <SolidColorBrush x:Key="TermoxMutedBrush" Color="#9299a3" />
+        <SolidColorBrush x:Key="TermoxSuccessBrush" Color="#4caf78" />
         <FontFamily x:Key="MaterialIconFont">
             avares://Termox/Assets/Fonts#Material Icons
         </FontFamily>

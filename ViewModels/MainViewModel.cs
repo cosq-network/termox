@@ -43,6 +43,10 @@ public class MainViewModel : INotifyPropertyChanged
 
     public ObservableCollection<ITabViewModel> Tabs { get; } = new();
 
+    public bool HasSavedConnections => SavedConnections.Count > 0;
+    public bool HasBookmarks => Bookmarks.Count > 0;
+    public bool HasTabs => Tabs.Count > 0;
+
     private ITabViewModel? _selectedTab;
     public ITabViewModel? SelectedTab
     {
@@ -254,6 +258,10 @@ public class MainViewModel : INotifyPropertyChanged
 
     public MainViewModel()
     {
+        SavedConnections.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasSavedConnections));
+        Bookmarks.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasBookmarks));
+        Tabs.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasTabs));
+
         ConnectCommand = new RelayCommand(() => Connect());
         DisconnectCommand = new RelayCommand(() => SelectedTab?.DisconnectCommand.Execute(null));
         ShowConnectionModalCommand = new RelayCommand(() => { IsConnectionModalVisible = true; TestStatus = ""; TestStatusColor = "#5bc0de"; IsTestSuccessful = false; });

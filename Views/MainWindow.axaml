@@ -44,9 +44,12 @@
 
 
             <!-- Status Bar at the bottom -->
-            <Border DockPanel.Dock="Bottom" Background="#007acc" Padding="10,2">
+            <Border DockPanel.Dock="Bottom" Background="#18527a" Padding="10,3">
                 <DockPanel>
-                    <TextBlock Text="Ready" Foreground="White" FontSize="12" DockPanel.Dock="Left" />
+                    <StackPanel Orientation="Horizontal" Spacing="7" DockPanel.Dock="Left">
+                        <TextBlock Text="●" Foreground="#6ee7a8" FontSize="11" VerticalAlignment="Center" />
+                        <TextBlock Text="Ready" Foreground="#f4f7fb" FontSize="12" VerticalAlignment="Center" />
+                    </StackPanel>
                     <TextBlock Text="TERMOX  /  SSH WORKSPACE" Foreground="White" FontSize="12"
                         DockPanel.Dock="Right" HorizontalAlignment="Right" />
                 </DockPanel>
@@ -62,6 +65,12 @@
                             <Style Selector="TabItem">
                                 <Setter Property="FontSize" Value="13" />
                                 <Setter Property="MinHeight" Value="35" />
+                            </Style>
+                            <Style Selector="ListBoxItem:pointerover /template/ Border#PART_ContentPresenter">
+                                <Setter Property="Background" Value="#30343b" />
+                            </Style>
+                            <Style Selector="ListBoxItem:selected /template/ Border#PART_ContentPresenter">
+                                <Setter Property="Background" Value="#264f78" />
                             </Style>
                         </TabControl.Styles>
 
@@ -120,6 +129,13 @@
                                             </DataTemplate>
                                         </ListBox.ItemTemplate>
                                     </ListBox>
+                                    <StackPanel IsVisible="{Binding !HasSavedConnections}" Spacing="4"
+                                        Margin="4,12,4,0">
+                                        <TextBlock Text="No saved sessions yet" Foreground="#c9d1db"
+                                            FontWeight="SemiBold" FontSize="12" />
+                                        <TextBlock Text="Create a connection to get started."
+                                            Foreground="#858d98" FontSize="11" TextWrapping="Wrap" />
+                                    </StackPanel>
 
                                 </StackPanel>
                             </ScrollViewer>
@@ -173,6 +189,13 @@
                                             </DataTemplate>
                                         </ListBox.ItemTemplate>
                                     </ListBox>
+                                    <StackPanel IsVisible="{Binding !HasBookmarks}" Spacing="4"
+                                        Margin="4,12,4,0">
+                                        <TextBlock Text="No bookmarks yet" Foreground="#c9d1db"
+                                            FontWeight="SemiBold" FontSize="12" />
+                                        <TextBlock Text="Bookmark a remote folder from SFTP."
+                                            Foreground="#858d98" FontSize="11" TextWrapping="Wrap" />
+                                    </StackPanel>
                                 </StackPanel>
                             </ScrollViewer>
                         </TabItem>
@@ -181,35 +204,20 @@
                                 HorizontalScrollBarVisibility="Disabled">
                                 <WrapPanel Margin="15" Orientation="Horizontal"
                                     HorizontalAlignment="Left">
-                                    <Button Content="Port Scanner"
+                                    <Button Content="Port Scanner" Classes="toolButton"
                                         Command="{Binding OpenPortScannerTabCommand}"
-                                        Background="#333337" Foreground="#e0e0e0"
-                                        Padding="12,7" Margin="0,0,8,8" CornerRadius="16"
-                                        FontSize="11"
                                         ToolTip.Tip="Open the dedicated port scanner tab" />
-                                    <Button Content="Ping Test"
+                                    <Button Content="Ping Test" Classes="toolButton"
                                         Command="{Binding OpenPingTestTabCommand}"
-                                        Background="#333337" Foreground="#e0e0e0"
-                                        Padding="12,7" Margin="0,0,8,8" CornerRadius="16"
-                                        FontSize="11"
                                         ToolTip.Tip="Open the dedicated ping test tab" />
-                                    <Button Content="SSH Key Generator"
+                                    <Button Content="SSH Key Generator" Classes="toolButton"
                                         Command="{Binding OpenSshKeyGeneratorTabCommand}"
-                                        Background="#333337" Foreground="#e0e0e0"
-                                        Padding="12,7" Margin="0,0,8,8" CornerRadius="16"
-                                        FontSize="11"
                                         ToolTip.Tip="Open the dedicated SSH key generator tab" />
-                                    <Button Content="Connection Tester"
+                                    <Button Content="Connection Tester" Classes="toolButton"
                                         Command="{Binding OpenConnectionTesterTabCommand}"
-                                        Background="#333337" Foreground="#e0e0e0"
-                                        Padding="12,7" Margin="0,0,8,8" CornerRadius="16"
-                                        FontSize="11"
                                         ToolTip.Tip="Test all saved connections" />
-                                    <Button Content="SSH Endpoint Test"
+                                    <Button Content="SSH Endpoint Test" Classes="toolButton"
                                         Command="{Binding OpenSshEndpointTestTabCommand}"
-                                        Background="#333337" Foreground="#e0e0e0"
-                                        Padding="12,7" Margin="0,0,8,8" CornerRadius="16"
-                                        FontSize="11"
                                         ToolTip.Tip="Test SSH endpoint performance" />
                                 </WrapPanel>
                             </ScrollViewer>
@@ -222,7 +230,8 @@
                     HorizontalAlignment="Center" VerticalAlignment="Stretch" />
 
                 <!-- Terminal Area with Tab -->
-                <Border Grid.Column="2" Background="#1e1e1e">
+                <Grid Grid.Column="2" Background="#1e1e1e">
+                    <Border Background="#1e1e1e">
                         <TabControl ItemsSource="{Binding Tabs}" SelectedItem="{Binding SelectedTab}">
                         <TabControl.ItemTemplate>
                             <DataTemplate>
@@ -1151,8 +1160,27 @@
                                 </TabControl>
                             </DataTemplate>
                         </TabControl.DataTemplates>
-                    </TabControl>
-                </Border>
+                        </TabControl>
+                    </Border>
+                    <Border IsVisible="{Binding !HasTabs}" Background="#1e1e1e">
+                        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"
+                            Spacing="12" Width="360">
+                            <Image Source="/Assets/Icons/termox-icon.png" Width="72" Height="72"
+                                HorizontalAlignment="Center" Opacity="0.9" />
+                            <TextBlock Text="Welcome to Termox" Foreground="#f1f5f9"
+                                FontSize="25" FontWeight="SemiBold" HorizontalAlignment="Center" />
+                            <TextBlock Text="Your secure SSH and SFTP workspace"
+                                Foreground="#9aa4b2" FontSize="13" HorizontalAlignment="Center" />
+                            <Button Content="＋  New Connection"
+                                Command="{Binding ShowConnectionModalCommand}"
+                                Classes="primaryButton" Padding="18,10"
+                                HorizontalAlignment="Center" Margin="0,8,0,0" />
+                            <TextBlock Text="Double-click a saved session to open it, or use the Tools tab for network utilities."
+                                Foreground="#737d8a" FontSize="11" TextWrapping="Wrap"
+                                TextAlignment="Center" HorizontalAlignment="Center" />
+                        </StackPanel>
+                    </Border>
+                </Grid>
             </Grid>
         </DockPanel>
 
@@ -1174,6 +1202,8 @@
 
                         <Rectangle Height="1" Fill="#444" Margin="0,5,0,10" />
 
+                        <TextBlock Text="SERVER" Foreground="#6ea9d4" FontSize="10"
+                            FontWeight="Bold" LetterSpacing="1.2" />
                         <TextBlock Text="Connection Name" Foreground="#aaaaaa" FontSize="13" />
                         <TextBox Text="{Binding ConnectionName}" Background="#1e1e1e"
                             Foreground="#e0e0e0" BorderThickness="1" BorderBrush="#555" Padding="8"
@@ -1202,6 +1232,8 @@
                             </StackPanel>
                         </Grid>
 
+                        <TextBlock Text="AUTHENTICATION" Foreground="#6ea9d4" FontSize="10"
+                            FontWeight="Bold" LetterSpacing="1.2" Margin="0,5,0,0" />
                         <TextBlock Text="Password" Foreground="#aaaaaa" FontSize="13"
                             Margin="0,5,0,0" />
                         <TextBox Text="{Binding Password}" Background="#1e1e1e" Foreground="#e0e0e0"
@@ -1223,7 +1255,9 @@
                                 CornerRadius="4" ToolTip.Tip="Browse for Private Key" />
                         </Grid>
 
-                        <StackPanel Margin="0,15,0,0" Spacing="15">
+                        <TextBlock Text="VERIFICATION" Foreground="#6ea9d4" FontSize="10"
+                            FontWeight="Bold" LetterSpacing="1.2" Margin="0,5,0,0" />
+                        <StackPanel Margin="0,5,0,0" Spacing="15">
                             <TextBlock Text="{Binding TestStatus}"
                                 Foreground="{Binding TestStatusColor}" TextWrapping="Wrap"
                                 HorizontalAlignment="Left" FontSize="13" FontWeight="Medium" />
@@ -1233,8 +1267,8 @@
                                     Command="{Binding HideConnectionModalCommand}"
                                     Background="#444" Foreground="#e0e0e0" Padding="15,8"
                                     CornerRadius="4" />
-                                <Button Content="Test Connection"
-                                    Command="{Binding TestConnectionCommand}" Background="#5bc0de"
+                                <Button Content="Test Connection" Classes="primaryButton"
+                                    Command="{Binding TestConnectionCommand}" Background="#1769aa"
                                     Foreground="White" Padding="15,8" CornerRadius="4" />
                                 <Button Content="Save Connection"
                                     Command="{Binding SaveConnectionCommand}"
