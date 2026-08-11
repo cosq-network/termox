@@ -4,6 +4,7 @@ using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using System;
 using System.IO;
+using System.Threading.Tasks;
 using Termox.ViewModels;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
@@ -256,45 +257,78 @@ public partial class MainWindow : Window
         {
             if (e.Key == Key.F2 && vm.SelectedFile != null)
             {
-                // F2 - Rename
-                RenameFile_Click(new Button { DataContext = vm }, new RoutedEventArgs());
+                TriggerRename(vm);
                 e.Handled = true;
             }
             else if (e.KeyModifiers == KeyModifiers.Control)
             {
                 if (e.Key == Key.U)
                 {
-                    // Ctrl+U - Upload
-                    UploadFile_Click(new Button { DataContext = vm }, new RoutedEventArgs());
+                    await TriggerUpload(vm);
                     e.Handled = true;
                 }
                 else if (e.Key == Key.D && vm.SelectedFile != null)
                 {
-                    // Ctrl+D - Download
-                    DownloadFile_Click(new Button { DataContext = vm, CommandParameter = lb.SelectedItems }, new RoutedEventArgs());
+                    await TriggerDownload(vm, lb.SelectedItems);
                     e.Handled = true;
                 }
                 else if (e.Key == Key.S && DataContext is MainViewModel mainVm)
                 {
-                    // Ctrl+S - Save bookmark
                     mainVm.AddBookmarkCommand.Execute(vm.CurrentPath);
                     e.Handled = true;
                 }
             }
             else if (e.Key == Key.Delete && vm.SelectedFile != null)
             {
-                // Delete or Ctrl+Delete - Delete file
                 vm.DeleteFileCommand.Execute(null);
                 e.Handled = true;
             }
         }
     }
 
+    private void TriggerRename(SftpTabViewModel vm)
+    {
+        if (DataContext is MainViewModel mainVm && vm.SelectedFile != null)
+        {
+            mainVm.RenameModalText = vm.SelectedFile.Name;
+            mainVm.IsRenameModalVisible = true;
+            _renameFileVm = vm;
+            _renamedOldName = vm.SelectedFile.Name;
+        }
+    }
+
+    private async Task TriggerUpload(SftpTabViewModel vm)
+    {
+        try
+        {
+            var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions { AllowMultiple = true, Title = "Select Files to Upload" });
+            if (files.Count > 0)
+            {
+                var paths = new System.Collections.Generic.List<string>();
+                foreach (var f in files) paths.Add(f.Path.LocalPath);
+                await vm.UploadFilesAsync(paths);
+            }
+        }
+        catch (Exception ex) { Console.WriteLine($"Upload action failed: {ex.Message}"); }
+    }
+
+    private async Task TriggerDownload(SftpTabViewModel vm, System.Collections.IList? selectedItems)
+    {
+        try
+        {
+            if (selectedItems == null || selectedItems.Count == 0) return;
+            var folder = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions { Title = "Select Download Destination" });
+            if (folder.Count > 0)
+                await vm.DownloadFilesAsync(selectedItems, folder[0].Path.LocalPath);
+        }
+        catch (Exception ex) { Console.WriteLine($"Download action failed: {ex.Message}"); }
+    }
+
     private void ContextMenu_Download(object? sender, RoutedEventArgs e)
     {
         if (DataContext is MainViewModel mainVm && mainVm.SelectedTab is SftpTabViewModel vm && vm.SelectedFile != null)
         {
-            DownloadFile_Click(new Button { DataContext = vm, CommandParameter = new[] { vm.SelectedFile } }, e);
+            _ = TriggerDownload(vm, new[] { vm.SelectedFile });
         }
     }
 
@@ -302,7 +336,7 @@ public partial class MainWindow : Window
     {
         if (DataContext is MainViewModel mainVm && mainVm.SelectedTab is SftpTabViewModel vm)
         {
-            UploadFile_Click(new Button { DataContext = vm }, e);
+            _ = TriggerUpload(vm);
         }
     }
 
@@ -310,7 +344,7 @@ public partial class MainWindow : Window
     {
         if (DataContext is MainViewModel mainVm && mainVm.SelectedTab is SftpTabViewModel vm && vm.SelectedFile != null)
         {
-            RenameFile_Click(new Button { DataContext = vm }, e);
+            TriggerRename(vm);
         }
     }
 

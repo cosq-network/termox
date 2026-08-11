@@ -85,6 +85,7 @@ public static class CredentialManager
         catch (Exception ex)
         {
             Console.WriteLine($"Credential retrieval failed: {ex.Message}");
+            throw;
         }
 
         // Legacy plaintext values are intentionally not returned to new sessions.
@@ -127,10 +128,14 @@ public static class CredentialManager
         var status = SecKeychainAddGenericPassword(IntPtr.Zero, (uint)service.Length, service,
             (uint)account.Length, account, (uint)password.Length, password, out var item);
 
-        // Update an existing item without putting the password in a process argument.
         if (status == ErrSecDuplicateItem)
         {
             IntPtr existingPasswordData = IntPtr.Zero;
+            if (item != IntPtr.Zero)
+            {
+                CFRelease(item);
+                item = IntPtr.Zero;
+            }
             status = SecKeychainFindGenericPassword(IntPtr.Zero, (uint)service.Length, service,
                 (uint)account.Length, account, out _, out existingPasswordData, out item);
             try
@@ -210,6 +215,7 @@ public static class CredentialManager
         if (standardInput != null)
         {
             process.StandardInput.Write(standardInput);
+            process.StandardInput.Flush();
             process.StandardInput.Close();
         }
 
@@ -242,6 +248,8 @@ public static class CredentialManager
     /// </summary>
     public static Models.SshConnectionProfile EncryptProfile(Models.SshConnectionProfile profile)
     {
+        ArgumentNullException.ThrowIfNull(profile);
+
         var encrypted = new Models.SshConnectionProfile
         {
             Id = profile.Id,
@@ -262,6 +270,8 @@ public static class CredentialManager
     /// </summary>
     public static Models.SshConnectionProfile DecryptProfile(Models.SshConnectionProfile profile)
     {
+        ArgumentNullException.ThrowIfNull(profile);
+
         var decrypted = new Models.SshConnectionProfile
         {
             Id = profile.Id,

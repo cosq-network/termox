@@ -169,8 +169,11 @@ public class TerminalTabViewModel : INotifyPropertyChanged, ITabViewModel
                     _shellStream.Flush();
                 }
 
-                Status = "Connected to " + host;
-                StatusColor = "#4caf50";
+                Dispatcher.UIThread.Post(() =>
+                {
+                    Status = "Connected to " + host;
+                    StatusColor = "#4caf50";
+                });
 
                 Dispatcher.UIThread.Post(() => TerminalModel.Feed($"\u001b[32m[Termox] Connection established successfully.\u001b[0m\r\n"));
 
@@ -183,9 +186,12 @@ public class TerminalTabViewModel : INotifyPropertyChanged, ITabViewModel
                 {
                     if (ReferenceEquals(_sshClient, client)) _sshClient = null;
                 }
-                Status = "Error: " + ex.Message;
-                StatusColor = "#f44336";
-                Dispatcher.UIThread.Post(() => TerminalModel.Feed($"\u001b[31m[Termox] Connection Failed: {ex.Message}\u001b[0m\r\n"));
+                Dispatcher.UIThread.Post(() =>
+                {
+                    Status = "Error: " + ex.Message;
+                    StatusColor = "#f44336";
+                    TerminalModel.Feed($"\u001b[31m[Termox] Connection Failed: {ex.Message}\u001b[0m\r\n");
+                });
             }
             finally
             {
@@ -211,8 +217,8 @@ public class TerminalTabViewModel : INotifyPropertyChanged, ITabViewModel
                 _shellStream = null;
                 _sshClient = null;
             }
+            try { client?.Disconnect(); } catch { }
             shell?.Dispose();
-            client?.Disconnect();
             client?.Dispose();
         }
         catch (Exception ex)
@@ -221,8 +227,11 @@ public class TerminalTabViewModel : INotifyPropertyChanged, ITabViewModel
         }
         finally
         {
-            Status = "Disconnected";
-            StatusColor = "#888888";
+            Dispatcher.UIThread.Post(() =>
+            {
+                Status = "Disconnected";
+                StatusColor = "#888888";
+            });
         }
     }
 
@@ -231,9 +240,33 @@ public class TerminalTabViewModel : INotifyPropertyChanged, ITabViewModel
         var buffer = new byte[4096];
         try
         {
-            while (_sshClient != null && _sshClient.IsConnected && _shellStream != null)
+            while (true)
             {
-                int read = await _shellStream.ReadAsync(buffer, 0, buffer.Length);
+                ShellStream? shell;
+                SshClient? client;
+                lock (_connectionLock)
+                {
+                    shell = _shellStream;
+                    client = _sshClient;
+                }
+
+                if (shell == null || client == null || !client.IsConnected)
+                    break;
+
+                int read;
+                try
+                {
+                    read = await shell.ReadAsync(buffer, 0, buffer.Length);
+                }
+                catch (ObjectDisposedException)
+                {
+                    break;
+                }
+                catch (InvalidOperationException)
+                {
+                    break;
+                }
+
                 if (read > 0)
                 {
                     string text = Encoding.UTF8.GetString(buffer, 0, read);

@@ -21,19 +21,33 @@ public static class SshSecurity
             var fingerprint = "SHA256:" + args.FingerPrintSHA256;
             var normalizedExpected = NormalizeFingerprint(expectedFingerprint);
 
-            // Trust on first use, then pin the observed key for subsequent connections.
             args.CanTrust = FingerprintsMatch(normalizedExpected, fingerprint);
 
             if (args.CanTrust && string.IsNullOrWhiteSpace(normalizedExpected))
-                firstSeen?.Invoke(fingerprint);
+            {
+                try
+                {
+                    firstSeen?.Invoke(fingerprint);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Failed to persist host key fingerprint: {ex.Message}");
+                    args.CanTrust = false;
+                }
+            }
         };
     }
 
     internal static bool FingerprintsMatch(string? expectedFingerprint, string? actualFingerprint)
     {
+        if (string.IsNullOrWhiteSpace(actualFingerprint))
+            return false;
+
         var expected = NormalizeFingerprint(expectedFingerprint);
-        return string.IsNullOrWhiteSpace(expected) ||
-            string.Equals(expected, NormalizeFingerprint(actualFingerprint), StringComparison.OrdinalIgnoreCase);
+        if (string.IsNullOrWhiteSpace(expected))
+            return true; // Trust on first use — fingerprint will be persisted via firstSeen callback.
+
+        return string.Equals(expected, NormalizeFingerprint(actualFingerprint), StringComparison.OrdinalIgnoreCase);
     }
 
     internal static string NormalizeFingerprint(string? fingerprint)

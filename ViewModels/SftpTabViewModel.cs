@@ -16,10 +16,11 @@ using Termox.Services;
 
 namespace Termox.ViewModels;
 
-public class SftpTabViewModel : INotifyPropertyChanged, ITabViewModel
+public class SftpTabViewModel : INotifyPropertyChanged, ITabViewModel, IDisposable
 {
     private SftpClient? _sftpClient;
     private readonly SemaphoreSlim _operationGate = new(1, 1);
+    private bool _disposed;
     private readonly object _connectionLock = new();
     private CancellationTokenSource? _connectionCancellation;
     private ObservableCollection<RemoteFileModel> _allFiles = new();
@@ -93,10 +94,21 @@ public class SftpTabViewModel : INotifyPropertyChanged, ITabViewModel
     private bool _deleteSelection;
 
     private string _searchQuery = "";
+    private System.Threading.Timer? _searchDebounceTimer;
     public string SearchQuery
     {
         get => _searchQuery;
-        set { _searchQuery = value; OnPropertyChanged(); ApplyFilter(); }
+        set
+        {
+            _searchQuery = value;
+            OnPropertyChanged();
+            _searchDebounceTimer?.Dispose();
+            _searchDebounceTimer = new System.Threading.Timer(
+                _ => Dispatcher.UIThread.Post(ApplyFilter),
+                null,
+                TimeSpan.FromMilliseconds(200),
+                Timeout.InfiniteTimeSpan);
+        }
     }
 
     public ICommand TogglePauseCommand { get; }
@@ -121,7 +133,7 @@ public class SftpTabViewModel : INotifyPropertyChanged, ITabViewModel
         DisconnectCommand = new RelayCommand(Disconnect);
         CloseTabCommand = new RelayCommand(() => { Disconnect(); onClose(this); });
         NavigateUpCommand = new RelayCommand(NavigateUp);
-        NavigateToCommand = new RelayCommand<RemoteFileModel>(NavigateTo!);
+        NavigateToCommand = new RelayCommand<RemoteFileModel>(NavigateTo, f => f != null && f.IsDirectory);
         RefreshCommand = new RelayCommand(LoadDirectory);
         TogglePauseCommand = new RelayCommand(() => IsPaused = !IsPaused);
         CancelTransferCommand = new RelayCommand(() => _cancelRequested = true);
@@ -204,8 +216,11 @@ public class SftpTabViewModel : INotifyPropertyChanged, ITabViewModel
                     ? _sftpClient.WorkingDirectory
                     : initialPath;
 
-                Status = "Connected to " + host;
-                StatusColor = "#4caf50";
+                Dispatcher.UIThread.Post(() =>
+                {
+                    Status = "Connected to " + host;
+                    StatusColor = "#4caf50";
+                });
 
             }
             catch (Exception ex)
@@ -216,8 +231,11 @@ public class SftpTabViewModel : INotifyPropertyChanged, ITabViewModel
                     if (ReferenceEquals(_sftpClient, client)) _sftpClient = null;
                 }
                 try { client?.Dispose(); } catch { }
-                Status = "Error: " + ex.Message;
-                StatusColor = "#f44336";
+                Dispatcher.UIThread.Post(() =>
+                {
+                    Status = "Error: " + ex.Message;
+                    StatusColor = "#f44336";
+                });
                 Console.WriteLine($"SFTP Connection Failed: {ex.Message}");
             }
             finally
@@ -334,7 +352,7 @@ public class SftpTabViewModel : INotifyPropertyChanged, ITabViewModel
         LoadDirectory();
     }
 
-    private void NavigateTo(RemoteFileModel file)
+    private void NavigateTo(RemoteFileModel? file)
     {
         if (file == null || !file.IsDirectory) return;
         CurrentPath = file.FullName;
@@ -520,7 +538,10 @@ public class SftpTabViewModel : INotifyPropertyChanged, ITabViewModel
     private void DownloadSingleFile(string remoteFilePath, string localFilePath, string displayFileName)
     {
         if (System.IO.File.Exists(localFilePath))
-            throw new IOException($"Download stopped because '{displayFileName}' already exists locally.");
+        {
+            Console.WriteLine($"Skipping '{displayFileName}' — already exists locally.");
+            return;
+        }
 
         using var sftpStream = _sftpClient!.OpenRead(remoteFilePath);
         using var fileStream = new FileStream(localFilePath, FileMode.CreateNew, FileAccess.Write, FileShare.None);
@@ -687,11 +708,10 @@ public class SftpTabViewModel : INotifyPropertyChanged, ITabViewModel
     private static string FormatSize(long bytes)
     {
         string[] suf = { "B", "KB", "MB", "GB", "TB" };
-        if (bytes == 0) return "0 B";
-        long bytesAbsolute = bytes == long.MinValue ? long.MaxValue : Math.Abs(bytes);
-        int place = Math.Min(Convert.ToInt32(Math.Floor(Math.Log(bytesAbsolute, 1024))), suf.Length - 1);
-        double num = Math.Round(bytesAbsolute / Math.Pow(1024, place), 1);
-        return $"{Math.Sign(bytes) * num} {suf[place]}";
+        if (bytes <= 0) return "0 B";
+        int place = Math.Min(Convert.ToInt32(Math.Floor(Math.Log(bytes, 1024))), suf.Length - 1);
+        double num = Math.Round(bytes / Math.Pow(1024, place), 1);
+        return $"{num} {suf[place]}";
     }
 
     public void ChangeFilePermissions(RemoteFileModel file, short newMode, MainViewModel mainVm)
@@ -727,18 +747,17 @@ public class SftpTabViewModel : INotifyPropertyChanged, ITabViewModel
         });
     }
 
-    public void PreviewFile(RemoteFileModel file, MainViewModel mainVm)
+    public async void PreviewFile(RemoteFileModel file, MainViewModel mainVm)
     {
         if (_sftpClient == null || !_sftpClient.IsConnected) return;
 
-        _operationGate.Wait();
+        await _operationGate.WaitAsync();
         try
         {
-            // Only preview text files
             var ext = System.IO.Path.GetExtension(file.Name).ToLower();
-            var textExtensions = new[] { ".txt", ".md", ".json", ".xml", ".yaml", ".yml", ".cs", ".py", ".js", ".html", ".css", ".log", ".conf", ".cfg", ".properties", ".sh", ".bat", ".cmd", ".py" };
+            var textExtensions = new[] { ".txt", ".md", ".json", ".xml", ".yaml", ".yml", ".cs", ".py", ".js", ".html", ".css", ".log", ".conf", ".cfg", ".properties", ".sh", ".bat", ".cmd" };
 
-            if (!textExtensions.Contains(ext) || file.Length > 1024 * 1024) // Max 1MB
+            if (!textExtensions.Contains(ext) || file.Length > 1024 * 1024)
             {
                 Dispatcher.UIThread.Post(() =>
                 {
@@ -850,20 +869,32 @@ public class SftpTabViewModel : INotifyPropertyChanged, ITabViewModel
 
     private void RenameSelectedFile()
     {
-        if (_selectedFile == null || _sftpClient == null || !_sftpClient.IsConnected) return;
-
-        if (string.IsNullOrWhiteSpace(_renameNewName))
+        RemoteFileModel? fileToRename;
+        lock (_connectionLock)
         {
-            Status = "Rename cancelled.";
-            StatusColor = "#f39c12";
+            fileToRename = _selectedFile;
+            if (fileToRename == null || _sftpClient == null || !_sftpClient.IsConnected) return;
+        }
+
+        var newName = _renameNewName;
+        if (string.IsNullOrWhiteSpace(newName))
+        {
+            Dispatcher.UIThread.Post(() =>
+            {
+                Status = "Rename cancelled.";
+                StatusColor = "#f39c12";
+            });
             return;
         }
 
-        if (_renameNewName.Contains('/') || _renameNewName.Contains('\\') ||
-            _renameNewName is "." or ".." || _renameNewName.Contains("..", StringComparison.Ordinal))
+        if (newName.Contains('/') || newName.Contains('\\') ||
+            newName is "." or ".." || newName.Contains("..", StringComparison.Ordinal))
         {
-            Status = "Rename failed: use a simple file or directory name.";
-            StatusColor = "#f44336";
+            Dispatcher.UIThread.Post(() =>
+            {
+                Status = "Rename failed: use a simple file or directory name.";
+                StatusColor = "#f44336";
+            });
             _renameNewName = null;
             return;
         }
@@ -873,15 +904,16 @@ public class SftpTabViewModel : INotifyPropertyChanged, ITabViewModel
             _operationGate.Wait();
             try
             {
-                int lastSlash = _selectedFile.FullName.LastIndexOf('/');
+                int lastSlash = fileToRename.FullName.LastIndexOf('/');
                 string newFullPath = lastSlash >= 0
-                    ? _selectedFile.FullName.Substring(0, lastSlash + 1) + _renameNewName
-                    : _renameNewName;
-                _sftpClient.RenameFile(_selectedFile.FullName, newFullPath);
+                    ? fileToRename.FullName.Substring(0, lastSlash + 1) + newName
+                    : newName;
+                _sftpClient.RenameFile(fileToRename.FullName, newFullPath);
 
+                var name = fileToRename.Name;
                 Dispatcher.UIThread.Post(() =>
                 {
-                    Status = $"Renamed '{_selectedFile.Name}' to '{_renameNewName}' successfully.";
+                    Status = $"Renamed '{name}' to '{newName}' successfully.";
                     StatusColor = "#4caf50";
                     _renameNewName = null;
                     LoadDirectory();
@@ -902,5 +934,13 @@ public class SftpTabViewModel : INotifyPropertyChanged, ITabViewModel
                 _operationGate.Release();
             }
         });
+    }
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        _searchDebounceTimer?.Dispose();
+        _operationGate.Dispose();
     }
 }

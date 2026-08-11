@@ -368,9 +368,12 @@ public class MainViewModel : INotifyPropertyChanged
         }
 
         IsConnectionModalVisible = false;
+        TestStatus = "";
+        TestStatusColor = "#5bc0de";
+        IsTestSuccessful = false;
     }
 
-    private void TestConnection()
+    private async void TestConnection()
     {
         if (string.IsNullOrWhiteSpace(Host) || string.IsNullOrWhiteSpace(Username) ||
             !int.TryParse(Port, out var parsedPort) || parsedPort is < 1 or > 65535)
@@ -384,63 +387,62 @@ public class MainViewModel : INotifyPropertyChanged
         TestStatus = "Testing connection...";
         TestStatusColor = "#f39c12";
         IsTestSuccessful = false;
-        Task.Run(() =>
+
+        try
         {
-            try
+            int portNumber = parsedPort;
+
+            SshClient testClient;
+            var safeUsername = Username ?? "";
+            var safePassword = Password ?? "";
+            SshSecurity.EnsurePrivateKeyExists(PrivateKeyPath);
+
+            if (!string.IsNullOrWhiteSpace(PrivateKeyPath) && File.Exists(PrivateKeyPath))
             {
-                int portNumber = parsedPort;
-
-                SshClient testClient;
-                var safeUsername = Username ?? "";
-                var safePassword = Password ?? "";
-                SshSecurity.EnsurePrivateKeyExists(PrivateKeyPath);
-
-                if (!string.IsNullOrWhiteSpace(PrivateKeyPath) && File.Exists(PrivateKeyPath))
-                {
-                    var keyFile = new PrivateKeyFile(PrivateKeyPath, string.IsNullOrEmpty(safePassword) ? null : safePassword);
-                    testClient = new SshClient(Host ?? "", portNumber, safeUsername, new[] { keyFile });
-                }
-
-                else
-                {
-                    testClient = new SshClient(Host ?? "", portNumber, safeUsername, safePassword);
-                }
-
-                testClient.ConnectionInfo.Timeout = SshSecurity.ConnectionTimeout;
-
-                SshSecurity.ConfigureHostKeyPolicy(testClient, HostKeyFingerprint,
-                    fingerprint => HostKeyFingerprint = fingerprint);
-                var connectTask = Task.Run(() =>
-                {
-                    try { testClient.ConnectAsync(CancellationToken.None).GetAwaiter().GetResult(); }
-                    finally
-                    {
-                        try { testClient.Disconnect(); } catch { }
-                        testClient.Dispose();
-                    }
-                });
-                var completed = Task.WhenAny(connectTask, Task.Delay(TimeSpan.FromSeconds(10))).GetAwaiter().GetResult();
-                if (completed != connectTask)
-                {
-                    try { testClient.Dispose(); } catch { }
-                    _ = connectTask.ContinueWith(t => _ = t.Exception, TaskContinuationOptions.OnlyOnFaulted);
-                    TestStatus = "Test timed out after 10 seconds.";
-                    TestStatusColor = "#f39c12";
-                    return;
-                }
-                connectTask.GetAwaiter().GetResult();
-
-                TestStatus = "Test Successful!";
-                TestStatusColor = "#4caf50";
-                IsTestSuccessful = true;
+                var keyFile = new PrivateKeyFile(PrivateKeyPath, string.IsNullOrEmpty(safePassword) ? null : safePassword);
+                testClient = new SshClient(Host ?? "", portNumber, safeUsername, new[] { keyFile });
             }
-            catch (Exception ex)
+            else
             {
-                TestStatus = "Test Failed: " + ex.Message;
-                TestStatusColor = "#f44336";
-                IsTestSuccessful = false;
+                testClient = new SshClient(Host ?? "", portNumber, safeUsername, safePassword);
             }
-        });
+
+            testClient.ConnectionInfo.Timeout = SshSecurity.ConnectionTimeout;
+            SshSecurity.ConfigureHostKeyPolicy(testClient, HostKeyFingerprint,
+                fingerprint => Dispatcher.UIThread.Post(() => HostKeyFingerprint = fingerprint));
+
+            var connectTask = Task.Run(() =>
+            {
+                try { testClient.ConnectAsync(CancellationToken.None).GetAwaiter().GetResult(); }
+                finally
+                {
+                    try { testClient.Disconnect(); } catch { }
+                    testClient.Dispose();
+                }
+            });
+
+            var completed = await Task.WhenAny(connectTask, Task.Delay(TimeSpan.FromSeconds(10)));
+            if (completed != connectTask)
+            {
+                try { testClient.Dispose(); } catch { }
+                _ = connectTask.ContinueWith(t => _ = t.Exception, TaskContinuationOptions.OnlyOnFaulted);
+                TestStatus = "Test timed out after 10 seconds.";
+                TestStatusColor = "#f39c12";
+                return;
+            }
+
+            await connectTask;
+
+            TestStatus = "Test Successful!";
+            TestStatusColor = "#4caf50";
+            IsTestSuccessful = true;
+        }
+        catch (Exception ex)
+        {
+            TestStatus = "Test Failed: " + ex.Message;
+            TestStatusColor = "#f44336";
+            IsTestSuccessful = false;
+        }
     }
 
     private void ConnectProfile(SshConnectionProfile profile)
@@ -650,11 +652,26 @@ public class MainViewModel : INotifyPropertyChanged
 
     private static bool IsValidRemoteDirectory(string? path)
     {
-        return !string.IsNullOrWhiteSpace(path) &&
-            path.StartsWith("/", StringComparison.Ordinal) &&
-            !path.Contains("%s", StringComparison.Ordinal) &&
-            !path.Contains("$PWD", StringComparison.Ordinal) &&
-            !path.Contains("\\n", StringComparison.Ordinal);
+        if (string.IsNullOrWhiteSpace(path))
+            return false;
+
+        if (!path.StartsWith("/", StringComparison.Ordinal))
+            return false;
+
+        var dangerousPatterns = new[]
+        {
+            "%s", "$PWD", "\\n", "\\r", "\\t",
+            ";", "`", "$(", "${", "|", "&&", "||",
+            ">", "<", "~", "*"
+        };
+
+        foreach (var pattern in dangerousPatterns)
+        {
+            if (path.Contains(pattern, StringComparison.Ordinal))
+                return false;
+        }
+
+        return true;
     }
 
     private void RequestRemoveBookmark(BookmarkModel bookmark)
@@ -914,13 +931,22 @@ public class RelayCommand<T> : ICommand
 
     public void RaiseCanExecuteChanged() => CanExecuteChanged?.Invoke(this, EventArgs.Empty);
 
-    public bool CanExecute(object? parameter) => _canExecute == null || (parameter is T t && _canExecute(t));
+    public bool CanExecute(object? parameter)
+    {
+        if (parameter is T t)
+            return _canExecute == null || _canExecute(t);
+        return typeof(T).IsValueType ? _canExecute == null || _canExecute(default!) : _canExecute == null;
+    }
 
     public void Execute(object? parameter)
     {
         if (parameter is T t)
         {
             _execute(t);
+        }
+        else if (parameter == null && !typeof(T).IsValueType)
+        {
+            _execute(default!);
         }
     }
 }

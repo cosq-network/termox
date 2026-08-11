@@ -34,13 +34,12 @@ public class RemoteFileModel : INotifyPropertyChanged
     public string SizeDisplay => IsDirectory ? "" : FormatSize(Length);
     public string ModifiedDisplay => LastWriteTime.ToString("yyyy-MM-dd HH:mm:ss");
 
-    private string FormatSize(long bytes)
+    private static string FormatSize(long bytes)
     {
         string[] suf = { "B", "KB", "MB", "GB", "TB" };
-        if (bytes == 0) return "0 B";
-        long bytesAbsolute = bytes == long.MinValue ? long.MaxValue : Math.Abs(bytes);
-        int place = Math.Min(Convert.ToInt32(Math.Floor(Math.Log(bytesAbsolute, 1024))), suf.Length - 1);
-        double num = Math.Round(bytesAbsolute / Math.Pow(1024, place), 1);
-        return $"{Math.Sign(bytes) * num} {suf[place]}";
+        if (bytes <= 0) return "0 B";
+        int place = Math.Min(Convert.ToInt32(Math.Floor(Math.Log(bytes, 1024))), suf.Length - 1);
+        double num = Math.Round(bytes / Math.Pow(1024, place), 1);
+        return $"{num} {suf[place]}";
     }
 }

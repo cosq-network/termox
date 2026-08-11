@@ -30,8 +30,8 @@ public class ToolsTabViewModel : INotifyPropertyChanged, ITabViewModel
     public string Title { get => _title; set { _title = value; OnPropertyChanged(); } }
 
     // Shared command support
-    public ICommand DisconnectCommand { get; } = new RelayCommand(() => { });
-    public ICommand CloseTabCommand { get; } = new RelayCommand(() => { });
+    public ICommand DisconnectCommand { get; private set; } = new RelayCommand(() => { });
+    public ICommand CloseTabCommand { get; private set; } = new RelayCommand(() => { });
 
     // Port Scanner Properties
     private string _scanHost = "localhost";
@@ -175,8 +175,8 @@ public class ToolsTabViewModel : INotifyPropertyChanged, ITabViewModel
         ScanPortsCommand = new RelayCommand(ScanPorts_Execute);
         PingCommand = new RelayCommand(Ping_Execute);
         GenerateKeyCommand = new RelayCommand(GenerateKey_Execute);
-        CopyPublicKeyCommand = new RelayCommand(() => CopyToClipboard(GeneratedPublicKey));
-        CopyPrivateKeyCommand = new RelayCommand(() => CopyToClipboard(GeneratedPrivateKey));
+        CopyPublicKeyCommand = new RelayCommand(() => _ = CopyToClipboard(GeneratedPublicKey));
+        CopyPrivateKeyCommand = new RelayCommand(() => _ = CopyToClipboard(GeneratedPrivateKey));
         TestAllConnectionsCommand = new RelayCommand(TestAllConnections_Execute);
         RunSpeedTestCommand = new RelayCommand(RunSpeedTest_Execute);
     }
@@ -532,11 +532,12 @@ public class ToolsTabViewModel : INotifyPropertyChanged, ITabViewModel
                 using var client = new TcpClient();
                 await client.ConnectAsync(SpeedTestHost, 22).WaitAsync(TimeSpan.FromSeconds(10));
                 stopwatch.Stop();
-                SpeedTestResult = $"SSH endpoint reachable\nHost: {SpeedTestHost}\nPort: 22\nConnection latency: {stopwatch.ElapsedMilliseconds} ms\n\nAuthenticated SFTP transfer benchmarking requires an active SFTP session.";
+                var result = $"SSH endpoint reachable\nHost: {SpeedTestHost}\nPort: 22\nConnection latency: {stopwatch.ElapsedMilliseconds} ms\n\nAuthenticated SFTP transfer benchmarking requires an active SFTP session.";
+                Dispatcher.UIThread.Post(() => SpeedTestResult = result);
             }
             catch (Exception ex)
             {
-                SpeedTestResult = $"Error: {ex.Message}";
+                Dispatcher.UIThread.Post(() => SpeedTestResult = $"Error: {ex.Message}");
             }
             finally
             {
@@ -545,7 +546,7 @@ public class ToolsTabViewModel : INotifyPropertyChanged, ITabViewModel
         });
     }
 
-    private async void CopyToClipboard(string text)
+    private async Task CopyToClipboard(string text)
     {
         if (string.IsNullOrEmpty(text)) return;
 

@@ -12,7 +12,7 @@ public class AboutDialogViewModel
     public string ReleaseDate { get; } = "July 2026";
     
     public string CompanyName { get; } = "The Termox Project";
-    public string CompanyWebsite { get; } = "";
+    public string CompanyWebsite { get; } = "https://cosqnetwork.com/";
     public string CompanyMotto { get; } = "A focused SSH and SFTP workspace for modern remote operations.";
     
     public string ApplicationDescription { get; } = 
