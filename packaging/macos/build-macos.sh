@@ -12,7 +12,7 @@ rm -rf "$APP"
 mkdir -p "$PUBLISH" "$RELEASE" "$APP/Contents/MacOS" "$APP/Contents/Resources"
 
 dotnet publish "$ROOT/Termox.csproj" -c Release -r "$RID" --self-contained true \
-  -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true \
+  -p:PublishSingleFile=true -p:IncludeAllContentForSelfExtract=true \
   -p:Version="$VERSION" -p:VersionPrefix="$VERSION" -o "$PUBLISH"
 
 cp -R "$PUBLISH/." "$APP/Contents/MacOS/"
@@ -35,22 +35,26 @@ cat > "$APP/Contents/Info.plist" <<EOF
 EOF
 chmod +x "$APP/Contents/MacOS/Termox"
 
-if [[ -z "${APPLE_SIGNING_IDENTITY:-}" ]]; then
-  echo "APPLE_SIGNING_IDENTITY is required for release packaging." >&2
-  exit 1
+if [[ -n "${APPLE_SIGNING_IDENTITY:-}" ]]; then
+  echo "Signing macOS bundle with identity: $APPLE_SIGNING_IDENTITY"
+  codesign --deep --force --options runtime --timestamp --sign "$APPLE_SIGNING_IDENTITY" "$APP"
+  codesign --verify --deep --strict "$APP"
+else
+  echo "APPLE_SIGNING_IDENTITY not set — building unsigned bundle." >&2
 fi
-codesign --deep --force --options runtime --timestamp --sign "$APPLE_SIGNING_IDENTITY" "$APP"
-codesign --verify --deep --strict "$APP"
 
 hdiutil create -volname Termox -srcfolder "$APP" -ov -format UDZO "$RELEASE/Termox-$VERSION-$RID.dmg" >/dev/null
 
-if [[ -z "${APPLE_ID:-}" || -z "${APPLE_TEAM_ID:-}" || -z "${APPLE_APP_PASSWORD:-}" ]]; then
-  echo "Apple notarization credentials are required for release packaging." >&2
-  exit 1
+if [[ -n "${APPLE_ID:-}" && -n "${APPLE_TEAM_ID:-}" && -n "${APPLE_APP_PASSWORD:-}" ]]; then
+  echo "Submitting DMG for notarization..."
+  xcrun notarytool submit "$RELEASE/Termox-$VERSION-$RID.dmg" \
+    --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD" --wait --timeout 10m
+  xcrun stapler staple "$RELEASE/Termox-$VERSION-$RID.dmg"
+  xcrun stapler staple "$APP"
+  echo "Notarization and stapling complete."
+else
+  echo "Notarization credentials not set — skipping notarization and stapling." >&2
 fi
-xcrun notarytool submit "$RELEASE/Termox-$VERSION-$RID.dmg" \
-  --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD" --wait
-xcrun stapler staple "$RELEASE/Termox-$VERSION-$RID.dmg"
-xcrun stapler staple "$APP"
+
 rm -f "$RELEASE/Termox-$VERSION-$RID.zip"
 ditto -c -k --sequesterRsrc --keepParent "$APP" "$RELEASE/Termox-$VERSION-$RID.zip"

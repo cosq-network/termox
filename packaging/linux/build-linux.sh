@@ -18,20 +18,20 @@ rm -rf "$APPDIR"
 mkdir -p "$PUBLISH" "$RELEASE" "$APPDIR/usr/bin" "$APPDIR/usr/share/applications" "$APPDIR/usr/share/icons/hicolor/1024x1024/apps"
 
 dotnet publish "$ROOT/Termox.csproj" -c Release -r "$RID" --self-contained true \
-  -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true \
+  -p:PublishSingleFile=true -p:IncludeAllContentForSelfExtract=true \
   -p:Version="$VERSION" -p:VersionPrefix="$VERSION" -o "$PUBLISH"
 
 cp -R "$PUBLISH/." "$APPDIR/usr/bin/"
 cp "$ROOT/packaging/linux/termox.desktop" "$APPDIR/usr/share/applications/termox.desktop"
 cp "$ROOT/Assets/Icons/termox-icon.png" "$APPDIR/usr/share/icons/hicolor/1024x1024/apps/termox-icon.png"
-sed -i.bak 's#Exec=Termox#Exec=/usr/bin/Termox#' "$APPDIR/usr/share/applications/termox.desktop"
-rm -f "$APPDIR/usr/share/applications/termox.desktop.bak"
+sed -i 's#Exec=Termox#Exec=/usr/bin/Termox#' "$APPDIR/usr/share/applications/termox.desktop"
 
 tar -C "$APPDIR" -czf "$RELEASE/Termox-$VERSION-$RID.tar.gz" .
 
 if command -v dpkg-deb >/dev/null 2>&1; then
-  mkdir -p "$APPDIR/DEBIAN"
-  cat > "$APPDIR/DEBIAN/control" <<EOF
+  DEBIANDIR="$APPDIR-debian/DEBIAN"
+  mkdir -p "$DEBIANDIR"
+  cat > "$DEBIANDIR/control" <<EOF
 Package: termox
 Version: $VERSION
 Section: net
@@ -41,6 +41,7 @@ Maintainer: Termox Project <contact@cosqnetwork.com>
 Description: Cross-platform SSH and SFTP workspace
  Termox provides SSH terminal sessions, SFTP file management, and network utilities.
 EOF
-  dpkg-deb --build "$APPDIR" "$RELEASE/Termox-$VERSION-$RID.deb" >/dev/null
-  rm -rf "$APPDIR/DEBIAN"
+  cp -a "$APPDIR/usr" "$APPDIR-debian/usr"
+  dpkg-deb --build "$APPDIR-debian" "$RELEASE/Termox-$VERSION-$RID.deb" >/dev/null
+  rm -rf "$APPDIR-debian"
 fi

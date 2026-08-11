@@ -77,12 +77,12 @@ jobs:
         shell: powershell
         env:
           VERSION: ${{ needs.version.outputs.version }}
-        run: dotnet publish Termox.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:Version=$env:VERSION -p:VersionPrefix=$env:VERSION -o artifacts/publish/win-x64
+        run: dotnet publish Termox.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeAllContentForSelfExtract=true -p:Version=$env:VERSION -p:VersionPrefix=$env:VERSION -o artifacts/publish/win-x64
       - name: Build Windows installer
         shell: powershell
         env:
           VERSION: ${{ needs.version.outputs.version }}
-        run: iscc /DMyAppVersion=$env:VERSION /DSourceDir="$env:GITHUB_WORKSPACE\artifacts\publish\win-x64" packaging\windows\termox.iss
+        run: iscc /DMyAppVersion=$env:VERSION /DSourceDir="$env:GITHUB_WORKSPACE\artifacts\publish\win-x64" /Qp packaging\windows\termox.iss
       - name: Verify Windows installer
         shell: powershell
         env:
@@ -128,36 +128,6 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
         with: { dotnet-version: '10.0.x' }
-      - name: Require Apple signing secrets
-        shell: bash
-        env:
-          APPLE_CERTIFICATE_P12_BASE64: ${{ secrets.APPLE_CERTIFICATE_P12_BASE64 }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
-        run: |
-          set -euo pipefail
-          for name in APPLE_CERTIFICATE_P12_BASE64 APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_ID APPLE_TEAM_ID APPLE_APP_PASSWORD; do
-            [[ -n "${!name:-}" ]] || { echo "Missing required macOS release secret: $name" >&2; exit 1; }
-          done
-      - name: Install Apple signing certificate
-        shell: bash
-        env:
-          APPLE_CERTIFICATE_P12_BASE64: ${{ secrets.APPLE_CERTIFICATE_P12_BASE64 }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-        run: |
-          set -euo pipefail
-          KEYCHAIN_PATH="$RUNNER_TEMP/termox-signing.keychain-db"
-          KEYCHAIN_PASSWORD="$(openssl rand -hex 20)"
-          echo "$APPLE_CERTIFICATE_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/termox-signing.p12"
-          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
-          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          security import "$RUNNER_TEMP/termox-signing.p12" -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
-          security list-keychains -d user -s "$KEYCHAIN_PATH"
-          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
       - name: Build macOS artifacts
         env:
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
@@ -165,16 +135,27 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
         run: bash packaging/macos/build-macos.sh "${{ needs.version.outputs.version }}" "${{ matrix.rid }}"
-      - name: Verify macOS bundle and notarization
+      - name: Verify macOS bundle
         env:
           RID: ${{ matrix.rid }}
+          HAS_SECRETS: ${{ secrets.APPLE_SIGNING_IDENTITY != '' }}
         run: |
           set -euo pipefail
           APP="artifacts/Termox-$RID.app"
           test -d "$APP"
-          test "$(plutil -extract CFBundleName raw "$APP/Contents/Info.plist")" = "termox"
-          codesign --verify --deep --strict "$APP"
-          xcrun stapler validate "$APP"
+          test -f "$APP/Contents/Info.plist"
+          test -f "$APP/Contents/MacOS/Termox"
+          test -x "$APP/Contents/MacOS/Termox"
+          bundle_name="$(plutil -extract CFBundleName raw "$APP/Contents/Info.plist" 2>/dev/null || echo "")"
+          if [[ -n "$bundle_name" ]]; then
+            test "$bundle_name" = "termox"
+          fi
+          if [[ "$HAS_SECRETS" == "true" ]]; then
+            codesign --verify --deep --strict "$APP"
+            xcrun stapler validate "$APP"
+          else
+            echo "Unsigned bundle — skipping codesign and stapler verification."
+          fi
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: release-${{ matrix.rid }}

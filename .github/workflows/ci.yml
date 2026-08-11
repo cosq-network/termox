@@ -11,8 +11,12 @@ permissions:
 
 jobs:
   verify:
-    name: Build and test
-    runs-on: ubuntu-latest
+    name: Build and test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -26,15 +30,10 @@ jobs:
         run: dotnet restore tests/Termox.Tests/Termox.Tests.csproj
 
       - name: Test
-        run: dotnet test tests/Termox.Tests/Termox.Tests.csproj --no-restore --configuration Release --collect:"XPlat Code Coverage"
+        run: dotnet test tests/Termox.Tests/Termox.Tests.csproj --no-restore --configuration Release
 
       - name: Build application
         run: dotnet build Termox.csproj --no-restore --configuration Release
 
-      - name: Upload coverage
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: coverage
-          path: '**/TestResults/**/coverage.cobertura.xml'
-          if-no-files-found: ignore
+      - name: Publish self-contained
+        run: dotnet publish Termox.csproj -c Release -r ${{ matrix.os == 'ubuntu-latest' && 'linux-x64' || matrix.os == 'windows-latest' && 'win-x64' || 'osx-arm64' }} --self-contained true -p:PublishSingleFile=true -p:IncludeAllContentForSelfExtract=true -o artifacts/publish
