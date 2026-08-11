@@ -30,11 +30,12 @@ jobs:
         id: version
         env:
           BUMP: ${{ inputs.bump }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         shell: bash
         run: |
           set -euo pipefail
-          if [[ "$GITHUB_REF_NAME" != "$GITHUB_DEFAULT_BRANCH" ]]; then
-            echo "Releases must run from the default branch ($GITHUB_DEFAULT_BRANCH)." >&2
+          if [[ "$GITHUB_REF_NAME" != "$DEFAULT_BRANCH" ]]; then
+            echo "Releases must run from the default branch ($DEFAULT_BRANCH)." >&2
             exit 1
           fi
           latest="$(git tag --list 'v[0-9]*' --sort=-version:refname | head -n 1 || true)"
