@@ -169,6 +169,15 @@ public partial class MainWindow : Window
         }
     }
 
+    private void SftpPathBox_KeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter) return;
+        if (sender is TextBox textBox && textBox.DataContext is SftpTabViewModel vm)
+        {
+            vm.NavigateToPath(textBox.Text);
+        }
+    }
+
     private void SftpFileList_SelectionChanged(object? sender, SelectionChangedEventArgs e)
     {
         if (sender is ListBox listbox && listbox.DataContext is SftpTabViewModel vm)

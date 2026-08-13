@@ -359,6 +359,95 @@ public class SftpTabViewModel : INotifyPropertyChanged, ITabViewModel, IDisposab
         LoadDirectory();
     }
 
+    public void NavigateToPath(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path)) return;
+        var normalized = NormalizeRemotePath(path);
+        if (normalized == null)
+        {
+            Dispatcher.UIThread.Post(() =>
+            {
+                Status = $"Invalid path: '{path}'. Use an absolute path such as /home/user.";
+                StatusColor = "#f44336";
+            });
+            return;
+        }
+
+        var target = normalized;
+        Task.Run(() =>
+        {
+            if (!_operationGate.Wait(0)) return;
+            try
+            {
+                if (_sftpClient == null || !_sftpClient.IsConnected)
+                {
+                    Dispatcher.UIThread.Post(() =>
+                    {
+                        Status = "Not connected.";
+                        StatusColor = "#f44336";
+                    });
+                    return;
+                }
+
+                var attributes = _sftpClient.GetAttributes(target);
+                if (!attributes.IsDirectory)
+                {
+                    Dispatcher.UIThread.Post(() =>
+                    {
+                        Status = $"'{target}' is not a directory.";
+                        StatusColor = "#f39c12";
+                    });
+                    return;
+                }
+
+                Dispatcher.UIThread.Post(() =>
+                {
+                    CurrentPath = target;
+                    LoadDirectory();
+                });
+            }
+            catch (Exception ex)
+            {
+                Dispatcher.UIThread.Post(() =>
+                {
+                    Status = $"Cannot navigate: {ex.Message}";
+                    StatusColor = "#f44336";
+                });
+            }
+            finally
+            {
+                _operationGate.Release();
+            }
+        });
+    }
+
+    private static string? NormalizeRemotePath(string path)
+    {
+        var trimmed = path.Trim();
+        if (trimmed.Length == 0) return null;
+
+        var normalized = trimmed.Replace('\\', '/');
+        if (normalized[0] != '/') return null;
+
+        var segments = new List<string>();
+        foreach (var segment in normalized.Split('/'))
+        {
+            if (segment.Length == 0 || segment == ".") continue;
+            if (segment == "..")
+            {
+                if (segments.Count == 0) continue;
+                segments.RemoveAt(segments.Count - 1);
+            }
+            else
+            {
+                segments.Add(segment);
+            }
+        }
+
+        var result = "/" + string.Join("/", segments);
+        return result.Length == 1 ? result : result.TrimEnd('/');
+    }
+
     private string GetPermissionsString(ISftpFile file)
     {
         char[] p = new char[10];
