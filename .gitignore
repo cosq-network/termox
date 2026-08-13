@@ -45,3 +45,4 @@ artifacts/
 # Crash reports
 crash.log
 crash.txt
+/.commandcode
