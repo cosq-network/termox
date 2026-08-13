@@ -34,6 +34,3 @@ jobs:
 
       - name: Build application
         run: dotnet build Termox.csproj --no-restore --configuration Release
-
-      - name: Publish self-contained
-        run: dotnet publish Termox.csproj -c Release -r ${{ matrix.os == 'ubuntu-latest' && 'linux-x64' || matrix.os == 'windows-latest' && 'win-x64' || 'osx-arm64' }} --self-contained true -p:PublishSingleFile=true -p:IncludeAllContentForSelfExtract=true -o artifacts/publish

@@ -8,7 +8,14 @@ PUBLISH="$ROOT/artifacts/publish/$RID"
 RELEASE="$ROOT/artifacts/release"
 APP="$ROOT/artifacts/Termox-$RID.app"
 
-rm -rf "$APP"
+# The publish directory is copied into the app bundle and is no longer needed
+# afterward. Remove it even when packaging fails.
+cleanup() {
+  rm -rf -- "$PUBLISH"
+}
+trap cleanup EXIT
+
+rm -rf "$PUBLISH" "$APP"
 mkdir -p "$PUBLISH" "$RELEASE" "$APP/Contents/MacOS" "$APP/Contents/Resources"
 
 dotnet publish "$ROOT/Termox.csproj" -c Release -r "$RID" --self-contained true \

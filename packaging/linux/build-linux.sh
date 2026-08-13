@@ -13,8 +13,16 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 PUBLISH="$ROOT/artifacts/publish/$RID"
 RELEASE="$ROOT/artifacts/release"
 APPDIR="$ROOT/artifacts/linux-appdir-$RID"
+DEBIANDIR="$APPDIR-debian"
 
-rm -rf "$APPDIR"
+# Keep only final archives after packaging. The publish and staging folders
+# can each contain a full self-contained application.
+cleanup() {
+  rm -rf -- "$PUBLISH" "$APPDIR" "$DEBIANDIR"
+}
+trap cleanup EXIT
+
+rm -rf "$PUBLISH" "$APPDIR" "$DEBIANDIR"
 mkdir -p "$PUBLISH" "$RELEASE" "$APPDIR/usr/bin" "$APPDIR/usr/share/applications" "$APPDIR/usr/share/icons/hicolor/1024x1024/apps"
 
 dotnet publish "$ROOT/Termox.csproj" -c Release -r "$RID" --self-contained true \
@@ -29,9 +37,8 @@ sed -i 's#Exec=Termox#Exec=/usr/bin/Termox#' "$APPDIR/usr/share/applications/ter
 tar -C "$APPDIR" -czf "$RELEASE/Termox-$VERSION-$RID.tar.gz" .
 
 if command -v dpkg-deb >/dev/null 2>&1; then
-  DEBIANDIR="$APPDIR-debian/DEBIAN"
-  mkdir -p "$DEBIANDIR"
-  cat > "$DEBIANDIR/control" <<EOF
+  mkdir -p "$DEBIANDIR/DEBIAN"
+  cat > "$DEBIANDIR/DEBIAN/control" <<EOF
 Package: termox
 Version: $VERSION
 Section: net
@@ -41,7 +48,6 @@ Maintainer: Termox Project <contact@cosqnetwork.com>
 Description: Cross-platform SSH and SFTP workspace
  Termox provides SSH terminal sessions, SFTP file management, and network utilities.
 EOF
-  cp -a "$APPDIR/usr" "$APPDIR-debian/usr"
-  dpkg-deb --build "$APPDIR-debian" "$RELEASE/Termox-$VERSION-$RID.deb" >/dev/null
-  rm -rf "$APPDIR-debian"
+  cp -a "$APPDIR/usr" "$DEBIANDIR/usr"
+  dpkg-deb --build "$DEBIANDIR" "$RELEASE/Termox-$VERSION-$RID.deb" >/dev/null
 fi

@@ -71,6 +71,9 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
         with: { dotnet-version: '10.0.x' }
+      - name: Show disk space
+        shell: powershell
+        run: Get-PSDrive -PSProvider FileSystem
       - name: Install Inno Setup
         shell: powershell
         run: choco install innosetup -y --no-progress
@@ -94,6 +97,10 @@ jobs:
           name: release-windows
           path: artifacts/release/Termox-*.exe
           if-no-files-found: error
+      - name: Clean Windows intermediates
+        if: always()
+        shell: powershell
+        run: Remove-Item -Recurse -Force -ErrorAction SilentlyContinue artifacts/publish, artifacts/release
 
   linux:
     name: Linux packages
@@ -103,6 +110,8 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
         with: { dotnet-version: '10.0.x' }
+      - name: Show disk space
+        run: df -h .
       - run: bash packaging/linux/build-linux.sh "${{ needs.version.outputs.version }}" linux-x64
       - name: Verify Linux packages
         env:
@@ -129,6 +138,8 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
         with: { dotnet-version: '10.0.x' }
+      - name: Show disk space
+        run: df -h .
       - name: Build macOS artifacts
         env:
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
@@ -162,6 +173,10 @@ jobs:
           name: release-${{ matrix.rid }}
           path: artifacts/release/Termox-*
           if-no-files-found: error
+      - name: Clean macOS intermediates
+        if: always()
+        shell: bash
+        run: rm -rf -- artifacts/publish artifacts/*.app artifacts/release
 
   publish:
     name: Publish GitHub release
