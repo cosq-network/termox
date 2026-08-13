@@ -650,6 +650,16 @@ public class MainViewModel : INotifyPropertyChanged
             ConnectSftpProfile(profile, path);
     }
 
+    public void DuplicateTerminal(TerminalTabViewModel terminal)
+    {
+        if (terminal == null || string.IsNullOrWhiteSpace(terminal.ConnectionProfileId))
+            return;
+
+        var profile = SavedConnections.FirstOrDefault(p => p.Id == terminal.ConnectionProfileId);
+        if (profile != null)
+            ConnectProfile(profile);
+    }
+
     private static bool IsValidRemoteDirectory(string? path)
     {
         if (string.IsNullOrWhiteSpace(path))

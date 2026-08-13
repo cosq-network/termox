@@ -14,6 +14,8 @@ namespace Termox.ViewModels;
 
 public class TerminalTabViewModel : INotifyPropertyChanged, ITabViewModel
 {
+    private static readonly TimeSpan IdleTimeout = TimeSpan.FromMinutes(30);
+    private static readonly TimeSpan IdleCheckInterval = TimeSpan.FromSeconds(30);
     private SshClient? _sshClient;
     private ShellStream? _shellStream;
     private readonly object _connectionLock = new();
@@ -22,8 +24,23 @@ public class TerminalTabViewModel : INotifyPropertyChanged, ITabViewModel
     private TaskCompletionSource<string?>? _directoryProbe;
     private string? _directoryProbeMarker;
     private string _directoryProbeBuffer = "";
+    private long _lastInputTimestamp;
+    private int _rapidZeroInputCount;
+    private CancellationTokenSource? _idleMonitorCancellation;
+    private long _lastActivityTimestamp;
+    private string _password = "";
+    private string _privateKeyPath = "";
+    private string? _hostKeyFingerprint;
+    private Action<string>? _firstSeenHostKey;
+    private string? _initialCommand;
+    private string? _disconnectReason;
 
-    public TerminalControlModel TerminalModel { get; } = new TerminalControlModel();
+    public TerminalControlModel TerminalModel { get; } = new TerminalControlModel(new TerminalOptions
+    {
+        // Keep the terminal buffer aligned with the available viewport so long
+        // commands reflow instead of requiring horizontal scrolling.
+        ReflowOnResize = true
+    });
 
     private string _title = "New Tab";
     public string Title { get => _title; set { _title = value; OnPropertyChanged(); } }
@@ -39,7 +56,15 @@ public class TerminalTabViewModel : INotifyPropertyChanged, ITabViewModel
     private string _statusColor = "#888888";
     public string StatusColor { get => _statusColor; set { _statusColor = value; OnPropertyChanged(); } }
 
+    private bool _isReconnectAvailable;
+    public bool IsReconnectAvailable
+    {
+        get => _isReconnectAvailable;
+        private set { _isReconnectAvailable = value; OnPropertyChanged(); }
+    }
+
     public ICommand DisconnectCommand { get; }
+    public ICommand ReconnectCommand { get; }
     public ICommand CloseTabCommand { get; }
 
     public async Task<string?> GetCurrentDirectoryAsync()
@@ -95,17 +120,75 @@ public class TerminalTabViewModel : INotifyPropertyChanged, ITabViewModel
     public TerminalTabViewModel(Action<TerminalTabViewModel> onClose)
     {
         DisconnectCommand = new RelayCommand(Disconnect);
+        ReconnectCommand = new RelayCommand(Reconnect);
         CloseTabCommand = new RelayCommand(() => { Disconnect(); onClose(this); });
+
+        TerminalModel.SizeChanged += (_, _) =>
+        {
+            var terminal = TerminalModel.Terminal;
+            ResizeRemoteTerminal(terminal.Cols, terminal.Rows);
+        };
 
         TerminalModel.UserInput += (_, e) =>
         {
             if (_shellStream != null && _sshClient != null && _sshClient.IsConnected)
             {
-                var bytes = e.Data.ToArray();
+                var bytes = NormalizeTerminalInput(e.Data.ToArray());
+
+                // Some key combinations can be reported by the terminal
+                // control as a runaway stream of single ASCII '0' bytes.
+                // Keep ordinary typing and paste intact, but stop that
+                // pathological repeat before it reaches the remote shell.
+                if (IsRunawayZeroInput(bytes))
+                    return;
+
+                MarkActivity();
                 _shellStream.Write(bytes, 0, bytes.Length);
                 _shellStream.Flush();
             }
         };
+    }
+
+    private static byte[] NormalizeTerminalInput(byte[] bytes)
+    {
+        if (Array.IndexOf(bytes, (byte)'\n') < 0)
+            return bytes;
+
+        var normalized = new byte[bytes.Length];
+        var length = 0;
+        for (var index = 0; index < bytes.Length; index++)
+        {
+            var value = bytes[index];
+            if (value == (byte)'\n')
+            {
+                // A CRLF from the clipboard is one Enter, not two.
+                if (length > 0 && normalized[length - 1] == (byte)'\r')
+                    continue;
+
+                normalized[length++] = (byte)'\r';
+            }
+            else
+            {
+                normalized[length++] = value;
+            }
+        }
+
+        return normalized[..length];
+    }
+
+    private bool IsRunawayZeroInput(byte[] bytes)
+    {
+        var now = Environment.TickCount64;
+        if (bytes.Length != 1 || bytes[0] != (byte)'0' || now - _lastInputTimestamp > 250)
+        {
+            _lastInputTimestamp = now;
+            _rapidZeroInputCount = 0;
+            return false;
+        }
+
+        _lastInputTimestamp = now;
+        _rapidZeroInputCount++;
+        return _rapidZeroInputCount > 8;
     }
 
     public void Connect(string host, int port, string username, string password, string privateKeyPath,
@@ -115,12 +198,20 @@ public class TerminalTabViewModel : INotifyPropertyChanged, ITabViewModel
         lock (_connectionLock)
         {
             _connectionCancellation?.Cancel();
+            _idleMonitorCancellation?.Cancel();
             _connectionCancellation = new CancellationTokenSource();
         }
         var cancellation = _connectionCancellation;
         ConnectionHost = host;
         ConnectionPort = port;
         ConnectionUsername = username;
+        _password = password;
+        _privateKeyPath = privateKeyPath;
+        _hostKeyFingerprint = hostKeyFingerprint;
+        _firstSeenHostKey = firstSeenHostKey;
+        _initialCommand = initialCommand;
+        _disconnectReason = null;
+        IsReconnectAvailable = false;
         Title = host;
         Status = "Connecting...";
         StatusColor = "#f39c12";
@@ -158,7 +249,8 @@ public class TerminalTabViewModel : INotifyPropertyChanged, ITabViewModel
                 client.ConnectAsync(cancellation.Token).GetAwaiter().GetResult();
                 connected = true;
 
-                _shellStream = client.CreateShellStream("xterm", 80, 24, 800, 600, 1024);
+                _shellStream = client.CreateShellStream("xterm", (uint)TerminalModel.Terminal.Cols,
+                    (uint)TerminalModel.Terminal.Rows, 800, 600, 1024);
 
                 if (!string.IsNullOrWhiteSpace(initialCommand))
                 {
@@ -173,7 +265,11 @@ public class TerminalTabViewModel : INotifyPropertyChanged, ITabViewModel
                 {
                     Status = "Connected to " + host;
                     StatusColor = "#4caf50";
+                    IsReconnectAvailable = false;
                 });
+
+                MarkActivity();
+                StartIdleMonitor(cancellation.Token);
 
                 Dispatcher.UIThread.Post(() => TerminalModel.Feed($"\u001b[32m[Termox] Connection established successfully.\u001b[0m\r\n"));
 
@@ -203,9 +299,97 @@ public class TerminalTabViewModel : INotifyPropertyChanged, ITabViewModel
         });
     }
 
+    private void Reconnect()
+    {
+        if (string.IsNullOrWhiteSpace(ConnectionHost) || string.IsNullOrWhiteSpace(ConnectionUsername))
+            return;
+
+        Connect(ConnectionHost, ConnectionPort, ConnectionUsername, _password, _privateKeyPath,
+            _hostKeyFingerprint, _firstSeenHostKey, _initialCommand);
+    }
+
+    private void MarkActivity()
+    {
+        Interlocked.Exchange(ref _lastActivityTimestamp, Environment.TickCount64);
+    }
+
+    private void StartIdleMonitor(CancellationToken connectionCancellation)
+    {
+        var monitorCancellation = new CancellationTokenSource();
+        lock (_connectionLock)
+        {
+            _idleMonitorCancellation?.Cancel();
+            _idleMonitorCancellation = monitorCancellation;
+        }
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                while (!monitorCancellation.IsCancellationRequested && !connectionCancellation.IsCancellationRequested)
+                {
+                    await Task.Delay(IdleCheckInterval, monitorCancellation.Token);
+                    if (Environment.TickCount64 - Interlocked.Read(ref _lastActivityTimestamp) >= IdleTimeout.TotalMilliseconds)
+                    {
+                        Disconnect("SSH connection closed after 30 minutes of inactivity.");
+                        break;
+                    }
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // Expected when the connection closes or reconnects.
+            }
+            finally
+            {
+                monitorCancellation.Dispose();
+            }
+        });
+    }
+
+    private void ResizeRemoteTerminal(int columns, int rows)
+    {
+        if (columns <= 0 || rows <= 0) return;
+
+        lock (_connectionLock)
+        {
+            if (_shellStream == null || _sshClient == null || !_sshClient.IsConnected) return;
+
+            try
+            {
+                _shellStream.ChangeWindowSize((uint)columns, (uint)rows, 0, 0);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Remote terminal resize failed: {ex.Message}");
+            }
+        }
+    }
+
     private void Disconnect()
     {
-        lock (_connectionLock) _connectionCancellation?.Cancel();
+        Disconnect(null, preserveExistingReason: false);
+    }
+
+    private void Disconnect(string? reason)
+    {
+        Disconnect(reason, preserveExistingReason: false);
+    }
+
+    private void Disconnect(string? reason, bool preserveExistingReason)
+    {
+        if (reason != null)
+            _disconnectReason = reason;
+        else if (!preserveExistingReason)
+            _disconnectReason = null;
+
+        var displayedReason = reason ?? _disconnectReason;
+        var shouldReportReason = displayedReason != null && !preserveExistingReason;
+        lock (_connectionLock)
+        {
+            _connectionCancellation?.Cancel();
+            _idleMonitorCancellation?.Cancel();
+        }
         try
         {
             ShellStream? shell;
@@ -229,8 +413,11 @@ public class TerminalTabViewModel : INotifyPropertyChanged, ITabViewModel
         {
             Dispatcher.UIThread.Post(() =>
             {
-                Status = "Disconnected";
-                StatusColor = "#888888";
+                IsReconnectAvailable = displayedReason != null;
+                Status = displayedReason ?? "Disconnected";
+                StatusColor = displayedReason != null ? "#f39c12" : "#888888";
+                if (shouldReportReason)
+                    TerminalModel.Feed($"\r\n\u001b[33m[Termox] {displayedReason} Use Reconnect to restore the SSH session.\u001b[0m\r\n");
             });
         }
     }
@@ -269,6 +456,7 @@ public class TerminalTabViewModel : INotifyPropertyChanged, ITabViewModel
 
                 if (read > 0)
                 {
+                    MarkActivity();
                     string text = Encoding.UTF8.GetString(buffer, 0, read);
                     ResolveDirectoryProbe(text);
                     Dispatcher.UIThread.Post(() => TerminalModel.Feed(text));
@@ -283,7 +471,7 @@ public class TerminalTabViewModel : INotifyPropertyChanged, ITabViewModel
         {
             Console.WriteLine($"Error reading output: {ex.Message}");
         }
-        Disconnect();
+        Disconnect(null, preserveExistingReason: true);
     }
 
     private void ResolveDirectoryProbe(string text)

@@ -251,12 +251,27 @@
                         <TabControl.DataTemplates>
                             <DataTemplate DataType="vm:TerminalTabViewModel">
                                 <Border Background="#0c0c0c" Padding="5">
-                                    <terminal:TerminalControl Model="{Binding TerminalModel}"
-                                        FontFamily="Consolas, Fira Code, Cascadia Code, Courier New, monospace"
-                                        FontSize="15">
+                                    <Grid RowDefinitions="Auto,*">
+                                        <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="2,0,2,5">
+                                            <TextBlock Grid.Column="0" Text="{Binding Status}"
+                                                Foreground="{Binding StatusColor}" VerticalAlignment="Center"
+                                                TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Status}" />
+                                            <Button Grid.Column="1" Content="Reconnect"
+                                                Command="{Binding ReconnectCommand}"
+                                                IsVisible="{Binding IsReconnectAvailable}"
+                                                Background="#3a3a3a" Foreground="White"
+                                                Padding="12,5" CornerRadius="3" />
+                                        </Grid>
+                                        <terminal:TerminalControl Grid.Row="1" Model="{Binding TerminalModel}"
+                                            FontFamily="Consolas, Fira Code, Cascadia Code, Courier New, monospace"
+                                            FontSize="15"
+                                            RightClickAction="CopyOrPaste"
+                                            KeyDown="Terminal_KeyDown">
                                         <terminal:TerminalControl.ContextMenu>
-                                            <ContextMenu Background="#2d2d30" Foreground="#e0e0e0">
-                                                <MenuItem Header="Copy" Click="CopyMenu_Click">
+                                            <ContextMenu Background="#2d2d30" Foreground="#e0e0e0"
+                                                Opened="TerminalContextMenu_Opened">
+                                                <MenuItem x:Name="TerminalCopyMenuItem" Header="Copy"
+                                                    IsEnabled="False" Click="CopyMenu_Click">
                                                     <MenuItem.Icon>
                                                         <PathIcon
                                                             Data="M19 2h-4.18C14.4.84 13.3 0 12 0c-1.3 0-2.4.84-2.82 2H5c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-7 0c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm7 18H5V4h2v3h10V4h2v16z"
@@ -264,6 +279,11 @@
                                                             Foreground="#e0e0e0" />
                                                     </MenuItem.Icon>
                                                 </MenuItem>
+                                                <MenuItem x:Name="TerminalPasteMenuItem" Header="Paste"
+                                                    IsEnabled="False" Click="PasteMenu_Click" />
+                                                <MenuItem Header="Duplicate SSH Terminal"
+                                                    InputGesture="Ctrl+Shift+D"
+                                                    Click="DuplicateTerminalMenu_Click" />
                                                 <Separator />
                                                 <MenuItem Header="Open SFTP"
                                                     Click="OpenSftpFromTerminal_Click" />
@@ -271,7 +291,8 @@
                                                     Click="AddTerminalDirectoryBookmark_Click" />
                                             </ContextMenu>
                                         </terminal:TerminalControl.ContextMenu>
-                                    </terminal:TerminalControl>
+                                        </terminal:TerminalControl>
+                                    </Grid>
                                 </Border>
                             </DataTemplate>
 

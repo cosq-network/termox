@@ -11,6 +11,7 @@ using Avalonia.Input.Platform;
 using Avalonia.Media;
 using System.Linq;
 using Termox.Models;
+using SvcSystems.UI.Terminal;
 
 namespace Termox.Views;
 
@@ -88,18 +89,102 @@ public partial class MainWindow : Window
     {
         try
         {
-            if (DataContext is MainViewModel vm && vm.SelectedTab is TerminalTabViewModel termTab)
+            if (sender is MenuItem menuItem &&
+                menuItem.Parent is ContextMenu contextMenu &&
+                contextMenu.PlacementTarget is TerminalControl terminal)
             {
-                var text = termTab.TerminalModel.SelectedText;
+                var text = terminal.SelectedText;
                 var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
                 if (clipboard != null && !string.IsNullOrEmpty(text))
                 {
                     await clipboard.SetTextAsync(text);
-                    termTab.TerminalModel.ClearSelection();
+                    terminal.Model?.ClearSelection();
                 }
             }
         }
         catch (Exception ex) { Console.WriteLine($"Clipboard copy failed: {ex.Message}"); }
+    }
+
+    private async void TerminalContextMenu_Opened(object? sender, EventArgs e)
+    {
+        if (sender is not ContextMenu contextMenu ||
+            contextMenu.PlacementTarget is not TerminalControl terminal)
+            return;
+
+        if (contextMenu.Items.OfType<MenuItem>().FirstOrDefault(item =>
+                item.Name == "TerminalCopyMenuItem") is MenuItem copyItem)
+            copyItem.IsEnabled = terminal.HasSelection;
+
+        var hasClipboardText = false;
+        try
+        {
+            var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
+            hasClipboardText = clipboard != null &&
+                !string.IsNullOrEmpty(await clipboard.TryGetTextAsync());
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Clipboard availability check failed: {ex.Message}");
+        }
+
+        if (contextMenu.Items.OfType<MenuItem>().FirstOrDefault(item =>
+                item.Name == "TerminalPasteMenuItem") is MenuItem pasteItem)
+            pasteItem.IsEnabled = hasClipboardText;
+    }
+
+    private async void PasteMenu_Click(object? sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (sender is MenuItem menuItem && menuItem.Parent is ContextMenu contextMenu &&
+                contextMenu.PlacementTarget is TerminalControl terminal)
+            {
+                await terminal.PasteFromClipboardAsync();
+            }
+        }
+        catch (Exception ex) { Console.WriteLine($"Clipboard paste failed: {ex.Message}"); }
+    }
+
+    private async void Terminal_KeyDown(object? sender, KeyEventArgs e)
+    {
+        if (sender is not TerminalControl terminal)
+            return;
+
+        var primaryModifier = OperatingSystem.IsMacOS() ? KeyModifiers.Meta : KeyModifiers.Control;
+        var isPaste = e.Key == Key.V && (e.KeyModifiers & primaryModifier) != 0;
+        var isDuplicate = e.Key == Key.D &&
+            (e.KeyModifiers & primaryModifier) != 0 &&
+            (e.KeyModifiers & KeyModifiers.Shift) != 0;
+
+        if (!isPaste && !isDuplicate)
+            return;
+
+        e.Handled = true;
+
+        if (isDuplicate)
+        {
+            if (DataContext is MainViewModel vm && terminal.DataContext is TerminalTabViewModel tab)
+                vm.DuplicateTerminal(tab);
+            return;
+        }
+
+        try
+        {
+            await terminal.PasteFromClipboardAsync();
+        }
+        catch (Exception ex) { Console.WriteLine($"Clipboard paste failed: {ex.Message}"); }
+    }
+
+    private void DuplicateTerminalMenu_Click(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainViewModel vm ||
+            sender is not MenuItem menuItem ||
+            menuItem.Parent is not ContextMenu contextMenu ||
+            contextMenu.PlacementTarget is not TerminalControl terminal ||
+            terminal.DataContext is not TerminalTabViewModel tab)
+            return;
+
+        vm.DuplicateTerminal(tab);
     }
 
     private async void OpenSftpFromTerminal_Click(object? sender, RoutedEventArgs e)
