@@ -130,8 +130,8 @@ public class SftpTabViewModel : INotifyPropertyChanged, ITabViewModel, IDisposab
 
     public SftpTabViewModel(Action<SftpTabViewModel> onClose)
     {
-        DisconnectCommand = new RelayCommand(Disconnect);
-        CloseTabCommand = new RelayCommand(() => { Disconnect(); onClose(this); });
+        DisconnectCommand = new RelayCommand(() => _ = DisconnectAsync());
+        CloseTabCommand = new RelayCommand(() => { _ = DisconnectAsync(); onClose(this); });
         NavigateUpCommand = new RelayCommand(NavigateUp);
         NavigateToCommand = new RelayCommand<RemoteFileModel>(NavigateTo, f => f != null && f.IsDirectory);
         RefreshCommand = new RelayCommand(LoadDirectory);
@@ -248,10 +248,12 @@ public class SftpTabViewModel : INotifyPropertyChanged, ITabViewModel, IDisposab
         });
     }
 
-    private void Disconnect()
+    public Task DisconnectAsync()
     {
         lock (_connectionLock) _connectionCancellation?.Cancel();
-        Task.Run(() =>
+        _cancelRequested = true;
+        IsPaused = false;
+        return Task.Run(() =>
         {
             _operationGate.Wait();
             try
@@ -292,27 +294,7 @@ public class SftpTabViewModel : INotifyPropertyChanged, ITabViewModel, IDisposab
             if (!_operationGate.Wait(0)) return;
             try
             {
-                var files = _sftpClient.ListDirectory(CurrentPath);
-                Dispatcher.UIThread.Post(() =>
-                {
-                    _allFiles.Clear();
-                    foreach (var file in files.OrderByDescending(f => f.IsDirectory).ThenBy(f => f.Name))
-                    {
-                        if (file.Name == "." || file.Name == "..") continue;
-
-                        _allFiles.Add(new RemoteFileModel
-                        {
-                            Name = file.Name,
-                            FullName = file.FullName,
-                            IsDirectory = file.IsDirectory,
-                            IsSymbolicLink = file.IsSymbolicLink,
-                            Length = file.Length,
-                            LastWriteTime = file.LastWriteTime,
-                            Permissions = GetPermissionsString(file)
-                        });
-                    }
-                    ApplyFilter();
-                });
+                PostDirectoryListing(_sftpClient.ListDirectory(CurrentPath));
             }
             catch (Exception ex)
             {
@@ -400,10 +382,11 @@ public class SftpTabViewModel : INotifyPropertyChanged, ITabViewModel, IDisposab
                     return;
                 }
 
+                var files = _sftpClient.ListDirectory(target);
                 Dispatcher.UIThread.Post(() =>
                 {
                     CurrentPath = target;
-                    LoadDirectory();
+                    PostDirectoryListing(files);
                 });
             }
             catch (Exception ex)
@@ -418,6 +401,33 @@ public class SftpTabViewModel : INotifyPropertyChanged, ITabViewModel, IDisposab
             {
                 _operationGate.Release();
             }
+        });
+    }
+
+    private void PostDirectoryListing(IEnumerable<ISftpFile> files)
+    {
+        var entries = files
+            .Where(file => file.Name != "." && file.Name != "..")
+            .OrderByDescending(file => file.IsDirectory)
+            .ThenBy(file => file.Name)
+            .Select(file => new RemoteFileModel
+            {
+                Name = file.Name,
+                FullName = file.FullName,
+                IsDirectory = file.IsDirectory,
+                IsSymbolicLink = file.IsSymbolicLink,
+                Length = file.Length,
+                LastWriteTime = file.LastWriteTime,
+                Permissions = GetPermissionsString(file)
+            })
+            .ToList();
+
+        Dispatcher.UIThread.Post(() =>
+        {
+            _allFiles.Clear();
+            foreach (var entry in entries)
+                _allFiles.Add(entry);
+            ApplyFilter();
         });
     }
 

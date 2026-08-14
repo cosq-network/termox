@@ -684,6 +684,13 @@ public class MainViewModel : INotifyPropertyChanged
         return true;
     }
 
+    private static bool IsValidSftpPath(string? path)
+    {
+        return !string.IsNullOrWhiteSpace(path) &&
+            path.StartsWith("/", StringComparison.Ordinal) &&
+            path.All(character => !char.IsControl(character));
+    }
+
     private void RequestRemoveBookmark(BookmarkModel bookmark)
     {
         if (bookmark == null || !Bookmarks.Contains(bookmark)) return;
@@ -740,7 +747,10 @@ public class MainViewModel : INotifyPropertyChanged
                             var profile = FindSessionProfile(session);
                             if (profile != null)
                             {
-                                ConnectSftpProfile(profile);
+                                var restoredPath = IsValidSftpPath(session.RemotePath)
+                                    ? session.RemotePath
+                                    : null;
+                                ConnectSftpProfile(profile, restoredPath);
                             }
                         }
                     }
@@ -775,7 +785,8 @@ public class MainViewModel : INotifyPropertyChanged
                     {
                         Type = "sftp", ProfileId = sftpTab.ConnectionProfileId,
                         Host = sftpTab.ConnectionHost, Port = sftpTab.ConnectionPort,
-                        Username = sftpTab.ConnectionUsername
+                        Username = sftpTab.ConnectionUsername,
+                        RemotePath = sftpTab.CurrentPath
                     });
                 }
             }
@@ -904,6 +915,7 @@ public class SessionData
     public string Host { get; set; } = "";
     public int Port { get; set; } = 22;
     public string Username { get; set; } = "";
+    public string? RemotePath { get; set; }
 }
 
 public class RelayCommand : ICommand

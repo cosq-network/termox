@@ -25,6 +25,32 @@ internal static class LocalPathSafety
             !candidate.StartsWith(rootPrefix, comparison))
             throw new InvalidOperationException("Remote path is outside the selected download folder.");
 
+        // A lexical check is insufficient when an existing directory in the
+        // destination tree is a symlink/junction. Resolve every existing
+        // component so a remote filename cannot redirect writes elsewhere.
+        var relative = Path.GetRelativePath(root, candidate);
+        var current = root;
+        foreach (var segment in relative.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar,
+                     StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            current = Path.Combine(current, segment);
+            if (!Directory.Exists(current) && !File.Exists(current))
+                continue;
+
+            FileSystemInfo info = Directory.Exists(current)
+                ? new DirectoryInfo(current)
+                : new FileInfo(current);
+            var resolved = info.ResolveLinkTarget(returnFinalTarget: true);
+            if (resolved == null)
+                continue;
+
+            var resolvedPath = Path.GetFullPath(resolved.FullName)
+                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            if (!resolvedPath.Equals(root, comparison) &&
+                !resolvedPath.StartsWith(rootPrefix, comparison))
+                throw new InvalidOperationException("Download path traverses outside the selected folder through a link.");
+        }
+
         return candidate;
     }
 }

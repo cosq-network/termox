@@ -23,12 +23,19 @@ public partial class MainWindow : Window
         Closed += MainWindow_Closed;
     }
 
-    private void MainWindow_Closed(object? sender, EventArgs e)
+    private async void MainWindow_Closed(object? sender, EventArgs e)
     {
         if (DataContext is MainViewModel vm)
         {
-            foreach (var tab in vm.Tabs.ToList())
+            var disconnectTasks = vm.Tabs
+                .OfType<SftpTabViewModel>()
+                .Select(tab => tab.DisconnectAsync())
+                .ToArray();
+
+            foreach (var tab in vm.Tabs.Where(tab => tab is not SftpTabViewModel).ToList())
                 tab.DisconnectCommand.Execute(null);
+
+            await Task.WhenAll(disconnectTasks);
         }
     }
 
@@ -105,7 +112,7 @@ public partial class MainWindow : Window
         catch (Exception ex) { Console.WriteLine($"Clipboard copy failed: {ex.Message}"); }
     }
 
-    private async void TerminalContextMenu_Opened(object? sender, EventArgs e)
+    private async void TerminalContextMenu_Opened(object? sender, RoutedEventArgs e)
     {
         if (sender is not ContextMenu contextMenu ||
             contextMenu.PlacementTarget is not TerminalControl terminal)
