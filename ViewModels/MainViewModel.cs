@@ -43,9 +43,68 @@ public class MainViewModel : INotifyPropertyChanged
 
     public ObservableCollection<ITabViewModel> Tabs { get; } = new();
 
+    private ObservableCollection<SshConnectionProfile> _recentlyUsedSessions = new();
+    public ObservableCollection<SshConnectionProfile> RecentlyUsedSessions
+    {
+        get => _recentlyUsedSessions;
+        set { _recentlyUsedSessions = value; OnPropertyChanged(); }
+    }
+
+    private ObservableCollection<BookmarkModel> _favoritedBookmarks = new();
+    public ObservableCollection<BookmarkModel> FavoritedBookmarks
+    {
+        get => _favoritedBookmarks;
+        set { _favoritedBookmarks = value; OnPropertyChanged(); }
+    }
+
+    // Configuration properties
+    private long _downloadSizeWarningThreshold = 100 * 1024 * 1024; // 100 MB default
+    public long DownloadSizeWarningThreshold
+    {
+        get => _downloadSizeWarningThreshold;
+        set { _downloadSizeWarningThreshold = value; OnPropertyChanged(); }
+    }
+
+    private int _connectionRetryCount = 3;
+    public int ConnectionRetryCount
+    {
+        get => _connectionRetryCount;
+        set { _connectionRetryCount = value; OnPropertyChanged(); }
+    }
+
+    private int _connectionRetryDelayMs = 2000;
+    public int ConnectionRetryDelayMs
+    {
+        get => _connectionRetryDelayMs;
+        set { _connectionRetryDelayMs = value; OnPropertyChanged(); }
+    }
+
+    /// <summary>Retry delay in whole seconds, for display in the connection dialog.</summary>
+    public int ConnectionRetryDelaySeconds
+    {
+        get => Math.Max(0, _connectionRetryDelayMs / 1000);
+        set { ConnectionRetryDelayMs = Math.Max(0, value) * 1000; }
+    }
+
+    private int _keepAliveIntervalSeconds = 60;
+    public int KeepAliveIntervalSeconds
+    {
+        get => _keepAliveIntervalSeconds;
+        set { _keepAliveIntervalSeconds = Math.Max(0, value); OnPropertyChanged(); }
+    }
+
+    private int _idleTimeoutMinutes;
+    public int IdleTimeoutMinutes
+    {
+        get => _idleTimeoutMinutes;
+        set { _idleTimeoutMinutes = Math.Max(0, value); OnPropertyChanged(); }
+    }
+
     public bool HasSavedConnections => SavedConnections.Count > 0;
     public bool HasBookmarks => Bookmarks.Count > 0;
     public bool HasTabs => Tabs.Count > 0;
+    public bool HasRecentlyUsedSessions => RecentlyUsedSessions.Count > 0;
+    public bool HasFavoritedBookmarks => FavoritedBookmarks.Count > 0;
 
     private ITabViewModel? _selectedTab;
     public ITabViewModel? SelectedTab
@@ -243,6 +302,7 @@ public class MainViewModel : INotifyPropertyChanged
     public ICommand ConfirmRemoveBookmarkCommand { get; }
     public ICommand CancelRemoveBookmarkCommand { get; }
     public ICommand ClearAllBookmarksCommand { get; }
+    public ICommand ToggleBookmarkFavoriteCommand { get; }
     public ICommand ShowFilePropertiesCommand { get; }
     public ICommand PreviewFileCommand { get; }
     public ICommand EditFilePermissionsCommand { get; }
@@ -251,6 +311,10 @@ public class MainViewModel : INotifyPropertyChanged
     public ICommand OpenSshKeyGeneratorTabCommand { get; }
     public ICommand OpenConnectionTesterTabCommand { get; }
     public ICommand OpenSshEndpointTestTabCommand { get; }
+    public ICommand OpenGpgTabCommand { get; }
+    public ICommand OpenFingerprintTabCommand { get; }
+    public ICommand OpenDnsTabCommand { get; }
+    public ICommand OpenServerStatsTabCommand { get; }
 
     private string _configPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Termox", "connections.json");
     private string _bookmarksPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Termox", "bookmarks.json");
@@ -283,6 +347,7 @@ public class MainViewModel : INotifyPropertyChanged
         ConfirmRemoveBookmarkCommand = new RelayCommand(ConfirmRemoveBookmark);
         CancelRemoveBookmarkCommand = new RelayCommand(CancelRemoveBookmark);
         ClearAllBookmarksCommand = new RelayCommand(ClearAllBookmarks);
+        ToggleBookmarkFavoriteCommand = new RelayCommand<BookmarkModel>(ToggleBookmarkFavorite);
         ShowFilePropertiesCommand = new RelayCommand<RemoteFileModel>(ShowFileProperties);
         PreviewFileCommand = new RelayCommand<RemoteFileModel>(PreviewFile);
         EditFilePermissionsCommand = new RelayCommand<RemoteFileModel>(EditFilePermissions);
@@ -291,9 +356,14 @@ public class MainViewModel : INotifyPropertyChanged
         OpenSshKeyGeneratorTabCommand = new RelayCommand(OpenSshKeyGeneratorTab);
         OpenConnectionTesterTabCommand = new RelayCommand(OpenConnectionTesterTab);
         OpenSshEndpointTestTabCommand = new RelayCommand(OpenSshEndpointTestTab);
+        OpenGpgTabCommand = new RelayCommand(OpenGpgTab);
+        OpenFingerprintTabCommand = new RelayCommand(OpenFingerprintTab);
+        OpenDnsTabCommand = new RelayCommand(OpenDnsTab);
+        OpenServerStatsTabCommand = new RelayCommand(OpenServerStatsTab);
         ShowAboutDialogCommand = new RelayCommand(() => IsAboutDialogVisible = true);
 
         LoadConnections();
+        RefreshRecentlyUsedSessions();
         LoadBookmarks();
         LoadAndRestoreSessions();
     }
@@ -341,7 +411,9 @@ public class MainViewModel : INotifyPropertyChanged
             Username = Username,
             Password = Password,
             PrivateKeyPath = PrivateKeyPath,
-            HostKeyFingerprint = HostKeyFingerprint
+            HostKeyFingerprint = HostKeyFingerprint,
+            KeepAliveIntervalSeconds = KeepAliveIntervalSeconds,
+            IdleTimeoutMinutes = IdleTimeoutMinutes
         };
 
         var existing = SavedConnections.FirstOrDefault(c => c.Name == profile.Name && c.Host == profile.Host);
@@ -490,8 +562,10 @@ public class MainViewModel : INotifyPropertyChanged
         SelectedTab = tab;
 
         tab.ConnectionProfileId = profile.Id;
+        tab.FileSizeWarningThreshold = DownloadSizeWarningThreshold;
         tab.Connect(profile.Host, profile.Port, profile.Username, profile.Password, profile.PrivateKeyPath,
             profile.HostKeyFingerprint, fingerprint => RememberHostKey(profile, fingerprint), initialPath);
+        UpdateLastUsedSession(profile);
         SaveCurrentSessions();
     }
 
@@ -538,6 +612,20 @@ public class MainViewModel : INotifyPropertyChanged
         Tabs.Add(tab);
         SelectedTab = tab;
 
+        // Use the saved profile's idle/keepalive settings when present, else the dialog values.
+        var keepAliveSeconds = KeepAliveIntervalSeconds;
+        var idleTimeoutMinutes = IdleTimeoutMinutes;
+        if (profileId != null)
+        {
+            var profile = SavedConnections.FirstOrDefault(p => p.Id == profileId);
+            UpdateLastUsedSession(profile);
+            if (profile != null)
+            {
+                keepAliveSeconds = profile.KeepAliveIntervalSeconds;
+                idleTimeoutMinutes = profile.IdleTimeoutMinutes;
+            }
+        }
+
         tab.Connect(Host ?? "", portNumber, Username ?? "", Password ?? "", PrivateKeyPath ?? "",
             HostKeyFingerprint, fingerprint =>
             {
@@ -547,7 +635,8 @@ public class MainViewModel : INotifyPropertyChanged
                     var profile = SavedConnections.FirstOrDefault(p => p.Id == profileId);
                     if (profile != null) RememberHostKey(profile, fingerprint);
                 }
-            }, initialCommand);
+            }, initialCommand, ConnectionRetryCount, ConnectionRetryDelayMs,
+            keepAliveSeconds, idleTimeoutMinutes);
         SaveCurrentSessions();
     }
 
@@ -599,6 +688,8 @@ public class MainViewModel : INotifyPropertyChanged
         {
             Console.WriteLine($"Failed to load bookmarks: {ex.Message}");
         }
+
+        RefreshFavoritedBookmarks();
     }
 
     private void SaveBookmarks()
@@ -708,6 +799,7 @@ public class MainViewModel : INotifyPropertyChanged
 
         IsBookmarkDeleteConfirmModalVisible = false;
         BookmarkToDelete = null;
+        RefreshFavoritedBookmarks();
     }
 
     private void CancelRemoveBookmark()
@@ -720,6 +812,7 @@ public class MainViewModel : INotifyPropertyChanged
     {
         Bookmarks.Clear();
         SaveBookmarks();
+        RefreshFavoritedBookmarks();
     }
 
     private void LoadAndRestoreSessions()
@@ -884,10 +977,102 @@ public class MainViewModel : INotifyPropertyChanged
         SelectedTab = endpointTab;
     }
 
+    private void OpenGpgTab()
+    {
+        var gpgTab = new GpgTabViewModel(tab =>
+        {
+            Tabs.Remove(tab);
+            SaveCurrentSessions();
+        });
+        Tabs.Add(gpgTab);
+        SelectedTab = gpgTab;
+    }
+
+    private void OpenFingerprintTab()
+    {
+        var fingerprintTab = new FingerprintTabViewModel(tab =>
+        {
+            Tabs.Remove(tab);
+            SaveCurrentSessions();
+        });
+        Tabs.Add(fingerprintTab);
+        SelectedTab = fingerprintTab;
+    }
+
+    private void OpenDnsTab()
+    {
+        var dnsTab = new DnsTabViewModel(tab =>
+        {
+            Tabs.Remove(tab);
+            SaveCurrentSessions();
+        });
+        Tabs.Add(dnsTab);
+        SelectedTab = dnsTab;
+    }
+
+    private void OpenServerStatsTab()
+    {
+        var statsTab = new ServerStatsTabViewModel(tab =>
+        {
+            Tabs.Remove(tab);
+            SaveCurrentSessions();
+        }, SavedConnections);
+        Tabs.Add(statsTab);
+        SelectedTab = statsTab;
+    }
+
     private void RememberHostKey(SshConnectionProfile profile, string fingerprint)
     {
         profile.HostKeyFingerprint = fingerprint;
         SaveProfilesToDisk();
+    }
+
+    private void UpdateLastUsedSession(SshConnectionProfile? profile)
+    {
+        if (profile == null) return;
+        
+        profile.LastUsed = DateTime.Now;
+        SaveProfilesToDisk();
+        RefreshRecentlyUsedSessions();
+    }
+
+    private void RefreshRecentlyUsedSessions()
+    {
+        var recently = SavedConnections
+            .Where(p => p.LastUsed > DateTime.MinValue)
+            .OrderByDescending(p => p.LastUsed)
+            .Take(10)
+            .ToList();
+
+        RecentlyUsedSessions.Clear();
+        foreach (var profile in recently)
+        {
+            RecentlyUsedSessions.Add(profile);
+        }
+        OnPropertyChanged(nameof(HasRecentlyUsedSessions));
+    }
+
+    public void ToggleBookmarkFavorite(BookmarkModel bookmark)
+    {
+        if (bookmark == null) return;
+        bookmark.IsFavorite = !bookmark.IsFavorite;
+        SaveBookmarks();
+        RefreshFavoritedBookmarks();
+    }
+
+    private void RefreshFavoritedBookmarks()
+    {
+        var favorited = Bookmarks
+            .Where(b => b.IsFavorite)
+            .OrderBy(b => b.SessionName)
+            .ToList();
+
+        FavoritedBookmarks.Clear();
+        foreach (var bookmark in favorited)
+        {
+            FavoritedBookmarks.Add(bookmark);
+        }
+        OnPropertyChanged(nameof(HasFavoritedBookmarks));
     }
 
     private void SaveProfilesToDisk()

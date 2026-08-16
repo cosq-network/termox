@@ -14,8 +14,8 @@ namespace Termox.ViewModels;
 
 public class TerminalTabViewModel : INotifyPropertyChanged, ITabViewModel
 {
-    private static readonly TimeSpan IdleTimeout = TimeSpan.FromMinutes(30);
     private static readonly TimeSpan IdleCheckInterval = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan IdleWarningLead = TimeSpan.FromSeconds(60);
     private SshClient? _sshClient;
     private ShellStream? _shellStream;
     private readonly object _connectionLock = new();
@@ -34,6 +34,11 @@ public class TerminalTabViewModel : INotifyPropertyChanged, ITabViewModel
     private Action<string>? _firstSeenHostKey;
     private string? _initialCommand;
     private string? _disconnectReason;
+    private int _retryCount = 3;
+    private int _retryDelayMs = 2000;
+    private int _keepAliveSeconds = 60;
+    private int _idleTimeoutMinutes;
+    private bool _idleWarningShown;
 
     public TerminalControlModel TerminalModel { get; } = new TerminalControlModel(new TerminalOptions
     {
@@ -66,6 +71,7 @@ public class TerminalTabViewModel : INotifyPropertyChanged, ITabViewModel
     public ICommand DisconnectCommand { get; }
     public ICommand ReconnectCommand { get; }
     public ICommand CloseTabCommand { get; }
+    public ICommand ClearHistoryCommand { get; }
 
     public async Task<string?> GetCurrentDirectoryAsync()
     {
@@ -122,6 +128,7 @@ public class TerminalTabViewModel : INotifyPropertyChanged, ITabViewModel
         DisconnectCommand = new RelayCommand(Disconnect);
         ReconnectCommand = new RelayCommand(Reconnect);
         CloseTabCommand = new RelayCommand(() => { Disconnect(); onClose(this); });
+        ClearHistoryCommand = new RelayCommand(ClearHistory);
 
         TerminalModel.SizeChanged += (_, _) =>
         {
@@ -193,7 +200,8 @@ public class TerminalTabViewModel : INotifyPropertyChanged, ITabViewModel
 
     public void Connect(string host, int port, string username, string password, string privateKeyPath,
         string? hostKeyFingerprint = null, Action<string>? firstSeenHostKey = null,
-        string? initialCommand = null)
+        string? initialCommand = null, int? retryCount = null, int? retryDelayMs = null,
+        int? keepAliveSeconds = null, int? idleTimeoutMinutes = null)
     {
         lock (_connectionLock)
         {
@@ -211,6 +219,11 @@ public class TerminalTabViewModel : INotifyPropertyChanged, ITabViewModel
         _firstSeenHostKey = firstSeenHostKey;
         _initialCommand = initialCommand;
         _disconnectReason = null;
+        _retryCount = Math.Max(1, retryCount ?? 3);
+        _retryDelayMs = Math.Max(0, retryDelayMs ?? 2000);
+        _keepAliveSeconds = Math.Max(0, keepAliveSeconds ?? 60);
+        _idleTimeoutMinutes = Math.Max(0, idleTimeoutMinutes ?? 0);
+        _idleWarningShown = false;
         IsReconnectAvailable = false;
         Title = host;
         Status = "Connecting...";
@@ -240,14 +253,46 @@ public class TerminalTabViewModel : INotifyPropertyChanged, ITabViewModel
 
                 client.ConnectionInfo.Timeout = SshSecurity.ConnectionTimeout;
                 SshSecurity.ConfigureHostKeyPolicy(client, hostKeyFingerprint, firstSeenHostKey);
+                if (_keepAliveSeconds > 0)
+                    client.KeepAliveInterval = TimeSpan.FromSeconds(_keepAliveSeconds);
                 lock (_connectionLock)
                 {
                     if (cancellation.IsCancellationRequested) return;
                     _sshClient = client;
                 }
 
-                client.ConnectAsync(cancellation.Token).GetAwaiter().GetResult();
-                connected = true;
+                // Attempt connection with retries
+                var maxRetries = _retryCount;
+                var retryDelayMs = _retryDelayMs;
+                var lastException = (Exception?)null;
+
+                for (int attempt = 1; attempt <= maxRetries; attempt++)
+                {
+                    try
+                    {
+                        if (attempt > 1)
+                        {
+                            Dispatcher.UIThread.Post(() => 
+                                TerminalModel.Feed($"\u001b[33m[Termox] Connection attempt {attempt}/{maxRetries}...\u001b[0m\r\n"));
+                            Task.Delay(retryDelayMs, cancellation.Token).Wait(cancellation.Token);
+                        }
+
+                        client.ConnectAsync(cancellation.Token).GetAwaiter().GetResult();
+                        connected = true;
+                        break;  // Successfully connected, exit retry loop
+                    }
+                    catch (Exception ex)
+                    {
+                        lastException = ex;
+                        if (attempt == maxRetries)
+                            throw;  // Last attempt failed, throw exception
+                        
+                        // Continue to next retry
+                    }
+                }
+
+                if (!connected && lastException != null)
+                    throw lastException;
 
                 _shellStream = client.CreateShellStream("xterm", (uint)TerminalModel.Terminal.Cols,
                     (uint)TerminalModel.Terminal.Rows, 800, 600, 1024);
@@ -299,6 +344,11 @@ public class TerminalTabViewModel : INotifyPropertyChanged, ITabViewModel
         });
     }
 
+    private void ClearHistory()
+    {
+        TerminalModel.Terminal.Engine.Clear();
+    }
+
     private void Reconnect()
     {
         if (string.IsNullOrWhiteSpace(ConnectionHost) || string.IsNullOrWhiteSpace(ConnectionUsername))
@@ -311,16 +361,23 @@ public class TerminalTabViewModel : INotifyPropertyChanged, ITabViewModel
     private void MarkActivity()
     {
         Interlocked.Exchange(ref _lastActivityTimestamp, Environment.TickCount64);
+        _idleWarningShown = false;
     }
 
     private void StartIdleMonitor(CancellationToken connectionCancellation)
     {
+        // Idle timeout of 0 disables the monitor entirely — the session stays open.
+        if (_idleTimeoutMinutes <= 0) return;
+
         var monitorCancellation = new CancellationTokenSource();
         lock (_connectionLock)
         {
             _idleMonitorCancellation?.Cancel();
             _idleMonitorCancellation = monitorCancellation;
         }
+
+        var idleTimeout = TimeSpan.FromMinutes(_idleTimeoutMinutes);
+        var warningLead = idleTimeout > IdleWarningLead ? IdleWarningLead : TimeSpan.FromSeconds(Math.Max(5, idleTimeout.TotalSeconds / 2));
 
         _ = Task.Run(async () =>
         {
@@ -329,9 +386,25 @@ public class TerminalTabViewModel : INotifyPropertyChanged, ITabViewModel
                 while (!monitorCancellation.IsCancellationRequested && !connectionCancellation.IsCancellationRequested)
                 {
                     await Task.Delay(IdleCheckInterval, monitorCancellation.Token);
-                    if (Environment.TickCount64 - Interlocked.Read(ref _lastActivityTimestamp) >= IdleTimeout.TotalMilliseconds)
+                    var idleFor = TimeSpan.FromMilliseconds(Environment.TickCount64 - Interlocked.Read(ref _lastActivityTimestamp));
+
+                    if (idleFor < idleTimeout - warningLead)
+                        continue;
+
+                    // Warn once, shortly before the disconnect.
+                    if (idleFor < idleTimeout && !_idleWarningShown)
                     {
-                        Disconnect("SSH connection closed after 30 minutes of inactivity.");
+                        _idleWarningShown = true;
+                        var minutes = Math.Max(1, (int)Math.Ceiling(idleFor.TotalMinutes));
+                        var message = $"\r\n\u001b[33m[Termox] No activity for {minutes} minute(s). " +
+                                      $"Session will disconnect in ~{Math.Max(1, (int)Math.Ceiling((idleTimeout - idleFor).TotalSeconds))}s unless you interact.\u001b[0m\r\n";
+                        Dispatcher.UIThread.Post(() => TerminalModel.Feed(message));
+                        continue;
+                    }
+
+                    if (idleFor >= idleTimeout)
+                    {
+                        Disconnect($"SSH connection closed after {_idleTimeoutMinutes} minute(s) of inactivity.");
                         break;
                     }
                 }

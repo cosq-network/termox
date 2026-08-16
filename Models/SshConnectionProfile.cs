@@ -25,6 +25,19 @@ public class SshConnectionProfile
     public string Password { get; set; } = "";
     public string PrivateKeyPath { get; set; } = "";
     public string HostKeyFingerprint { get; set; } = "";
+    public DateTime LastUsed { get; set; } = DateTime.MinValue;
+
+    /// <summary>
+    /// Seconds between SSH keep-alive messages while a terminal session is connected.
+    /// 0 disables keep-alive (SSH.NET default).
+    /// </summary>
+    public int KeepAliveIntervalSeconds { get; set; } = 60;
+
+    /// <summary>
+    /// Minutes of inactivity before an SSH terminal session auto-disconnects.
+    /// 0 keeps the session open indefinitely.
+    /// </summary>
+    public int IdleTimeoutMinutes { get; set; } = 0;
 
     [JsonIgnore]
     public bool IsConnected { get; set; }

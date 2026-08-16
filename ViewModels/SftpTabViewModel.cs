@@ -93,6 +93,30 @@ public class SftpTabViewModel : INotifyPropertyChanged, ITabViewModel, IDisposab
     private RemoteFileModel? _deleteTarget;
     private bool _deleteSelection;
 
+    private bool _isFileSizeWarningVisible;
+    public bool IsFileSizeWarningVisible
+    {
+        get => _isFileSizeWarningVisible;
+        set { _isFileSizeWarningVisible = value; OnPropertyChanged(); }
+    }
+
+    private string _fileSizeWarningMessage = "";
+    public string FileSizeWarningMessage
+    {
+        get => _fileSizeWarningMessage;
+        set { _fileSizeWarningMessage = value; OnPropertyChanged(); }
+    }
+
+    private long _fileSizeWarningThreshold = 100 * 1024 * 1024;  // 100 MB default
+    public long FileSizeWarningThreshold
+    {
+        get => _fileSizeWarningThreshold;
+        set { _fileSizeWarningThreshold = value; OnPropertyChanged(); }
+    }
+
+    private List<RemoteFileModel>? _pendingDownloadFiles;
+    private string _pendingDownloadFolder = "";
+
     private string _searchQuery = "";
     private System.Threading.Timer? _searchDebounceTimer;
     public string SearchQuery
@@ -127,6 +151,8 @@ public class SftpTabViewModel : INotifyPropertyChanged, ITabViewModel, IDisposab
     public ICommand BulkDeleteCommand { get; }
     public ICommand SelectAllCommand { get; }
     public ICommand ClearSelectionCommand { get; }
+    public ICommand ConfirmFileSizeWarningCommand { get; }
+    public ICommand CancelFileSizeWarningCommand { get; }
 
     public SftpTabViewModel(Action<SftpTabViewModel> onClose)
     {
@@ -145,6 +171,8 @@ public class SftpTabViewModel : INotifyPropertyChanged, ITabViewModel, IDisposab
         BulkDeleteCommand = new RelayCommand(RequestBulkDelete);
         SelectAllCommand = new RelayCommand(SelectAllFiles);
         ClearSelectionCommand = new RelayCommand(ClearAllSelections);
+        ConfirmFileSizeWarningCommand = new RelayCommand(ConfirmFileSizeWarning);
+        CancelFileSizeWarningCommand = new RelayCommand(CancelFileSizeWarning);
     }
 
     public event Action<string>? NotifyAddBookmark;
@@ -557,11 +585,72 @@ public class SftpTabViewModel : INotifyPropertyChanged, ITabViewModel, IDisposab
         LoadDirectory();
     }
 
-    public async Task DownloadFilesAsync(System.Collections.IList filesToDownload, string localFolderPath)
+    /// <summary>
+    /// Starts a download, optionally prompting the user first when the total size
+    /// of the selected items exceeds the configured warning threshold.
+    /// </summary>
+    public async Task DownloadFilesAsync(System.Collections.IList filesToDownload, string localFolderPath,
+        bool skipSizeWarning = false)
     {
         if (_sftpClient == null || !_sftpClient.IsConnected) return;
 
         var files = filesToDownload.Cast<RemoteFileModel>().ToList();
+        if (files.Count == 0) return;
+
+        if (!skipSizeWarning && IsFileSizeWarningVisible)
+            return;  // A confirmation is already on screen; ignore repeated triggers.
+
+        // Prompt before starting the transfer when the selection is large.
+        if (!skipSizeWarning && FileSizeWarningThreshold > 0)
+        {
+            var totalSize = files
+                .Where(f => !f.IsDirectory)
+                .Sum(f => Math.Max(f.Length, 0L));
+            var largeItems = files.Where(f => !f.IsDirectory && f.Length > FileSizeWarningThreshold).ToList();
+
+            if (largeItems.Count > 0 || totalSize > FileSizeWarningThreshold)
+            {
+                _pendingDownloadFiles = files;
+                _pendingDownloadFolder = localFolderPath;
+                var details = string.Join(", ",
+                    largeItems.OrderByDescending(f => f.Length)
+                        .Take(3)
+                        .Select(f => $"{f.Name} ({FormatSize(f.Length)})"));
+                FileSizeWarningMessage =
+                    $"The selection contains {FormatSize(totalSize)} of data. " +
+                    (largeItems.Count > 0
+                        ? $"Largest item(s): {details}. "
+                        : "") +
+                    "Continue with the download?";
+                IsFileSizeWarningVisible = true;
+                return;
+            }
+        }
+
+        await DownloadFilesCoreAsync(files, localFolderPath);
+    }
+
+    private void ConfirmFileSizeWarning()
+    {
+        IsFileSizeWarningVisible = false;
+        var files = _pendingDownloadFiles;
+        var folder = _pendingDownloadFolder;
+        _pendingDownloadFiles = null;
+        _pendingDownloadFolder = "";
+        if (files != null && files.Count > 0)
+            _ = DownloadFilesCoreAsync(files, folder);
+    }
+
+    private void CancelFileSizeWarning()
+    {
+        IsFileSizeWarningVisible = false;
+        _pendingDownloadFiles = null;
+        _pendingDownloadFolder = "";
+    }
+
+    private async Task DownloadFilesCoreAsync(List<RemoteFileModel> files, string localFolderPath)
+    {
+        if (_sftpClient == null || !_sftpClient.IsConnected) return;
         if (files.Count == 0) return;
 
         IsTransferring = true;

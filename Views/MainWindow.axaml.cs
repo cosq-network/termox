@@ -10,6 +10,7 @@ using Avalonia.Input;
 using Avalonia.Input.Platform;
 using Avalonia.Media;
 using System.Linq;
+using System.Windows.Input;
 using Termox.Models;
 using SvcSystems.UI.Terminal;
 
@@ -162,11 +163,22 @@ public partial class MainWindow : Window
         var isDuplicate = e.Key == Key.D &&
             (e.KeyModifiers & primaryModifier) != 0 &&
             (e.KeyModifiers & KeyModifiers.Shift) != 0;
+        var isClearHistory = e.Key == Key.L && (e.KeyModifiers & primaryModifier) != 0;
 
-        if (!isPaste && !isDuplicate)
+        if (!isPaste && !isDuplicate && !isClearHistory)
             return;
 
         e.Handled = true;
+
+        if (isClearHistory)
+        {
+            if (terminal.DataContext is TerminalTabViewModel tab &&
+                tab.ClearHistoryCommand is ICommand cmd && cmd.CanExecute(null))
+            {
+                cmd.Execute(null);
+            }
+            return;
+        }
 
         if (isDuplicate)
         {
@@ -312,6 +324,14 @@ public partial class MainWindow : Window
         if (sender is Button btn && DataContext is MainViewModel vm && btn.CommandParameter is BookmarkModel bookmark)
         {
             vm.RemoveBookmarkCommand.Execute(bookmark);
+        }
+    }
+
+    private void ToggleBookmarkFavorite_Click(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button btn && DataContext is MainViewModel vm && btn.CommandParameter is BookmarkModel bookmark)
+        {
+            vm.ToggleBookmarkFavoriteCommand.Execute(bookmark);
         }
     }
 

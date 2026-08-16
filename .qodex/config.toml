@@ -1,0 +1,24 @@
+[model]
+provider = "openai-compatible"
+base_url = "https://api.groq.com/openai/v1"
+model = "openai/gpt-oss-20b"
+
+auth = { type = "bearer", token_env = "GROQ_API_KEY", header = "" }
+
+
+[runtime]
+backend = "external"
+context_tokens = 32768
+temperature = 0.2
+top_p = 0.95
+
+[approval]
+write_files = "ask"
+run_commands = "ask"
+network = "ask"
+
+[store]
+path = ".qodex/qodex.db"
+
+[agent]
+max_steps = 12
