@@ -91,9 +91,11 @@ public class GpgKeyManager
             await process.StandardInput.WriteLineAsync(keyData);
             process.StandardInput.Close();
 
-            var output = await process.StandardOutput.ReadToEndAsync();
-            var error = await process.StandardError.ReadToEndAsync();
-            process.WaitForExit();
+            var outputTask = process.StandardOutput.ReadToEndAsync();
+            var errorTask = process.StandardError.ReadToEndAsync();
+            await Task.WhenAll(outputTask, errorTask);
+            await process.WaitForExitAsync();
+            var error = errorTask.Result;
 
             if (process.ExitCode == 0)
             {
@@ -137,9 +139,11 @@ public class GpgKeyManager
             using var process = Process.Start(processInfo)
                 ?? throw new InvalidOperationException("Could not start gpg process");
 
-            var output = await process.StandardOutput.ReadToEndAsync();
-            var error = await process.StandardError.ReadToEndAsync();
-            process.WaitForExit();
+            var outputTask = process.StandardOutput.ReadToEndAsync();
+            var errorTask = process.StandardError.ReadToEndAsync();
+            await Task.WhenAll(outputTask, errorTask);
+            await process.WaitForExitAsync();
+            var error = errorTask.Result;
 
             if (process.ExitCode == 0)
             {
@@ -193,19 +197,26 @@ public class GpgKeyManager
         using var process = Process.Start(processInfo)
             ?? throw new InvalidOperationException("Could not start gpg process");
 
-        var output = await process.StandardOutput.ReadToEndAsync();
-        process.WaitForExit();
+        var outputTask = process.StandardOutput.ReadToEndAsync();
+        var errorTask = process.StandardError.ReadToEndAsync();
+        await Task.WhenAll(outputTask, errorTask);
+        await process.WaitForExitAsync();
 
         if (process.ExitCode != 0)
-            throw new InvalidOperationException($"GPG command failed with exit code {process.ExitCode}");
+        {
+            var error = errorTask.Result.Trim();
+            throw new InvalidOperationException(string.IsNullOrWhiteSpace(error)
+                ? $"GPG command failed with exit code {process.ExitCode}"
+                : error);
+        }
 
-        return output;
+        return outputTask.Result;
     }
 
     /// <summary>
     /// Parse GPG colon-delimited output format into GpgKey objects.
     /// </summary>
-    private List<GpgKey> ParseGpgOutput(string output)
+    internal List<GpgKey> ParseGpgOutput(string output)
     {
         var keys = new List<GpgKey>();
         var currentKey = (GpgKey?)null;
@@ -220,13 +231,16 @@ public class GpgKeyManager
 
             if (recordType == "pub" || recordType == "sec")
             {
+                if (parts.Length <= 4)
+                    continue;
+
                 if (currentKey != null)
                     keys.Add(currentKey);
 
                 currentKey = new GpgKey
                 {
-                    KeyType = parts[2],
-                    KeySize = parts[2],
+                    KeyType = parts.Length > 3 ? parts[3] : "",
+                    KeySize = parts.Length > 2 ? parts[2] : "",
                     Validity = parts[1]
                 };
 

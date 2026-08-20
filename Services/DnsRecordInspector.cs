@@ -115,15 +115,7 @@ public class DnsRecordInspector
             throw new ArgumentException("Domain cannot be empty", nameof(domain));
 
         var tasks = new List<Task<DnsQueryResult>>();
-        var recordTypes = new[] 
-        { 
-            DnsRecordType.A, 
-            DnsRecordType.AAAA, 
-            DnsRecordType.CNAME, 
-            DnsRecordType.MX, 
-            DnsRecordType.TXT, 
-            DnsRecordType.NS 
-        };
+        var recordTypes = Enum.GetValues<DnsRecordType>();
 
         foreach (var recordType in recordTypes)
         {
@@ -186,18 +178,21 @@ public class DnsRecordInspector
         processInfo.ArgumentList.Add(domain);
         processInfo.ArgumentList.Add(recordType);
         processInfo.ArgumentList.Add("+short");
-        processInfo.ArgumentList.Add("@8.8.8.8");  // Use Google DNS
 
         using var process = Process.Start(processInfo)
             ?? throw new InvalidOperationException("Could not start dig process");
 
-        var output = await process.StandardOutput.ReadToEndAsync();
-        process.WaitForExit();
+        var outputTask = process.StandardOutput.ReadToEndAsync();
+        var errorTask = process.StandardError.ReadToEndAsync();
+        await Task.WhenAll(outputTask, errorTask);
+        await process.WaitForExitAsync();
 
         if (process.ExitCode != 0)
-            throw new InvalidOperationException($"dig exited with code {process.ExitCode}");
+            throw new InvalidOperationException(string.IsNullOrWhiteSpace(errorTask.Result.Trim())
+                ? $"dig exited with code {process.ExitCode}"
+                : errorTask.Result.Trim());
 
-        return ParseDigOutput(output, recordType);
+        return ParseDigOutput(outputTask.Result, recordType);
     }
 
     /// <summary>
@@ -220,13 +215,17 @@ public class DnsRecordInspector
         using var process = Process.Start(processInfo)
             ?? throw new InvalidOperationException("Could not start nslookup process");
 
-        var output = await process.StandardOutput.ReadToEndAsync();
-        process.WaitForExit();
+        var outputTask = process.StandardOutput.ReadToEndAsync();
+        var errorTask = process.StandardError.ReadToEndAsync();
+        await Task.WhenAll(outputTask, errorTask);
+        await process.WaitForExitAsync();
 
         if (process.ExitCode != 0)
-            throw new InvalidOperationException($"nslookup exited with code {process.ExitCode}");
+            throw new InvalidOperationException(string.IsNullOrWhiteSpace(errorTask.Result.Trim())
+                ? $"nslookup exited with code {process.ExitCode}"
+                : errorTask.Result.Trim());
 
-        return ParseNslookupOutput(output, recordType);
+        return ParseNslookupOutput(outputTask.Result, recordType);
     }
 
     /// <summary>

@@ -28,6 +28,8 @@ public partial class MainWindow : Window
     {
         if (DataContext is MainViewModel vm)
         {
+            vm.SaveCurrentSessions();
+
             var disconnectTasks = vm.Tabs
                 .OfType<SftpTabViewModel>()
                 .Select(tab => tab.DisconnectAsync())
@@ -37,6 +39,9 @@ public partial class MainWindow : Window
                 tab.DisconnectCommand.Execute(null);
 
             await Task.WhenAll(disconnectTasks);
+
+            foreach (var tab in vm.Tabs.OfType<SftpTabViewModel>())
+                tab.Dispose();
         }
     }
 
@@ -482,6 +487,22 @@ public partial class MainWindow : Window
         if (DataContext is MainViewModel mainVm && mainVm.SelectedTab is SftpTabViewModel vm && vm.SelectedFile != null)
         {
             mainVm.PreviewFileCommand.Execute(vm.SelectedFile);
+        }
+    }
+
+    private void ContextMenu_Edit(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is MainViewModel mainVm && mainVm.SelectedTab is SftpTabViewModel vm && vm.SelectedFile != null)
+        {
+            mainVm.EditFileCommand.Execute(vm.SelectedFile);
+        }
+    }
+
+    private void EditFile_Click(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is MainViewModel mainVm && mainVm.SelectedTab is SftpTabViewModel vm && vm.SelectedFile != null)
+        {
+            mainVm.EditFileCommand.Execute(vm.SelectedFile);
         }
     }
 

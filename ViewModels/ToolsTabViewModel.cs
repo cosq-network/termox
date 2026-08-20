@@ -197,7 +197,12 @@ public class ToolsTabViewModel : INotifyPropertyChanged, ITabViewModel
                     .Select(p => p.Trim())
                     .Where(p => int.TryParse(p, out _))
                     .Select(int.Parse)
+                    .Where(port => port is >= 1 and <= 65535)
+                    .Distinct()
                     .ToList();
+
+                if (ports.Count == 0)
+                    throw new ArgumentException("Enter one or more TCP ports from 1 to 65535.");
 
                 foreach (var port in ports)
                 {
@@ -366,7 +371,7 @@ public class ToolsTabViewModel : INotifyPropertyChanged, ITabViewModel
             {
                 FileName = OperatingSystem.IsWindows() ? "ssh-keygen.exe" : "ssh-keygen",
                 UseShellExecute = false,
-                RedirectStandardOutput = true,
+                RedirectStandardOutput = false,
                 RedirectStandardError = true,
                 CreateNoWindow = true
             };

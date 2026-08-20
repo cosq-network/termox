@@ -54,6 +54,8 @@
             which is too dark in the package default palette.
         -->
         <StyleInclude Source="avares://SvcSystems.UI.Terminal/Styles/Colors.axaml" />
+        <!-- AvaloniaEdit styles (required for the text editor control). -->
+        <StyleInclude Source="avares://AvaloniaEdit/Themes/Fluent/AvaloniaEdit.xaml" />
     </Application.Styles>
 
     <Application.Resources>

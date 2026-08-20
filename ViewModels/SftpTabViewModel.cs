@@ -21,6 +21,8 @@ public class SftpTabViewModel : INotifyPropertyChanged, ITabViewModel, IDisposab
     private SftpClient? _sftpClient;
     private readonly SemaphoreSlim _operationGate = new(1, 1);
     private bool _disposed;
+    private readonly CancellationTokenSource _featureCancellation = new();
+    private const long TextFileLimitBytes = 1024 * 1024;
     private readonly object _connectionLock = new();
     private CancellationTokenSource? _connectionCancellation;
     private ObservableCollection<RemoteFileModel> _allFiles = new();
@@ -157,7 +159,7 @@ public class SftpTabViewModel : INotifyPropertyChanged, ITabViewModel, IDisposab
     public SftpTabViewModel(Action<SftpTabViewModel> onClose)
     {
         DisconnectCommand = new RelayCommand(() => _ = DisconnectAsync());
-        CloseTabCommand = new RelayCommand(() => { _ = DisconnectAsync(); onClose(this); });
+        CloseTabCommand = new RelayCommand(() => _ = CloseAsync(onClose));
         NavigateUpCommand = new RelayCommand(NavigateUp);
         NavigateToCommand = new RelayCommand<RemoteFileModel>(NavigateTo, f => f != null && f.IsDirectory);
         RefreshCommand = new RelayCommand(LoadDirectory);
@@ -935,29 +937,52 @@ public class SftpTabViewModel : INotifyPropertyChanged, ITabViewModel, IDisposab
         });
     }
 
+    private static readonly string[] TextExtensions = new[]
+    {
+        ".txt", ".md", ".json", ".xml", ".yaml", ".yml", ".cs", ".py", ".js", ".html",
+        ".css", ".log", ".conf", ".cfg", ".properties", ".sh", ".bat", ".cmd"
+    };
+
+    private SshConnectionProfile? _connectionProfile;
+    public SshConnectionProfile? ConnectionProfile
+    {
+        get => _connectionProfile;
+        set { _connectionProfile = value; OnPropertyChanged(); }
+    }
+
+    private async Task CloseAsync(Action<SftpTabViewModel> onClose)
+    {
+        await DisconnectAsync();
+        Dispose();
+        onClose(this);
+    }
+
     public async void PreviewFile(RemoteFileModel file, MainViewModel mainVm)
     {
         if (_sftpClient == null || !_sftpClient.IsConnected) return;
 
-        await _operationGate.WaitAsync();
+        var acquired = false;
         try
         {
+            await _operationGate.WaitAsync(_featureCancellation.Token);
+            acquired = true;
             var ext = System.IO.Path.GetExtension(file.Name).ToLower();
-            var textExtensions = new[] { ".txt", ".md", ".json", ".xml", ".yaml", ".yml", ".cs", ".py", ".js", ".html", ".css", ".log", ".conf", ".cfg", ".properties", ".sh", ".bat", ".cmd" };
 
-            if (!textExtensions.Contains(ext) || file.Length > 1024 * 1024)
+            if (!TextExtensions.Contains(ext) || file.Length > TextFileLimitBytes)
             {
                 Dispatcher.UIThread.Post(() =>
                 {
                     mainVm.FilePreviewContent = "Cannot preview this file type or file is too large (>1MB)";
                     mainVm.FilePreviewName = file.Name;
+                    mainVm.IsFilePreviewModalVisible = true;
                 });
                 return;
             }
 
             using var stream = _sftpClient.OpenRead(file.FullName);
-            using var reader = new System.IO.StreamReader(stream);
-            var content = reader.ReadToEnd();
+            var content = ReadTextWithLimit(stream);
+
+            if (_disposed) return;
 
             Dispatcher.UIThread.Post(() =>
             {
@@ -968,16 +993,81 @@ public class SftpTabViewModel : INotifyPropertyChanged, ITabViewModel, IDisposab
         }
         catch (Exception ex)
         {
+            if (_featureCancellation.IsCancellationRequested) return;
             Dispatcher.UIThread.Post(() =>
             {
                 mainVm.FilePreviewContent = $"Error reading file: {ex.Message}";
                 mainVm.FilePreviewName = file.Name;
+                mainVm.IsFilePreviewModalVisible = true;
             });
         }
         finally
         {
-            _operationGate.Release();
+            if (acquired) _operationGate.Release();
         }
+    }
+
+    public async void OpenFileInEditor(RemoteFileModel file, MainViewModel mainVm)
+    {
+        if (_sftpClient == null || !_sftpClient.IsConnected) return;
+
+        var acquired = false;
+        try
+        {
+            await _operationGate.WaitAsync(_featureCancellation.Token);
+            acquired = true;
+            var ext = System.IO.Path.GetExtension(file.Name).ToLower();
+
+            if (file.IsDirectory || !TextExtensions.Contains(ext) || file.Length > TextFileLimitBytes)
+            {
+                Dispatcher.UIThread.Post(() =>
+                {
+                    mainVm.EditorStatusMessage = "Cannot edit this file type or file is too large (>1MB)";
+                });
+                return;
+            }
+
+            Dispatcher.UIThread.Post(() =>
+            {
+                mainVm.OpenFileEditorTab(this, new RemoteTextFile
+                {
+                    Host = ConnectionHost,
+                    RemotePath = file.FullName,
+                    DisplayName = file.Name,
+                    Length = file.Length,
+                    LastWriteTime = file.LastWriteTime
+                });
+            });
+        }
+        catch (Exception ex)
+        {
+            if (_featureCancellation.IsCancellationRequested) return;
+            Dispatcher.UIThread.Post(() =>
+            {
+                mainVm.EditorStatusMessage = $"Error opening file: {ex.Message}";
+            });
+        }
+        finally
+        {
+            if (acquired) _operationGate.Release();
+        }
+    }
+
+    private static string ReadTextWithLimit(Stream stream)
+    {
+        using var buffer = new MemoryStream();
+        var chunk = new byte[81920];
+        int read;
+        while ((read = stream.Read(chunk, 0, chunk.Length)) > 0)
+        {
+            if (buffer.Length + read > TextFileLimitBytes)
+                throw new InvalidDataException("The remote file is larger than the 1MB preview limit.");
+            buffer.Write(chunk, 0, read);
+        }
+
+        buffer.Position = 0;
+        using var reader = new StreamReader(buffer, new System.Text.UTF8Encoding(false, false), detectEncodingFromByteOrderMarks: true);
+        return reader.ReadToEnd();
     }
 
     private void DeleteSelectedFile(RemoteFileModel selectedFile)
@@ -1128,6 +1218,8 @@ public class SftpTabViewModel : INotifyPropertyChanged, ITabViewModel, IDisposab
     {
         if (_disposed) return;
         _disposed = true;
+        _featureCancellation.Cancel();
+        _featureCancellation.Dispose();
         _searchDebounceTimer?.Dispose();
         _operationGate.Dispose();
     }

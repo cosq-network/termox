@@ -253,6 +253,20 @@ public class MainViewModel : INotifyPropertyChanged
         set { _filePreviewName = value; OnPropertyChanged(); }
     }
 
+    private string _editorStatusMessage = "";
+    public string EditorStatusMessage
+    {
+        get => _editorStatusMessage;
+        set
+        {
+            _editorStatusMessage = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(IsEditorStatusVisible));
+        }
+    }
+
+    public bool IsEditorStatusVisible => !string.IsNullOrWhiteSpace(EditorStatusMessage);
+
     private bool _isPermissionsModalVisible;
     public bool IsPermissionsModalVisible
     {
@@ -305,6 +319,8 @@ public class MainViewModel : INotifyPropertyChanged
     public ICommand ToggleBookmarkFavoriteCommand { get; }
     public ICommand ShowFilePropertiesCommand { get; }
     public ICommand PreviewFileCommand { get; }
+    public ICommand EditFileCommand { get; }
+    public ICommand ClearEditorStatusCommand { get; }
     public ICommand EditFilePermissionsCommand { get; }
     public ICommand OpenPortScannerTabCommand { get; }
     public ICommand OpenPingTestTabCommand { get; }
@@ -350,6 +366,8 @@ public class MainViewModel : INotifyPropertyChanged
         ToggleBookmarkFavoriteCommand = new RelayCommand<BookmarkModel>(ToggleBookmarkFavorite);
         ShowFilePropertiesCommand = new RelayCommand<RemoteFileModel>(ShowFileProperties);
         PreviewFileCommand = new RelayCommand<RemoteFileModel>(PreviewFile);
+        EditFileCommand = new RelayCommand<RemoteFileModel>(EditFile);
+        ClearEditorStatusCommand = new RelayCommand(() => EditorStatusMessage = "");
         EditFilePermissionsCommand = new RelayCommand<RemoteFileModel>(EditFilePermissions);
         OpenPortScannerTabCommand = new RelayCommand(OpenPortScannerTab);
         OpenPingTestTabCommand = new RelayCommand(OpenPingTestTab);
@@ -380,9 +398,15 @@ public class MainViewModel : INotifyPropertyChanged
                 {
                     foreach (var p in profiles)
                     {
-                        // Decrypt passwords after loading
-                        var decrypted = CredentialManager.DecryptProfile(p);
-                        SavedConnections.Add(decrypted);
+                        try
+                        {
+                            var decrypted = CredentialManager.DecryptProfile(p);
+                            SavedConnections.Add(decrypted);
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"Failed to load connection '{p.Name}': {ex.Message}");
+                        }
                     }
                 }
             }
@@ -562,6 +586,7 @@ public class MainViewModel : INotifyPropertyChanged
         SelectedTab = tab;
 
         tab.ConnectionProfileId = profile.Id;
+        tab.ConnectionProfile = profile;
         tab.FileSizeWarningThreshold = DownloadSizeWarningThreshold;
         tab.Connect(profile.Host, profile.Port, profile.Username, profile.Password, profile.PrivateKeyPath,
             profile.HostKeyFingerprint, fingerprint => RememberHostKey(profile, fingerprint), initialPath);
@@ -856,7 +881,7 @@ public class MainViewModel : INotifyPropertyChanged
         }
     }
 
-    private void SaveCurrentSessions()
+    public void SaveCurrentSessions()
     {
         try
         {
@@ -909,6 +934,30 @@ public class MainViewModel : INotifyPropertyChanged
         {
             Task.Run(() => vm.PreviewFile(file, this));
         }
+    }
+
+    private void EditFile(RemoteFileModel? file)
+    {
+        if (file == null || file.IsDirectory) return;
+
+        if (SelectedTab is SftpTabViewModel vm)
+        {
+            Task.Run(() => vm.OpenFileInEditor(file, this));
+        }
+    }
+
+    public void OpenFileEditorTab(SftpTabViewModel sourceTab, RemoteTextFile file)
+    {
+        if (!Tabs.Contains(sourceTab) || sourceTab.ConnectionProfile == null) return;
+
+        var tab = new FileEditorTabViewModel(t =>
+        {
+            t.Dispose();
+            Tabs.Remove(t);
+            SaveCurrentSessions();
+        }, sourceTab.ConnectionProfile, file);
+        Tabs.Add(tab);
+        SelectedTab = tab;
     }
 
     private void EditFilePermissions(RemoteFileModel? file)

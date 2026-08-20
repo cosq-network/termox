@@ -4,6 +4,7 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:terminal="using:SvcSystems.UI.Terminal"
+    xmlns:edit="using:AvaloniaEdit"
     mc:Ignorable="d" d:DesignWidth="1050" d:DesignHeight="700"
     x:Class="Termox.Views.MainWindow"
     x:DataType="vm:MainViewModel"
@@ -449,7 +450,7 @@
 
                                         <!-- File actions stay directly below the address bar. -->
                                         <Grid Grid.Row="1"
-                                            ColumnDefinitions="*, Auto, Auto, Auto, Auto, Auto, Auto, Auto, Auto"
+                                            ColumnDefinitions="*, Auto, Auto, Auto, Auto, Auto, Auto, Auto, Auto, Auto"
                                             Margin="0,0,0,10">
                                             <TextBlock Grid.Column="0" Text="{Binding Status}"
                                                 Foreground="{Binding StatusColor}"
@@ -495,6 +496,15 @@
                                                 <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="&#xE3C9;" />
                                             </Button>
                                             <Button Grid.Column="5"
+                                                Click="EditFile_Click" Background="#3a3a3a"
+                                                Foreground="White" Padding="12,6" CornerRadius="4"
+                                                Cursor="Hand" ToolTip.Tip="Edit selected file"
+                                                IsEnabled="{Binding SelectedFile, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                                IsVisible="{Binding !IsTransferring}"
+                                                Margin="0,0,3,0" FontSize="12">
+                                                <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="&#xE70F;" />
+                                            </Button>
+                                            <Button Grid.Column="6"
                                                 Click="EditPermissions_Click" Background="#3a3a3a"
                                                 Foreground="White" Padding="12,6" CornerRadius="4"
                                                 Cursor="Hand" ToolTip.Tip="Edit file permissions"
@@ -503,7 +513,7 @@
                                                 Margin="0,0,3,0" FontSize="12">
                                                 <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="&#xE897;" />
                                             </Button>
-                                            <Button Grid.Column="6"
+                                            <Button Grid.Column="7"
                                                 Command="{Binding BulkDeleteCommand}"
                                                 Background="#3a3a3a" Foreground="White"
                                                 Padding="12,6" CornerRadius="4" Cursor="Hand"
@@ -513,14 +523,14 @@
                                                 Margin="0,0,3,0" FontSize="12">
                                                 <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="&#xE92E;" />
                                             </Button>
-                                            <Button Grid.Column="7"
+                                            <Button Grid.Column="8"
                                                 Content="{Binding PauseButtonText}"
                                                 Command="{Binding TogglePauseCommand}"
                                                 Background="#f39c12" Foreground="White"
                                                 Padding="12,6" CornerRadius="4" Cursor="Hand"
                                                 Margin="0,0,3,0"
                                                 IsVisible="{Binding IsTransferring}" FontSize="12" />
-                                            <Button Grid.Column="8" Content="Cancel Transfer"
+                                            <Button Grid.Column="9" Content="Cancel Transfer"
                                                 Command="{Binding CancelTransferCommand}"
                                                 Background="#f44336" Foreground="White"
                                                 Padding="12,6" CornerRadius="4" Cursor="Hand"
@@ -562,6 +572,9 @@
                                                         Click="ContextMenu_Delete"
                                                         IsEnabled="{Binding SelectedFile, Converter={x:Static ObjectConverters.IsNotNull}}" />
                                                     <Separator />
+                                                    <MenuItem Header="Edit"
+                                                        Click="ContextMenu_Edit"
+                                                        IsEnabled="{Binding SelectedFile, Converter={x:Static ObjectConverters.IsNotNull}}" />
                                                     <MenuItem Header="Preview"
                                                         Click="ContextMenu_Preview"
                                                         IsEnabled="{Binding SelectedFile, Converter={x:Static ObjectConverters.IsNotNull}}" />
@@ -646,6 +659,82 @@
                                             </StackPanel>
                                         </Border>
                                     </Border>
+                                    </Panel>
+                                </Border>
+                            </DataTemplate>
+
+                            <DataTemplate DataType="vm:FileEditorTabViewModel">
+                                <Border Background="#1e1e1e" Padding="10">
+                                    <Panel>
+                                        <Grid RowDefinitions="Auto, *">
+                                            <Grid Grid.Row="0" ColumnDefinitions="*, Auto, Auto, Auto"
+                                                Margin="0,0,0,10">
+                                                <TextBlock Grid.Column="0" Text="{Binding Status}"
+                                                    Foreground="{Binding StatusColor}"
+                                                    VerticalAlignment="Center"
+                                                    TextTrimming="CharacterEllipsis"
+                                                    ToolTip.Tip="{Binding Status}" Margin="0,0,10,0" />
+                                                <Button Grid.Column="1" Content="{Binding SaveButtonText}"
+                                                    Command="{Binding SaveCommand}"
+                                                    IsEnabled="{Binding IsDirty}"
+                                                    Background="#3a3a3a" Foreground="White"
+                                                    Padding="12,6" CornerRadius="4" Cursor="Hand"
+                                                    ToolTip.Tip="Save changes to remote file"
+                                                    Margin="0,0,3,0" FontSize="12" />
+                                                <Button Grid.Column="2" Content="Save &amp; Close"
+                                                    Command="{Binding SaveAndCloseCommand}"
+                                                    Background="#20a53a" Foreground="White"
+                                                    Padding="12,6" CornerRadius="4" Cursor="Hand"
+                                                    ToolTip.Tip="Save changes and close this editor tab"
+                                                    Margin="0,0,3,0" FontSize="12" />
+                                                <Button Grid.Column="3" Content="✕"
+                                                    Command="{Binding CloseTabCommand}"
+                                                    Background="#f44336" Foreground="White"
+                                                    Padding="12,6" CornerRadius="4" Cursor="Hand"
+                                                    ToolTip.Tip="Close editor (prompts if unsaved changes)"
+                                                    FontSize="12" />
+                                            </Grid>
+
+                                            <Grid Grid.Row="1">
+                                                <edit:TextEditor x:Name="Editor"
+                                                    Document="{Binding Document}"
+                                                    FontFamily="Consolas, Fira Code, Cascadia Code, Courier New, monospace"
+                                                    FontSize="14"
+                                                    ShowLineNumbers="True"
+                                                    Background="#1e1e1e"
+                                                    Foreground="#e0e0e0"
+                                                    IsVisible="{Binding !IsLoading}" />
+                                                <TextBlock Text="Loading remote file..."
+                                                    Foreground="#888" FontSize="15"
+                                                    HorizontalAlignment="Center"
+                                                    VerticalAlignment="Center"
+                                                    IsVisible="{Binding IsLoading}" />
+                                            </Grid>
+                                        </Grid>
+                                        <Border Background="#CC000000" IsVisible="{Binding IsSaveConfirmVisible}"
+                                            ZIndex="30" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                                            <Border Background="#2d2d30" BorderBrush="#555" BorderThickness="1"
+                                                CornerRadius="8" Width="420" Padding="22"
+                                                HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                <StackPanel Spacing="14">
+                                                    <TextBlock Text="Unsaved Changes" FontSize="17"
+                                                        FontWeight="SemiBold" Foreground="#f39c12" />
+                                                    <TextBlock Text="This file has unsaved changes. Close without saving?"
+                                                        TextWrapping="Wrap" Foreground="#ccc" />
+                                                    <StackPanel Orientation="Horizontal"
+                                                        HorizontalAlignment="Right" Spacing="10">
+                                                        <Button Content="Cancel"
+                                                            Command="{Binding CancelDiscardCommand}"
+                                                            Background="#444" Foreground="#e0e0e0"
+                                                            Padding="14,7" />
+                                                        <Button Content="Discard Changes"
+                                                            Command="{Binding ConfirmDiscardCommand}"
+                                                            Background="#d32f2f" Foreground="White"
+                                                            Padding="14,7" />
+                                                    </StackPanel>
+                                                </StackPanel>
+                                            </Border>
+                                        </Border>
                                     </Panel>
                                 </Border>
                             </DataTemplate>
@@ -2213,6 +2302,19 @@
                 </Grid>
             </Grid>
         </DockPanel>
+
+        <Border Background="#2d2d30" BorderBrush="#f39c12" BorderThickness="1"
+            CornerRadius="6" Padding="12" Margin="20" HorizontalAlignment="Right"
+            VerticalAlignment="Bottom" MaxWidth="520" ZIndex="200"
+            IsVisible="{Binding IsEditorStatusVisible}">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                <TextBlock Text="{Binding EditorStatusMessage}" Foreground="#f5f5f5"
+                    TextWrapping="Wrap" VerticalAlignment="Center" />
+                <Button Grid.Column="1" Content="✕"
+                    Command="{Binding ClearEditorStatusCommand}"
+                    Background="Transparent" Foreground="#aaa" BorderThickness="0" />
+            </Grid>
+        </Border>
 
         <!-- Connection Modal Overlay -->
         <Border Background="#99000000" IsVisible="{Binding IsConnectionModalVisible}" ZIndex="100">
