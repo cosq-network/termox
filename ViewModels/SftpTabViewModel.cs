@@ -22,7 +22,7 @@ public class SftpTabViewModel : INotifyPropertyChanged, ITabViewModel, IDisposab
     private readonly SemaphoreSlim _operationGate = new(1, 1);
     private bool _disposed;
     private readonly CancellationTokenSource _featureCancellation = new();
-    private const long TextFileLimitBytes = 1024 * 1024;
+    private const long TextFileLimitBytes = 20 * 1024 * 1024;
     private readonly object _connectionLock = new();
     private CancellationTokenSource? _connectionCancellation;
     private ObservableCollection<RemoteFileModel> _allFiles = new();
@@ -937,12 +937,6 @@ public class SftpTabViewModel : INotifyPropertyChanged, ITabViewModel, IDisposab
         });
     }
 
-    private static readonly string[] TextExtensions = new[]
-    {
-        ".txt", ".md", ".json", ".xml", ".yaml", ".yml", ".cs", ".py", ".js", ".html",
-        ".css", ".log", ".conf", ".cfg", ".properties", ".sh", ".bat", ".cmd"
-    };
-
     private SshConnectionProfile? _connectionProfile;
     public SshConnectionProfile? ConnectionProfile
     {
@@ -966,13 +960,11 @@ public class SftpTabViewModel : INotifyPropertyChanged, ITabViewModel, IDisposab
         {
             await _operationGate.WaitAsync(_featureCancellation.Token);
             acquired = true;
-            var ext = System.IO.Path.GetExtension(file.Name).ToLower();
-
-            if (!TextExtensions.Contains(ext) || file.Length > TextFileLimitBytes)
+            if (file.IsDirectory || file.Length > TextFileLimitBytes)
             {
                 Dispatcher.UIThread.Post(() =>
                 {
-                    mainVm.FilePreviewContent = "Cannot preview this file type or file is too large (>1MB)";
+                    mainVm.FilePreviewContent = "Cannot preview directories or files larger than 20MB.";
                     mainVm.FilePreviewName = file.Name;
                     mainVm.IsFilePreviewModalVisible = true;
                 });
@@ -1016,13 +1008,12 @@ public class SftpTabViewModel : INotifyPropertyChanged, ITabViewModel, IDisposab
         {
             await _operationGate.WaitAsync(_featureCancellation.Token);
             acquired = true;
-            var ext = System.IO.Path.GetExtension(file.Name).ToLower();
 
-            if (file.IsDirectory || !TextExtensions.Contains(ext) || file.Length > TextFileLimitBytes)
+            if (file.IsDirectory || file.Length > TextFileLimitBytes)
             {
                 Dispatcher.UIThread.Post(() =>
                 {
-                    mainVm.EditorStatusMessage = "Cannot edit this file type or file is too large (>1MB)";
+                    mainVm.EditorStatusMessage = "Cannot edit directories or files larger than 20MB.";
                 });
                 return;
             }
@@ -1061,13 +1052,44 @@ public class SftpTabViewModel : INotifyPropertyChanged, ITabViewModel, IDisposab
         while ((read = stream.Read(chunk, 0, chunk.Length)) > 0)
         {
             if (buffer.Length + read > TextFileLimitBytes)
-                throw new InvalidDataException("The remote file is larger than the 1MB preview limit.");
+                throw new InvalidDataException("The remote file is larger than the 20MB preview limit.");
             buffer.Write(chunk, 0, read);
         }
 
         buffer.Position = 0;
+        if (LooksLikeBinary(buffer))
+            throw new InvalidDataException("The remote file appears to be binary and cannot be displayed as text.");
+
+        buffer.Position = 0;
         using var reader = new StreamReader(buffer, new System.Text.UTF8Encoding(false, false), detectEncodingFromByteOrderMarks: true);
         return reader.ReadToEnd();
+    }
+
+    private static bool LooksLikeBinary(Stream stream)
+    {
+        var position = stream.Position;
+        var sample = new byte[8192];
+        var read = stream.Read(sample, 0, sample.Length);
+        stream.Position = position;
+
+        var hasUnicodeBom = read >= 2 &&
+            ((sample[0] == 0xFF && sample[1] == 0xFE) ||
+             (sample[0] == 0xFE && sample[1] == 0xFF)) ||
+            read >= 3 && sample[0] == 0xEF && sample[1] == 0xBB && sample[2] == 0xBF ||
+            read >= 4 &&
+            ((sample[0] == 0xFF && sample[1] == 0xFE && sample[2] == 0x00 && sample[3] == 0x00) ||
+             (sample[0] == 0x00 && sample[1] == 0x00 && sample[2] == 0xFE && sample[3] == 0xFF));
+        if (hasUnicodeBom) return false;
+
+        for (var index = 0; index < read; index++)
+        {
+            var value = sample[index];
+            if (value == 0) return true;
+            if (value < 0x09 || value is > 0x0D and < 0x20)
+                return true;
+        }
+
+        return false;
     }
 
     private void DeleteSelectedFile(RemoteFileModel selectedFile)

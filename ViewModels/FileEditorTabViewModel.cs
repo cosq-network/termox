@@ -20,7 +20,7 @@ public class FileEditorTabViewModel : INotifyPropertyChanged, ITabViewModel, IDi
     private readonly RemoteTextFile _file;
     private readonly string _remotePath;
     private bool _disposed;
-    private const long MaxFileBytes = 1024 * 1024;
+    private const long MaxFileBytes = 20 * 1024 * 1024;
     private Encoding _fileEncoding = new System.Text.UTF8Encoding(false);
     private long _loadedLength = -1;
     private DateTime _loadedLastWriteTime;
@@ -113,6 +113,8 @@ public class FileEditorTabViewModel : INotifyPropertyChanged, ITabViewModel, IDi
                 using var stream = client.OpenRead(_file.RemotePath);
                 var bytes = ReadLimited(stream);
                 using var reader = new StreamReader(new MemoryStream(bytes), new System.Text.UTF8Encoding(false, false), detectEncodingFromByteOrderMarks: true);
+                if (LooksLikeBinary(bytes))
+                    throw new InvalidDataException("The remote file appears to be binary and cannot be edited as text.");
                 var content = reader.ReadToEnd();
                 return (content, reader.CurrentEncoding, attributes.Size, attributes.LastWriteTime);
             });
@@ -233,10 +235,33 @@ public class FileEditorTabViewModel : INotifyPropertyChanged, ITabViewModel, IDi
         while ((read = stream.Read(chunk, 0, chunk.Length)) > 0)
         {
             if (buffer.Length + read > MaxFileBytes)
-                throw new InvalidDataException("The remote file is larger than the 1MB editor limit.");
+                throw new InvalidDataException("The remote file is larger than the 20MB editor limit.");
             buffer.Write(chunk, 0, read);
         }
         return buffer.ToArray();
+    }
+
+    private static bool LooksLikeBinary(byte[] data)
+    {
+        var sampleLength = Math.Min(data.Length, 8192);
+        var hasUnicodeBom = sampleLength >= 2 &&
+            ((data[0] == 0xFF && data[1] == 0xFE) ||
+             (data[0] == 0xFE && data[1] == 0xFF)) ||
+            sampleLength >= 3 && data[0] == 0xEF && data[1] == 0xBB && data[2] == 0xBF ||
+            sampleLength >= 4 &&
+            ((data[0] == 0xFF && data[1] == 0xFE && data[2] == 0x00 && data[3] == 0x00) ||
+             (data[0] == 0x00 && data[1] == 0x00 && data[2] == 0xFE && data[3] == 0xFF));
+        if (hasUnicodeBom) return false;
+
+        for (var index = 0; index < sampleLength; index++)
+        {
+            var value = data[index];
+            if (value == 0) return true;
+            if (value < 0x09 || value is > 0x0D and < 0x20)
+                return true;
+        }
+
+        return false;
     }
 
     public void Dispose()
