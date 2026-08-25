@@ -12,6 +12,7 @@
     Title="Termox — SSH &amp; SFTP Workspace"
     Width="1050" Height="700"
     Background="#2d2d30"
+    KeyDown="MainWindow_KeyDown"
     FontFamily="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
     WindowStartupLocation="CenterScreen">
 
@@ -2370,7 +2371,14 @@
                             Margin="0,5,0,0" />
                         <TextBox Text="{Binding Password}" Background="#1e1e1e" Foreground="#e0e0e0"
                             BorderThickness="1" BorderBrush="#555" Padding="8" CornerRadius="4"
-                            PasswordChar="•" ToolTip.Tip="Leave blank if key has no password" />
+                            PasswordChar="•" ToolTip.Tip="Account password (leave blank for key-based auth)" />
+
+                        <TextBlock Text="Private Key Passphrase (Optional)" Foreground="#aaaaaa"
+                            FontSize="13" Margin="0,5,0,0" />
+                        <TextBox Text="{Binding PrivateKeyPassphrase}" Background="#1e1e1e"
+                            Foreground="#e0e0e0" BorderThickness="1" BorderBrush="#555" Padding="8"
+                            CornerRadius="4" PasswordChar="•"
+                            ToolTip.Tip="Passphrase for the private key, if it has one" />
 
                         <TextBlock Text="Private Key File (Optional)" Foreground="#aaaaaa"
                             FontSize="13"
@@ -2583,7 +2591,7 @@
                             <TextBlock Grid.Column="0" Text="Type:" Foreground="#aaaaaa"
                                 FontWeight="SemiBold" />
                             <TextBlock Grid.Column="1"
-                                Text="{Binding SelectedFileProperties.IsDirectory, Converter={x:Static StringConverters.IsNotNullOrEmpty}, FallbackValue='File'}"
+                                Text="{Binding SelectedFileProperties.TypeDisplay}"
                                 Foreground="#e0e0e0" />
                         </Grid>
 
@@ -2632,32 +2640,91 @@
         </Border>
 
         <!-- File Preview Modal -->
-        <Border Background="#99000000" IsVisible="{Binding IsFilePreviewModalVisible}" ZIndex="105">
-            <Border Background="#2d2d30" BorderBrush="#444" BorderThickness="1" CornerRadius="8"
+        <Border Background="#B8000000" IsVisible="{Binding IsFilePreviewModalVisible}" ZIndex="105">
+            <Border Background="#202124" BorderBrush="#4f5b6b" BorderThickness="1" CornerRadius="10"
                 HorizontalAlignment="Center" VerticalAlignment="Center"
-                Width="700" Height="500" Padding="25" BoxShadow="0 10 30 0 #55000000">
+                Width="900" Height="650" BoxShadow="0 18 45 0 #88000000">
+                <Grid RowDefinitions="Auto,*,Auto">
+                    <Border Grid.Row="0" Background="#292d35" Padding="22,16"
+                        BorderBrush="#3c4350" BorderThickness="0,0,0,1">
+                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="14">
+                            <Border Width="38" Height="38" CornerRadius="19" Background="#2f80c9"
+                                VerticalAlignment="Center">
+                                <TextBlock Text="◉" Foreground="White" FontSize="20"
+                                    HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                            <StackPanel Grid.Column="1" Spacing="3" VerticalAlignment="Center">
+                                <TextBlock Text="FILE PREVIEW" Foreground="#91bff0" FontSize="10"
+                                    FontWeight="SemiBold" />
+                                <TextBlock Text="{Binding FilePreviewName}" FontWeight="SemiBold" FontSize="18"
+                                    Foreground="#f3f5f7" TextTrimming="CharacterEllipsis"
+                                    ToolTip.Tip="{Binding FilePreviewName}" />
+                                <TextBlock Text="{Binding FilePreviewDetails}" Foreground="#9aa4b2"
+                                    FontSize="11" />
+                            </StackPanel>
+                            <Button Grid.Column="2" Content="✕" Click="ClosePreviewModal_Click"
+                                Background="Transparent" Foreground="#aeb7c4" HorizontalAlignment="Right"
+                                VerticalAlignment="Top" FontSize="17" BorderThickness="0"
+                                Padding="8" ToolTip.Tip="Close preview" />
+                        </Grid>
+                    </Border>
+
+                    <Border Grid.Row="1" Margin="18" Background="#17191d" BorderBrush="#343b46"
+                        BorderThickness="1" CornerRadius="6" ClipToBounds="True">
+                        <edit:TextEditor Document="{Binding FilePreviewDocument}"
+                            IsReadOnly="True" ShowLineNumbers="True"
+                            FontFamily="Consolas, Fira Code, Cascadia Code, Courier New, monospace"
+                            FontSize="13" Background="#17191d" Foreground="#d8dee9"
+                            Padding="10,8" KeyDown="PreviewEditor_KeyDown">
+                            <edit:TextEditor.ContextMenu>
+                                <ContextMenu>
+                                    <MenuItem Header="Copy" Click="PreviewEditor_Copy_Click" />
+                                </ContextMenu>
+                            </edit:TextEditor.ContextMenu>
+                        </edit:TextEditor>
+                    </Border>
+
+                    <Border Grid.Row="2" Background="#292d35" Padding="18,12"
+                        BorderBrush="#3c4350" BorderThickness="0,1,0,0">
+                        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8" VerticalAlignment="Center">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <TextBlock Text="●" Foreground="#63d297" FontSize="11" />
+                                <TextBlock Text="Read-only preview" Foreground="#b7c0cc" FontSize="11"
+                                    VerticalAlignment="Center" />
+                            </StackPanel>
+                            <Button Grid.Column="1" Content="Copy All" Click="CopyPreview_Click"
+                                Background="#2f80c9" Foreground="White" Padding="16,8"
+                                CornerRadius="5" BorderThickness="0" ToolTip.Tip="Copy the full preview to the system clipboard" />
+                            <Button Grid.Column="2" Content="Close Preview" Click="ClosePreviewModal_Click"
+                                Background="#3b4654" Foreground="#f3f5f7" Padding="16,8"
+                                CornerRadius="5" BorderThickness="0" />
+                        </Grid>
+                    </Border>
+                </Grid>
+            </Border>
+        </Border>
+
+        <!-- Host Key Confirmation Modal -->
+        <Border Background="#99000000" IsVisible="{Binding IsHostKeyConfirmModalVisible}" ZIndex="107">
+            <Border Background="#2d2d30" BorderBrush="#f39c12" BorderThickness="1" CornerRadius="8"
+                HorizontalAlignment="Center" VerticalAlignment="Center"
+                Width="520" Padding="25" BoxShadow="0 10 30 0 #55000000">
                 <StackPanel Spacing="15">
-                    <Grid>
-                        <TextBlock Text="{Binding FilePreviewName}" FontWeight="Bold" FontSize="16"
-                            Foreground="#e0e0e0" VerticalAlignment="Center"
-                            TextTrimming="CharacterEllipsis" />
-                        <Button Content="✕" Click="ClosePreviewModal_Click" Background="Transparent"
-                            Foreground="#888" HorizontalAlignment="Right" FontSize="16"
-                            BorderThickness="0" />
-                    </Grid>
-
-                    <Rectangle Height="1" Fill="#444" Margin="0,5,0,10" />
-
-                    <ScrollViewer VerticalScrollBarVisibility="Auto"
-                        HorizontalScrollBarVisibility="Auto">
-                        <TextBlock Text="{Binding FilePreviewContent}" Foreground="#ccc"
-                            FontFamily="Consolas, Fira Code, monospace" FontSize="12" Padding="10"
-                            TextWrapping="Wrap" Background="#1e1e1e" />
-                    </ScrollViewer>
-
-                    <Button Content="Close" Click="ClosePreviewModal_Click" Background="#444"
-                        Foreground="#e0e0e0" Padding="15,8" CornerRadius="4"
-                        HorizontalAlignment="Right" />
+                    <TextBlock Text="Verify Host Key" FontWeight="Bold" FontSize="18"
+                        Foreground="#f39c12" />
+                    <Rectangle Height="1" Fill="#444" Margin="0,5,0,5" />
+                    <TextBlock Text="{Binding HostKeyConfirmMessage}" Foreground="#d0d0d0"
+                        TextWrapping="Wrap" FontSize="13" LineHeight="20" />
+                    <TextBlock Text="Connecting is refused until you confirm this fingerprint."
+                        Foreground="#888" FontSize="12" TextWrapping="Wrap" />
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10"
+                        Margin="0,10,0,0">
+                        <Button Content="Reject" Command="{Binding RejectHostKeyCommand}"
+                            Background="#444" Foreground="#e0e0e0" Padding="15,8" CornerRadius="4" />
+                        <Button Content="Trust This Host"
+                            Command="{Binding ConfirmHostKeyCommand}" Background="#f39c12"
+                            Foreground="#1e1e1e" Padding="15,8" CornerRadius="4" FontWeight="Bold" />
+                    </StackPanel>
                 </StackPanel>
             </Border>
         </Border>

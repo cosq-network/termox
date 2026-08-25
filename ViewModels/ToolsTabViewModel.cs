@@ -447,23 +447,9 @@ public class ToolsTabViewModel : INotifyPropertyChanged, ITabViewModel
 
         try
         {
-            SshClient testClient;
-            var safeUsername = profile.Username ?? "";
-            var safePassword = profile.Password ?? "";
-            SshSecurity.EnsurePrivateKeyExists(profile.PrivateKeyPath);
-
-            if (!string.IsNullOrWhiteSpace(profile.PrivateKeyPath) && System.IO.File.Exists(profile.PrivateKeyPath))
-            {
-                var keyFile = new PrivateKeyFile(profile.PrivateKeyPath, string.IsNullOrEmpty(safePassword) ? null : safePassword);
-                testClient = new SshClient(profile.Host ?? "", profile.Port, safeUsername, new[] { keyFile });
-            }
-
-            else
-            {
-                testClient = new SshClient(profile.Host ?? "", profile.Port, safeUsername, safePassword);
-            }
-
-            testClient.ConnectionInfo.Timeout = SshSecurity.ConnectionTimeout;
+            var testClient = SshConnectionFactory.CreateSshClient(
+                profile.Host ?? "", profile.Port, profile.Username ?? "", profile.Password ?? "",
+                profile.PrivateKeyPath ?? "", profile.PrivateKeyPassphrase);
 
             SshSecurity.ConfigureHostKeyPolicy(testClient, profile.HostKeyFingerprint, null);
 
@@ -487,8 +473,6 @@ public class ToolsTabViewModel : INotifyPropertyChanged, ITabViewModel
 
             if (completed == delayTask)
             {
-                try { testClient.Dispose(); } catch { }
-                _ = connectTask.ContinueWith(t => _ = t.Exception, TaskContinuationOptions.OnlyOnFaulted);
                 return new ConnectionTestResult
                 {
                     ProfileName = profile.Name,

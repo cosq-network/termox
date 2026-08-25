@@ -23,6 +23,7 @@ public class SshConnectionProfile
     public string Username { get; set; } = "";
 
     public string Password { get; set; } = "";
+    public string PrivateKeyPassphrase { get; set; } = "";
     public string PrivateKeyPath { get; set; } = "";
     public string HostKeyFingerprint { get; set; } = "";
     public DateTime LastUsed { get; set; } = DateTime.MinValue;

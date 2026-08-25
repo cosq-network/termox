@@ -103,23 +103,7 @@ public class ServerStatsService
         if (string.IsNullOrWhiteSpace(profile.Host) || string.IsNullOrWhiteSpace(profile.Username))
             return stats;
 
-        SshClient client;
-        var safeUsername = profile.Username ?? "";
-        var safePassword = profile.Password ?? "";
-
-        SshSecurity.EnsurePrivateKeyExists(profile.PrivateKeyPath);
-
-        if (!string.IsNullOrWhiteSpace(profile.PrivateKeyPath) && File.Exists(profile.PrivateKeyPath))
-        {
-            var keyFile = new PrivateKeyFile(profile.PrivateKeyPath, string.IsNullOrEmpty(safePassword) ? null : safePassword);
-            client = new SshClient(profile.Host, profile.Port, safeUsername, new[] { keyFile });
-        }
-        else
-        {
-            client = new SshClient(profile.Host, profile.Port, safeUsername, safePassword);
-        }
-
-        client.ConnectionInfo.Timeout = SshSecurity.ConnectionTimeout;
+        var client = SshConnectionFactory.CreateSshClient(profile);
         SshSecurity.ConfigureHostKeyPolicy(client, profile.HostKeyFingerprint, null);
 
         try

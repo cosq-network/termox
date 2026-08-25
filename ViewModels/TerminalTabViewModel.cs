@@ -30,8 +30,10 @@ public class TerminalTabViewModel : INotifyPropertyChanged, ITabViewModel
     private long _lastActivityTimestamp;
     private string _password = "";
     private string _privateKeyPath = "";
+    private string? _privateKeyPassphrase;
     private string? _hostKeyFingerprint;
     private Action<string>? _firstSeenHostKey;
+    private Func<string, bool>? _confirmNewHost;
     private string? _initialCommand;
     private string? _disconnectReason;
     private int _retryCount = 3;
@@ -138,20 +140,30 @@ public class TerminalTabViewModel : INotifyPropertyChanged, ITabViewModel
 
         TerminalModel.UserInput += (_, e) =>
         {
-            if (_shellStream != null && _sshClient != null && _sshClient.IsConnected)
-            {
-                var bytes = NormalizeTerminalInput(e.Data.ToArray());
+            var bytes = NormalizeTerminalInput(e.Data.ToArray());
 
-                // Some key combinations can be reported by the terminal
-                // control as a runaway stream of single ASCII '0' bytes.
-                // Keep ordinary typing and paste intact, but stop that
-                // pathological repeat before it reaches the remote shell.
-                if (IsRunawayZeroInput(bytes))
+            // Some key combinations can be reported by the terminal
+            // control as a runaway stream of single ASCII '0' bytes.
+            // Keep ordinary typing and paste intact, but stop that
+            // pathological repeat before it reaches the remote shell.
+            if (IsRunawayZeroInput(bytes))
+                return;
+
+            lock (_connectionLock)
+            {
+                if (_shellStream == null || _sshClient == null || !_sshClient.IsConnected)
                     return;
 
-                MarkActivity();
-                _shellStream.Write(bytes, 0, bytes.Length);
-                _shellStream.Flush();
+                try
+                {
+                    MarkActivity();
+                    _shellStream.Write(bytes, 0, bytes.Length);
+                    _shellStream.Flush();
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Terminal input write failed: {ex.Message}");
+                }
             }
         };
     }
@@ -199,7 +211,8 @@ public class TerminalTabViewModel : INotifyPropertyChanged, ITabViewModel
     }
 
     public void Connect(string host, int port, string username, string password, string privateKeyPath,
-        string? hostKeyFingerprint = null, Action<string>? firstSeenHostKey = null,
+        string? privateKeyPassphrase = null, string? hostKeyFingerprint = null,
+        Action<string>? firstSeenHostKey = null, Func<string, bool>? confirmNewHost = null,
         string? initialCommand = null, int? retryCount = null, int? retryDelayMs = null,
         int? keepAliveSeconds = null, int? idleTimeoutMinutes = null)
     {
@@ -215,8 +228,10 @@ public class TerminalTabViewModel : INotifyPropertyChanged, ITabViewModel
         ConnectionUsername = username;
         _password = password;
         _privateKeyPath = privateKeyPath;
+        _privateKeyPassphrase = privateKeyPassphrase;
         _hostKeyFingerprint = hostKeyFingerprint;
         _firstSeenHostKey = firstSeenHostKey;
+        _confirmNewHost = confirmNewHost;
         _initialCommand = initialCommand;
         _disconnectReason = null;
         _retryCount = Math.Max(1, retryCount ?? 3);
@@ -237,24 +252,11 @@ public class TerminalTabViewModel : INotifyPropertyChanged, ITabViewModel
             var connected = false;
             try
             {
-                SshSecurity.EnsurePrivateKeyExists(privateKeyPath);
-                var safeUsername = username ?? "";
-                var safePassword = password ?? "";
+                client = SshConnectionFactory.CreateSshClient(
+                    host, port, username ?? "", password ?? "",
+                    privateKeyPath, privateKeyPassphrase, _keepAliveSeconds);
 
-                if (!string.IsNullOrWhiteSpace(privateKeyPath) && System.IO.File.Exists(privateKeyPath))
-                {
-                    var keyFile = new PrivateKeyFile(privateKeyPath, string.IsNullOrEmpty(safePassword) ? null : safePassword);
-                    client = new SshClient(host, port, safeUsername, new[] { keyFile });
-                }
-                else
-                {
-                    client = new SshClient(host, port, safeUsername, safePassword);
-                }
-
-                client.ConnectionInfo.Timeout = SshSecurity.ConnectionTimeout;
-                SshSecurity.ConfigureHostKeyPolicy(client, hostKeyFingerprint, firstSeenHostKey);
-                if (_keepAliveSeconds > 0)
-                    client.KeepAliveInterval = TimeSpan.FromSeconds(_keepAliveSeconds);
+                SshSecurity.ConfigureHostKeyPolicy(client, hostKeyFingerprint, firstSeenHostKey, confirmNewHost);
                 lock (_connectionLock)
                 {
                     if (cancellation.IsCancellationRequested) return;
@@ -355,7 +357,8 @@ public class TerminalTabViewModel : INotifyPropertyChanged, ITabViewModel
             return;
 
         Connect(ConnectionHost, ConnectionPort, ConnectionUsername, _password, _privateKeyPath,
-            _hostKeyFingerprint, _firstSeenHostKey, _initialCommand);
+            _privateKeyPassphrase, _hostKeyFingerprint, _firstSeenHostKey, _confirmNewHost,
+            _initialCommand, _retryCount, _retryDelayMs, _keepAliveSeconds, _idleTimeoutMinutes);
     }
 
     private void MarkActivity()

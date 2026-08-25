@@ -206,23 +206,7 @@ public class FileEditorTabViewModel : INotifyPropertyChanged, ITabViewModel, IDi
     private SftpClient CreateClient()
     {
         var decrypted = CredentialManager.DecryptProfile(_profile);
-        var safeUsername = decrypted.Username ?? "";
-        var safePassword = decrypted.Password ?? "";
-
-        SshSecurity.EnsurePrivateKeyExists(decrypted.PrivateKeyPath);
-
-        SftpClient client;
-        if (!string.IsNullOrWhiteSpace(decrypted.PrivateKeyPath) && File.Exists(decrypted.PrivateKeyPath))
-        {
-            var keyFile = new PrivateKeyFile(decrypted.PrivateKeyPath, string.IsNullOrEmpty(safePassword) ? null : safePassword);
-            client = new SftpClient(decrypted.Host, decrypted.Port, safeUsername, new[] { keyFile });
-        }
-        else
-        {
-            client = new SftpClient(decrypted.Host, decrypted.Port, safeUsername, safePassword);
-        }
-
-        client.ConnectionInfo.Timeout = SshSecurity.ConnectionTimeout;
+        var client = SshConnectionFactory.CreateSftpClient(decrypted);
         SshSecurity.ConfigureHostKeyPolicy(client, decrypted.HostKeyFingerprint, null);
         return client;
     }

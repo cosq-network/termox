@@ -51,7 +51,13 @@ public sealed class PortScannerTabViewModel : INotifyPropertyChanged, ITabViewMo
     public bool IsScanning
     {
         get => _isScanning;
-        private set { _isScanning = value; OnPropertyChanged(); }
+        private set
+        {
+            if (_isScanning == value) return;
+            _isScanning = value;
+            OnPropertyChanged();
+            (ScanPortsCommand as RelayCommand)?.RaiseCanExecuteChanged();
+        }
     }
 
     public string ScanStatus

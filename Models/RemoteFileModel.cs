@@ -31,6 +31,7 @@ public class RemoteFileModel : INotifyPropertyChanged
 
     // For UI Display
     public string IconDisplay => IsDirectory ? "📁" : "📄";
+    public string TypeDisplay => IsSymbolicLink ? "Symbolic Link" : IsDirectory ? "Directory" : "File";
     public string SizeDisplay => IsDirectory ? "" : FormatSize(Length);
     public string ModifiedDisplay => LastWriteTime.ToString("yyyy-MM-dd HH:mm:ss");
 

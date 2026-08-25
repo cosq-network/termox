@@ -13,6 +13,7 @@ using System.Linq;
 using System.Windows.Input;
 using Termox.Models;
 using SvcSystems.UI.Terminal;
+using AvaloniaEdit;
 
 namespace Termox.Views;
 
@@ -305,13 +306,11 @@ public partial class MainWindow : Window
                 mainVm.RenameModalText = vm.SelectedFile.Name;
                 mainVm.IsRenameModalVisible = true;
                 _renameFileVm = vm;
-                _renamedOldName = vm.SelectedFile.Name;
             }
         }
     }
 
     private SftpTabViewModel? _renameFileVm;
-    private string _renamedOldName = "";
 
     private void ConfirmRename_Click(object? sender, RoutedEventArgs e)
     {
@@ -386,7 +385,7 @@ public partial class MainWindow : Window
                 TriggerRename(vm);
                 e.Handled = true;
             }
-            else if (e.KeyModifiers == KeyModifiers.Control)
+            else if ((e.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Meta)) != 0)
             {
                 if (e.Key == Key.U)
                 {
@@ -419,7 +418,6 @@ public partial class MainWindow : Window
             mainVm.RenameModalText = vm.SelectedFile.Name;
             mainVm.IsRenameModalVisible = true;
             _renameFileVm = vm;
-            _renamedOldName = vm.SelectedFile.Name;
         }
     }
 
@@ -530,11 +528,107 @@ public partial class MainWindow : Window
         }
     }
 
+    private void MainWindow_KeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Escape || DataContext is not MainViewModel mainVm) return;
+
+        if (mainVm.IsFilePreviewModalVisible)
+        {
+            mainVm.IsFilePreviewModalVisible = false;
+            e.Handled = true;
+        }
+        else if (mainVm.IsHostKeyConfirmModalVisible)
+        {
+            mainVm.RejectHostKey();
+            e.Handled = true;
+        }
+        else if (mainVm.IsPermissionsModalVisible)
+        {
+            mainVm.IsPermissionsModalVisible = false;
+            e.Handled = true;
+        }
+        else if (mainVm.IsFilePropertiesModalVisible)
+        {
+            mainVm.IsFilePropertiesModalVisible = false;
+            e.Handled = true;
+        }
+        else if (mainVm.IsRenameModalVisible)
+        {
+            mainVm.IsRenameModalVisible = false;
+            mainVm.RenameModalText = "";
+            e.Handled = true;
+        }
+        else if (mainVm.IsConnectionModalVisible)
+        {
+            mainVm.IsConnectionModalVisible = false;
+            e.Handled = true;
+        }
+    }
+
     private void ClosePreviewModal_Click(object? sender, RoutedEventArgs e)
     {
         if (DataContext is MainViewModel mainVm)
         {
             mainVm.IsFilePreviewModalVisible = false;
+        }
+    }
+
+    private async void CopyPreview_Click(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainViewModel mainVm) return;
+
+        try
+        {
+            var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
+            if (clipboard == null) return;
+
+            await clipboard.SetTextAsync(mainVm.FilePreviewContent);
+            mainVm.EditorStatusMessage = "Preview contents copied to the clipboard.";
+        }
+        catch (Exception ex)
+        {
+            mainVm.EditorStatusMessage = $"Could not copy preview contents: {ex.Message}";
+        }
+    }
+
+    private async void PreviewEditor_KeyDown(object? sender, KeyEventArgs e)
+    {
+        if (sender is not TextEditor editor || e.Key != Key.C ||
+            (e.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Meta)) == 0 ||
+            string.IsNullOrEmpty(editor.SelectedText))
+            return;
+
+        e.Handled = true;
+        await CopyPreviewSelectionAsync(editor);
+    }
+
+    private async void PreviewEditor_Copy_Click(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not MenuItem menuItem ||
+            menuItem.Parent is not ContextMenu contextMenu ||
+            contextMenu.PlacementTarget is not TextEditor editor)
+            return;
+
+        await CopyPreviewSelectionAsync(editor);
+    }
+
+    private async Task CopyPreviewSelectionAsync(TextEditor editor)
+    {
+        if (string.IsNullOrEmpty(editor.SelectedText)) return;
+
+        try
+        {
+            var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
+            if (clipboard == null) return;
+
+            await clipboard.SetTextAsync(editor.SelectedText);
+            if (DataContext is MainViewModel mainVm)
+                mainVm.EditorStatusMessage = "Selected preview contents copied to the clipboard.";
+        }
+        catch (Exception ex)
+        {
+            if (DataContext is MainViewModel mainVm)
+                mainVm.EditorStatusMessage = $"Could not copy the selected preview: {ex.Message}";
         }
     }
 
@@ -571,30 +665,31 @@ public partial class MainWindow : Window
         {
             if (this.FindControl<TextBox>("PermissionsInput") is TextBox tb && !string.IsNullOrWhiteSpace(tb.Text))
             {
-                // Parse octal string (e.g., "755" -> 0o755 in C#)
-                if (int.TryParse(tb.Text, out int decimalMode))
+                // Parse an octal permission string (e.g. "755" -> 0o755).
+                var text = tb.Text.Trim();
+                if (text.Length is >= 3 and <= 4 && text.All(c => c is >= '0' and <= '7') &&
+                    int.TryParse(text, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var parsed))
                 {
-                    // Convert decimal input to octal interpretation
-                    int octalMode = 0;
-                    int temp = decimalMode;
-                    int multiplier = 1;
-
-                    while (temp > 0)
+                    var octalMode = 0;
+                    var multiplier = 1;
+                    foreach (var c in text.Reverse())
                     {
-                        octalMode += (temp % 10) * multiplier;
-                        temp /= 10;
+                        octalMode += (c - '0') * multiplier;
                         multiplier *= 8;
                     }
 
                     vm.ChangeFilePermissions(mainVm.SelectedFileForPermissions, (short)octalMode, mainVm);
                     mainVm.IsPermissionsModalVisible = false;
+                    return;
                 }
+
+                vm.Status = $"Invalid permissions '{tb.Text}'. Use 3-4 octal digits (0-7), e.g. 755.";
+                vm.StatusColor = "#f44336";
+                return;
             }
-            else
-            {
-                mainVm.SelectedFileForPermissions = null;
-                mainVm.IsPermissionsModalVisible = false;
-            }
+
+            mainVm.SelectedFileForPermissions = null;
+            mainVm.IsPermissionsModalVisible = false;
         }
     }
 

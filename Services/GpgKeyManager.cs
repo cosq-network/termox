@@ -93,8 +93,8 @@ public class GpgKeyManager
 
             var outputTask = process.StandardOutput.ReadToEndAsync();
             var errorTask = process.StandardError.ReadToEndAsync();
+            await WaitForExitWithTimeoutAsync(process);
             await Task.WhenAll(outputTask, errorTask);
-            await process.WaitForExitAsync();
             var error = errorTask.Result;
 
             if (process.ExitCode == 0)
@@ -141,8 +141,8 @@ public class GpgKeyManager
 
             var outputTask = process.StandardOutput.ReadToEndAsync();
             var errorTask = process.StandardError.ReadToEndAsync();
+            await WaitForExitWithTimeoutAsync(process);
             await Task.WhenAll(outputTask, errorTask);
-            await process.WaitForExitAsync();
             var error = errorTask.Result;
 
             if (process.ExitCode == 0)
@@ -176,6 +176,20 @@ public class GpgKeyManager
     }
 
     /// <summary>
+    /// Waits for the process to exit, killing it after a timeout so a hung gpg
+    /// cannot block the UI indefinitely.
+    /// </summary>
+    private static async Task WaitForExitWithTimeoutAsync(Process process, int timeoutSeconds = 30)
+    {
+        var exited = await Task.WhenAny(process.WaitForExitAsync(), Task.Delay(TimeSpan.FromSeconds(timeoutSeconds)));
+        if (exited != process.WaitForExitAsync())
+        {
+            try { process.Kill(entireProcessTree: true); } catch { }
+            throw new TimeoutException($"gpg timed out after {timeoutSeconds} seconds.");
+        }
+    }
+
+    /// <summary>
     /// Execute a GPG command and return raw output.
     /// </summary>
     private async Task<string> ExecuteGpgCommandAndGetOutputAsync(params string[] args)
@@ -199,8 +213,8 @@ public class GpgKeyManager
 
         var outputTask = process.StandardOutput.ReadToEndAsync();
         var errorTask = process.StandardError.ReadToEndAsync();
+        await WaitForExitWithTimeoutAsync(process);
         await Task.WhenAll(outputTask, errorTask);
-        await process.WaitForExitAsync();
 
         if (process.ExitCode != 0)
         {

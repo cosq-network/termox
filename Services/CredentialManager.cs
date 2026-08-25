@@ -258,6 +258,7 @@ public static class CredentialManager
             Port = profile.Port,
             Username = profile.Username,
             Password = EncryptCredential(profile.Password, profile.Id),
+            PrivateKeyPassphrase = EncryptCredential(profile.PrivateKeyPassphrase, profile.Id + ":key"),
             PrivateKeyPath = profile.PrivateKeyPath,
             HostKeyFingerprint = profile.HostKeyFingerprint,
             IsConnected = profile.IsConnected
@@ -280,6 +281,7 @@ public static class CredentialManager
             Port = profile.Port,
             Username = profile.Username,
             Password = DecryptCredential(profile.Password, profile.Id),
+            PrivateKeyPassphrase = DecryptCredential(profile.PrivateKeyPassphrase, profile.Id + ":key"),
             PrivateKeyPath = profile.PrivateKeyPath,
             HostKeyFingerprint = profile.HostKeyFingerprint,
             IsConnected = profile.IsConnected

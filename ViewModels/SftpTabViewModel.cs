@@ -189,7 +189,8 @@ public class SftpTabViewModel : INotifyPropertyChanged, ITabViewModel, IDisposab
     }
 
     public void Connect(string host, int port, string username, string password, string privateKeyPath,
-        string? hostKeyFingerprint = null, Action<string>? firstSeenHostKey = null,
+        string? privateKeyPassphrase = null, string? hostKeyFingerprint = null,
+        Action<string>? firstSeenHostKey = null, Func<string, bool>? confirmNewHost = null,
         string? initialPath = null)
     {
         lock (_connectionLock)
@@ -213,22 +214,11 @@ public class SftpTabViewModel : INotifyPropertyChanged, ITabViewModel, IDisposab
             try
             {
                 if (cancellation.IsCancellationRequested) return;
-                SshSecurity.EnsurePrivateKeyExists(privateKeyPath);
-                var safeUsername = username ?? "";
-                var safePassword = password ?? "";
+                client = SshConnectionFactory.CreateSftpClient(
+                    host, port, username ?? "", password ?? "",
+                    privateKeyPath, privateKeyPassphrase);
 
-                if (!string.IsNullOrWhiteSpace(privateKeyPath) && System.IO.File.Exists(privateKeyPath))
-                {
-                    var keyFile = new PrivateKeyFile(privateKeyPath, string.IsNullOrEmpty(safePassword) ? null : safePassword);
-                    client = new SftpClient(host, port, safeUsername, new[] { keyFile });
-                }
-                else
-                {
-                    client = new SftpClient(host, port, safeUsername, safePassword);
-                }
-
-                client.ConnectionInfo.Timeout = SshSecurity.ConnectionTimeout;
-                SshSecurity.ConfigureHostKeyPolicy(client, hostKeyFingerprint, firstSeenHostKey);
+                SshSecurity.ConfigureHostKeyPolicy(client, hostKeyFingerprint, firstSeenHostKey, confirmNewHost);
                 lock (_connectionLock)
                 {
                     if (cancellation.IsCancellationRequested) return;
@@ -285,6 +275,7 @@ public class SftpTabViewModel : INotifyPropertyChanged, ITabViewModel, IDisposab
         IsPaused = false;
         return Task.Run(() =>
         {
+            if (_disposed) return;
             _operationGate.Wait();
             try
             {
@@ -303,7 +294,7 @@ public class SftpTabViewModel : INotifyPropertyChanged, ITabViewModel, IDisposab
             }
             finally
             {
-                _operationGate.Release();
+                if (!_disposed) _operationGate.Release();
                 Dispatcher.UIThread.Post(() =>
                 {
                     Status = "Disconnected";
@@ -321,10 +312,13 @@ public class SftpTabViewModel : INotifyPropertyChanged, ITabViewModel, IDisposab
 
         Task.Run(() =>
         {
+            if (_disposed) return;
             if (!_operationGate.Wait(0)) return;
             try
             {
-                PostDirectoryListing(_sftpClient.ListDirectory(CurrentPath));
+                var client = _sftpClient;
+                if (client == null || !client.IsConnected) return;
+                PostDirectoryListing(client.ListDirectory(CurrentPath));
             }
             catch (Exception ex)
             {
@@ -332,7 +326,7 @@ public class SftpTabViewModel : INotifyPropertyChanged, ITabViewModel, IDisposab
             }
             finally
             {
-                _operationGate.Release();
+                if (!_disposed) _operationGate.Release();
             }
         });
     }
@@ -361,14 +355,39 @@ public class SftpTabViewModel : INotifyPropertyChanged, ITabViewModel, IDisposab
         var lastSlash = CurrentPath.LastIndexOf('/');
         if (lastSlash <= 0) CurrentPath = "/";
         else CurrentPath = CurrentPath.Substring(0, lastSlash);
-        LoadDirectory();
+        _ = ReloadDirectoryAsync();
     }
 
     private void NavigateTo(RemoteFileModel? file)
     {
         if (file == null || !file.IsDirectory) return;
         CurrentPath = file.FullName;
-        LoadDirectory();
+        _ = ReloadDirectoryAsync();
+    }
+
+    /// <summary>
+    /// Reloads the current directory without dropping the refresh when another
+    /// operation (transfer, connect) is holding the operation gate.
+    /// </summary>
+    private async Task ReloadDirectoryAsync()
+    {
+        await Task.Run(() =>
+        {
+            if (_disposed || _sftpClient == null || !_sftpClient.IsConnected) return;
+            if (!_operationGate.Wait(0)) return;
+            try
+            {
+                PostDirectoryListing(_sftpClient.ListDirectory(CurrentPath));
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"SFTP List Directory Error: {ex.Message}");
+            }
+            finally
+            {
+                if (!_disposed) _operationGate.Release();
+            }
+        });
     }
 
     public void NavigateToPath(string? path)
@@ -523,7 +542,7 @@ public class SftpTabViewModel : INotifyPropertyChanged, ITabViewModel, IDisposab
         _cancelRequested = false;
         IsPaused = false;
 
-        await _operationGate.WaitAsync();
+        await _operationGate.WaitAsync(_featureCancellation.Token);
         try
         {
             await Task.Run(() =>
@@ -563,6 +582,7 @@ public class SftpTabViewModel : INotifyPropertyChanged, ITabViewModel, IDisposab
 
                         if (_cancelRequested)
                         {
+                            // Remove the partial file we were writing.
                             try { _sftpClient.DeleteFile(remoteFilePath); } catch { }
                         }
                     }
@@ -583,7 +603,10 @@ public class SftpTabViewModel : INotifyPropertyChanged, ITabViewModel, IDisposab
                 }
             });
         }
-        finally { _operationGate.Release(); }
+        finally
+        {
+            if (!_disposed) _operationGate.Release();
+        }
         LoadDirectory();
     }
 
@@ -664,7 +687,7 @@ public class SftpTabViewModel : INotifyPropertyChanged, ITabViewModel, IDisposab
 
         var rootPath = System.IO.Path.GetFullPath(localFolderPath);
         System.IO.Directory.CreateDirectory(rootPath);
-        await _operationGate.WaitAsync();
+        await _operationGate.WaitAsync(_featureCancellation.Token);
         try
         {
             await Task.Run(() =>
@@ -698,15 +721,26 @@ public class SftpTabViewModel : INotifyPropertyChanged, ITabViewModel, IDisposab
                 }
             });
         }
-        finally { _operationGate.Release(); }
+        finally
+        {
+            if (!_disposed) _operationGate.Release();
+        }
         LoadDirectory();
     }
 
-    private void DownloadDirectoryRecursively(string remotePath, string localPath, string rootPath)
+    private void DownloadDirectoryRecursively(string remotePath, string localPath, string rootPath,
+        HashSet<string>? visited = null)
     {
         if (_cancelRequested) return;
+        if (_sftpClient == null || !_sftpClient.IsConnected) return;
 
-        var files = _sftpClient!.ListDirectory(remotePath);
+        // Normalize the canonical remote path so symlink cycles terminate.
+        var canonical = NormalizeRemotePath(remotePath) ?? remotePath;
+        visited ??= new HashSet<string>(StringComparer.Ordinal);
+        if (!visited.Add(canonical))
+            return;
+
+        var files = _sftpClient.ListDirectory(remotePath);
         foreach (var file in files)
         {
             if (_cancelRequested) break;
@@ -716,7 +750,7 @@ public class SftpTabViewModel : INotifyPropertyChanged, ITabViewModel, IDisposab
             if (file.IsDirectory && !file.IsSymbolicLink)
             {
                 System.IO.Directory.CreateDirectory(localFilePath);
-                DownloadDirectoryRecursively(file.FullName, localFilePath, rootPath);
+                DownloadDirectoryRecursively(file.FullName, localFilePath, rootPath, visited);
             }
             else
             {
@@ -951,20 +985,24 @@ public class SftpTabViewModel : INotifyPropertyChanged, ITabViewModel, IDisposab
         onClose(this);
     }
 
-    public async void PreviewFile(RemoteFileModel file, MainViewModel mainVm)
+    public async Task PreviewFile(RemoteFileModel file, MainViewModel mainVm)
     {
-        if (_sftpClient == null || !_sftpClient.IsConnected) return;
+        if (_disposed || _sftpClient == null || !_sftpClient.IsConnected) return;
 
         var acquired = false;
         try
         {
             await _operationGate.WaitAsync(_featureCancellation.Token);
             acquired = true;
+            if (_disposed) return;
             if (file.IsDirectory || file.Length > TextFileLimitBytes)
             {
                 Dispatcher.UIThread.Post(() =>
                 {
-                    mainVm.FilePreviewContent = "Cannot preview directories or files larger than 20MB.";
+                    var message = file.IsDirectory
+                        ? "Cannot preview a directory."
+                        : $"File exceeds the {TextFileLimitBytes / (1024 * 1024)}MB preview limit.";
+                    mainVm.SetFilePreviewContent(message);
                     mainVm.FilePreviewName = file.Name;
                     mainVm.IsFilePreviewModalVisible = true;
                 });
@@ -978,7 +1016,7 @@ public class SftpTabViewModel : INotifyPropertyChanged, ITabViewModel, IDisposab
 
             Dispatcher.UIThread.Post(() =>
             {
-                mainVm.FilePreviewContent = content;
+                mainVm.SetFilePreviewContent(content);
                 mainVm.FilePreviewName = file.Name;
                 mainVm.IsFilePreviewModalVisible = true;
             });
@@ -988,26 +1026,27 @@ public class SftpTabViewModel : INotifyPropertyChanged, ITabViewModel, IDisposab
             if (_featureCancellation.IsCancellationRequested) return;
             Dispatcher.UIThread.Post(() =>
             {
-                mainVm.FilePreviewContent = $"Error reading file: {ex.Message}";
+                mainVm.SetFilePreviewContent($"Error reading file: {ex.Message}");
                 mainVm.FilePreviewName = file.Name;
                 mainVm.IsFilePreviewModalVisible = true;
             });
         }
         finally
         {
-            if (acquired) _operationGate.Release();
+            if (acquired && !_disposed) _operationGate.Release();
         }
     }
 
-    public async void OpenFileInEditor(RemoteFileModel file, MainViewModel mainVm)
+    public async Task OpenFileInEditor(RemoteFileModel file, MainViewModel mainVm)
     {
-        if (_sftpClient == null || !_sftpClient.IsConnected) return;
+        if (_disposed || _sftpClient == null || !_sftpClient.IsConnected) return;
 
         var acquired = false;
         try
         {
             await _operationGate.WaitAsync(_featureCancellation.Token);
             acquired = true;
+            if (_disposed) return;
 
             if (file.IsDirectory || file.Length > TextFileLimitBytes)
             {
@@ -1040,7 +1079,7 @@ public class SftpTabViewModel : INotifyPropertyChanged, ITabViewModel, IDisposab
         }
         finally
         {
-            if (acquired) _operationGate.Release();
+            if (acquired && !_disposed) _operationGate.Release();
         }
     }
 
@@ -1138,9 +1177,15 @@ public class SftpTabViewModel : INotifyPropertyChanged, ITabViewModel, IDisposab
         });
     }
 
-    private void DeleteDirectoryRecursively(string remotePath)
+    private void DeleteDirectoryRecursively(string remotePath, HashSet<string>? visited = null)
     {
         if (_sftpClient == null || !_sftpClient.IsConnected) return;
+
+        // Normalize the canonical remote path so symlink cycles terminate.
+        var canonical = NormalizeRemotePath(remotePath) ?? remotePath;
+        visited ??= new HashSet<string>(StringComparer.Ordinal);
+        if (!visited.Add(canonical))
+            return;
 
         var files = _sftpClient.ListDirectory(remotePath);
         foreach (var file in files)
@@ -1149,7 +1194,7 @@ public class SftpTabViewModel : INotifyPropertyChanged, ITabViewModel, IDisposab
 
             if (file.IsDirectory && !file.IsSymbolicLink)
             {
-                DeleteDirectoryRecursively(file.FullName);
+                DeleteDirectoryRecursively(file.FullName, visited);
             }
             else
             {
@@ -1241,8 +1286,8 @@ public class SftpTabViewModel : INotifyPropertyChanged, ITabViewModel, IDisposab
         if (_disposed) return;
         _disposed = true;
         _featureCancellation.Cancel();
-        _featureCancellation.Dispose();
         _searchDebounceTimer?.Dispose();
-        _operationGate.Dispose();
+        // Do not dispose the operation gate here: background transfers may still
+        // be releasing it, and disposing a semaphore with waiters throws.
     }
 }

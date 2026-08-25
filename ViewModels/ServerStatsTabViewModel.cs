@@ -39,7 +39,13 @@ public sealed class ServerStatsTabViewModel : INotifyPropertyChanged, ITabViewMo
     public bool IsCollecting
     {
         get => _isCollecting;
-        private set { _isCollecting = value; OnPropertyChanged(); }
+        private set
+        {
+            if (_isCollecting == value) return;
+            _isCollecting = value;
+            OnPropertyChanged();
+            (CollectStatsCommand as RelayCommand)?.RaiseCanExecuteChanged();
+        }
     }
 
     private string _status = "Select a saved session to view its server statistics.";

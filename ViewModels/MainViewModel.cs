@@ -15,6 +15,7 @@ using System.Reflection;
 using Termox.Models;
 using Termox.Services;
 using Avalonia.Threading;
+using AvaloniaEdit.Document;
 
 namespace Termox.ViewModels;
 
@@ -155,11 +156,47 @@ public class MainViewModel : INotifyPropertyChanged
         set { _privateKeyPath = value; IsTestSuccessful = false; OnPropertyChanged(); }
     }
 
+    private string _privateKeyPassphrase = "";
+    public string PrivateKeyPassphrase
+    {
+        get => _privateKeyPassphrase;
+        set { _privateKeyPassphrase = value; IsTestSuccessful = false; OnPropertyChanged(); }
+    }
+
     private string _hostKeyFingerprint = "";
     public string HostKeyFingerprint
     {
         get => _hostKeyFingerprint;
         set { _hostKeyFingerprint = value; OnPropertyChanged(); }
+    }
+
+    // First-connect host-key confirmation state.
+    private string _pendingHostKeyFingerprint = "";
+    public string PendingHostKeyFingerprint
+    {
+        get => _pendingHostKeyFingerprint;
+        set { _pendingHostKeyFingerprint = value; OnPropertyChanged(); }
+    }
+
+    private string _pendingHostKeyHost = "";
+    public string PendingHostKeyHost
+    {
+        get => _pendingHostKeyHost;
+        set { _pendingHostKeyHost = value; OnPropertyChanged(); }
+    }
+
+    private bool _isHostKeyConfirmModalVisible;
+    public bool IsHostKeyConfirmModalVisible
+    {
+        get => _isHostKeyConfirmModalVisible;
+        set { _isHostKeyConfirmModalVisible = value; OnPropertyChanged(); }
+    }
+
+    private string _hostKeyConfirmMessage = "";
+    public string HostKeyConfirmMessage
+    {
+        get => _hostKeyConfirmMessage;
+        set { _hostKeyConfirmMessage = value; OnPropertyChanged(); }
     }
 
     private bool _isDeleteConfirmModalVisible;
@@ -253,7 +290,25 @@ public class MainViewModel : INotifyPropertyChanged
         set { _filePreviewName = value; OnPropertyChanged(); }
     }
 
+    private TextDocument _filePreviewDocument = new();
+    public TextDocument FilePreviewDocument
+    {
+        get => _filePreviewDocument;
+        private set { _filePreviewDocument = value; OnPropertyChanged(); }
+    }
+
+    public string FilePreviewDetails =>
+        $"{Math.Max(1, FilePreviewContent.Split('\n').Length):N0} lines  •  {FilePreviewContent.Length:N0} characters  •  Read-only";
+
+    public void SetFilePreviewContent(string content)
+    {
+        FilePreviewContent = content;
+        FilePreviewDocument = new TextDocument(content);
+        OnPropertyChanged(nameof(FilePreviewDetails));
+    }
+
     private string _editorStatusMessage = "";
+    private DispatcherTimer? _editorStatusClearTimer;
     public string EditorStatusMessage
     {
         get => _editorStatusMessage;
@@ -262,6 +317,17 @@ public class MainViewModel : INotifyPropertyChanged
             _editorStatusMessage = value;
             OnPropertyChanged();
             OnPropertyChanged(nameof(IsEditorStatusVisible));
+
+            _editorStatusClearTimer?.Stop();
+            if (string.IsNullOrWhiteSpace(value)) return;
+
+            _editorStatusClearTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4) };
+            _editorStatusClearTimer.Tick += (_, _) =>
+            {
+                _editorStatusClearTimer?.Stop();
+                EditorStatusMessage = "";
+            };
+            _editorStatusClearTimer.Start();
         }
     }
 
@@ -311,6 +377,8 @@ public class MainViewModel : INotifyPropertyChanged
     public ICommand ConfirmCloseTabCommand { get; }
     public ICommand CancelCloseTabCommand { get; }
     public ICommand TestConnectionCommand { get; }
+    public ICommand ConfirmHostKeyCommand { get; }
+    public ICommand RejectHostKeyCommand { get; }
     public ICommand AddBookmarkCommand { get; }
     public ICommand RemoveBookmarkCommand { get; }
     public ICommand ConfirmRemoveBookmarkCommand { get; }
@@ -358,6 +426,8 @@ public class MainViewModel : INotifyPropertyChanged
         ConfirmCloseTabCommand = new RelayCommand(ConfirmCloseTab);
         CancelCloseTabCommand = new RelayCommand(() => IsCloseConfirmModalVisible = false);
         TestConnectionCommand = new RelayCommand(TestConnection);
+        ConfirmHostKeyCommand = new RelayCommand(ConfirmHostKey);
+        RejectHostKeyCommand = new RelayCommand(() => IsHostKeyConfirmModalVisible = false);
         AddBookmarkCommand = new RelayCommand<string>(AddBookmark);
         RemoveBookmarkCommand = new RelayCommand<BookmarkModel>(RequestRemoveBookmark);
         ConfirmRemoveBookmarkCommand = new RelayCommand(ConfirmRemoveBookmark);
@@ -434,6 +504,7 @@ public class MainViewModel : INotifyPropertyChanged
             Port = parsedPort,
             Username = Username,
             Password = Password,
+            PrivateKeyPassphrase = PrivateKeyPassphrase,
             PrivateKeyPath = PrivateKeyPath,
             HostKeyFingerprint = HostKeyFingerprint,
             KeepAliveIntervalSeconds = KeepAliveIntervalSeconds,
@@ -488,24 +559,13 @@ public class MainViewModel : INotifyPropertyChanged
         {
             int portNumber = parsedPort;
 
-            SshClient testClient;
-            var safeUsername = Username ?? "";
-            var safePassword = Password ?? "";
-            SshSecurity.EnsurePrivateKeyExists(PrivateKeyPath);
+            var testClient = SshConnectionFactory.CreateSshClient(
+                Host ?? "", portNumber, Username ?? "", Password ?? "",
+                PrivateKeyPath ?? "", PrivateKeyPassphrase);
 
-            if (!string.IsNullOrWhiteSpace(PrivateKeyPath) && File.Exists(PrivateKeyPath))
-            {
-                var keyFile = new PrivateKeyFile(PrivateKeyPath, string.IsNullOrEmpty(safePassword) ? null : safePassword);
-                testClient = new SshClient(Host ?? "", portNumber, safeUsername, new[] { keyFile });
-            }
-            else
-            {
-                testClient = new SshClient(Host ?? "", portNumber, safeUsername, safePassword);
-            }
-
-            testClient.ConnectionInfo.Timeout = SshSecurity.ConnectionTimeout;
             SshSecurity.ConfigureHostKeyPolicy(testClient, HostKeyFingerprint,
-                fingerprint => Dispatcher.UIThread.Post(() => HostKeyFingerprint = fingerprint));
+                fingerprint => Dispatcher.UIThread.Post(() => HostKeyFingerprint = fingerprint),
+                fingerprint => ConfirmNewHostFingerprint(fingerprint, Host ?? ""));
 
             var connectTask = Task.Run(() =>
             {
@@ -520,8 +580,6 @@ public class MainViewModel : INotifyPropertyChanged
             var completed = await Task.WhenAny(connectTask, Task.Delay(TimeSpan.FromSeconds(10)));
             if (completed != connectTask)
             {
-                try { testClient.Dispose(); } catch { }
-                _ = connectTask.ContinueWith(t => _ = t.Exception, TaskContinuationOptions.OnlyOnFaulted);
                 TestStatus = "Test timed out after 10 seconds.";
                 TestStatusColor = "#f39c12";
                 return;
@@ -541,6 +599,27 @@ public class MainViewModel : INotifyPropertyChanged
         }
     }
 
+    private bool ConfirmNewHostFingerprint(string fingerprint, string host)
+    {
+        if (!RequireHostKeyConfirmation)
+        {
+            // Confirmations are disabled (e.g. programmatic session restore).
+            HostKeyFingerprint = fingerprint;
+            return true;
+        }
+
+        PendingHostKeyFingerprint = fingerprint;
+        PendingHostKeyHost = host;
+        HostKeyConfirmMessage =
+            $"The host '{host}' is being connected to for the first time.\n\n" +
+            $"Fingerprint: {fingerprint}\n\n" +
+            "Verify this fingerprint with your server administrator before trusting this host.";
+        Dispatcher.UIThread.Post(() => IsHostKeyConfirmModalVisible = true);
+
+        // The connection is refused until the user confirms in the modal.
+        return false;
+    }
+
     private void ConnectProfile(SshConnectionProfile profile)
     {
         Host = profile.Host;
@@ -548,6 +627,7 @@ public class MainViewModel : INotifyPropertyChanged
         Username = profile.Username;
         Password = profile.Password;
         PrivateKeyPath = profile.PrivateKeyPath;
+        PrivateKeyPassphrase = profile.PrivateKeyPassphrase;
         HostKeyFingerprint = profile.HostKeyFingerprint;
         Connect(profile.Id);
     }
@@ -564,10 +644,30 @@ public class MainViewModel : INotifyPropertyChanged
         Username = profile.Username;
         Password = profile.Password;
         PrivateKeyPath = profile.PrivateKeyPath;
+        PrivateKeyPassphrase = profile.PrivateKeyPassphrase;
         HostKeyFingerprint = profile.HostKeyFingerprint;
 
-        var escapedPath = bookmark.Path.Replace("'", "'\\''", StringComparison.Ordinal);
-        Connect(profile.Id, $"cd '{escapedPath}'");
+        var command = BuildCdCommand(bookmark.Path);
+        if (command == null) return;
+
+        Connect(profile.Id, command);
+    }
+
+    /// <summary>
+    /// Builds a safe shell command to change into a remote directory.
+    /// Returns null when the path is not safe to inject into a shell command.
+    /// </summary>
+    private static string? BuildCdCommand(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || !path.StartsWith("/", StringComparison.Ordinal))
+            return null;
+
+        // Reject any character that could break out of the quoted argument.
+        var unsafeChars = new[] { '\'', '"', '\\', '\n', '\r', '\t', ';', '`', '$', '|', '&', '>', '<', '~', '*', '?', '[', ']', '{', '}', '(', ')' };
+        if (path.Any(c => unsafeChars.Contains(c)))
+            return null;
+
+        return $"cd '{path}'";
     }
 
     private void OpenBookmarkInSftp(BookmarkModel bookmark)
@@ -589,9 +689,25 @@ public class MainViewModel : INotifyPropertyChanged
         tab.ConnectionProfile = profile;
         tab.FileSizeWarningThreshold = DownloadSizeWarningThreshold;
         tab.Connect(profile.Host, profile.Port, profile.Username, profile.Password, profile.PrivateKeyPath,
-            profile.HostKeyFingerprint, fingerprint => RememberHostKey(profile, fingerprint), initialPath);
+            profile.PrivateKeyPassphrase, profile.HostKeyFingerprint,
+            fingerprint => RememberHostKey(profile, fingerprint),
+            fingerprint => ConfirmNewHostFingerprint(fingerprint, profile.Host), initialPath);
         UpdateLastUsedSession(profile);
         SaveCurrentSessions();
+    }
+
+    public bool RequireHostKeyConfirmation { get; set; } = true;
+
+    public void ConfirmHostKey()
+    {
+        if (string.IsNullOrWhiteSpace(PendingHostKeyFingerprint)) return;
+        HostKeyFingerprint = PendingHostKeyFingerprint;
+        IsHostKeyConfirmModalVisible = false;
+    }
+
+    public void RejectHostKey()
+    {
+        IsHostKeyConfirmModalVisible = false;
     }
 
     private void ConfirmDelete()
@@ -652,7 +768,7 @@ public class MainViewModel : INotifyPropertyChanged
         }
 
         tab.Connect(Host ?? "", portNumber, Username ?? "", Password ?? "", PrivateKeyPath ?? "",
-            HostKeyFingerprint, fingerprint =>
+            PrivateKeyPassphrase, HostKeyFingerprint, fingerprint =>
             {
                 HostKeyFingerprint = fingerprint;
                 if (profileId != null)
@@ -660,7 +776,8 @@ public class MainViewModel : INotifyPropertyChanged
                     var profile = SavedConnections.FirstOrDefault(p => p.Id == profileId);
                     if (profile != null) RememberHostKey(profile, fingerprint);
                 }
-            }, initialCommand, ConnectionRetryCount, ConnectionRetryDelayMs,
+            }, fingerprint => ConfirmNewHostFingerprint(fingerprint, Host ?? ""),
+            initialCommand, ConnectionRetryCount, ConnectionRetryDelayMs,
             keepAliveSeconds, idleTimeoutMinutes);
         SaveCurrentSessions();
     }
@@ -932,7 +1049,7 @@ public class MainViewModel : INotifyPropertyChanged
 
         if (SelectedTab is SftpTabViewModel vm)
         {
-            Task.Run(() => vm.PreviewFile(file, this));
+            _ = vm.PreviewFile(file, this);
         }
     }
 
@@ -942,7 +1059,7 @@ public class MainViewModel : INotifyPropertyChanged
 
         if (SelectedTab is SftpTabViewModel vm)
         {
-            Task.Run(() => vm.OpenFileInEditor(file, this));
+            _ = vm.OpenFileInEditor(file, this);
         }
     }
 
@@ -1124,12 +1241,17 @@ public class MainViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(HasFavoritedBookmarks));
     }
 
+    private readonly object _persistenceLock = new();
+
     private void SaveProfilesToDisk()
     {
-        var dir = Path.GetDirectoryName(_configPath);
-        if (dir != null && !Directory.Exists(dir)) Directory.CreateDirectory(dir);
-        var profilesToSave = SavedConnections.Select(p => CredentialManager.EncryptProfile(p)).ToList();
-        File.WriteAllText(_configPath, JsonSerializer.Serialize(profilesToSave));
+        lock (_persistenceLock)
+        {
+            var dir = Path.GetDirectoryName(_configPath);
+            if (dir != null && !Directory.Exists(dir)) Directory.CreateDirectory(dir);
+            var profilesToSave = SavedConnections.Select(p => CredentialManager.EncryptProfile(p)).ToList();
+            File.WriteAllText(_configPath, JsonSerializer.Serialize(profilesToSave));
+        }
     }
 
     private SshConnectionProfile? FindSessionProfile(SessionData session)

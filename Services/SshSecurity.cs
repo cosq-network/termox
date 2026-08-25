@@ -14,7 +14,8 @@ public static class SshSecurity
             throw new FileNotFoundException("The configured private key file was not found.", privateKeyPath);
     }
 
-    public static void ConfigureHostKeyPolicy(IBaseClient client, string? expectedFingerprint, Action<string>? firstSeen)
+    public static void ConfigureHostKeyPolicy(IBaseClient client, string? expectedFingerprint,
+        Action<string>? firstSeen = null, Func<string, bool>? confirmNewHost = null)
     {
         client.HostKeyReceived += (_, args) =>
         {
@@ -25,6 +26,14 @@ public static class SshSecurity
 
             if (args.CanTrust && string.IsNullOrWhiteSpace(normalizedExpected))
             {
+                // First-time host. Ask the user to confirm before trusting when a
+                // confirmation callback is wired up; otherwise trust on first use.
+                if (confirmNewHost != null && !confirmNewHost(fingerprint))
+                {
+                    args.CanTrust = false;
+                    return;
+                }
+
                 try
                 {
                     firstSeen?.Invoke(fingerprint);

@@ -184,8 +184,13 @@ public class DnsRecordInspector
 
         var outputTask = process.StandardOutput.ReadToEndAsync();
         var errorTask = process.StandardError.ReadToEndAsync();
+        var exited = await Task.WhenAny(process.WaitForExitAsync(), Task.Delay(TimeSpan.FromSeconds(15)));
+        if (exited != process.WaitForExitAsync())
+        {
+            try { process.Kill(entireProcessTree: true); } catch { }
+            throw new TimeoutException("dig timed out after 15 seconds.");
+        }
         await Task.WhenAll(outputTask, errorTask);
-        await process.WaitForExitAsync();
 
         if (process.ExitCode != 0)
             throw new InvalidOperationException(string.IsNullOrWhiteSpace(errorTask.Result.Trim())
@@ -217,8 +222,13 @@ public class DnsRecordInspector
 
         var outputTask = process.StandardOutput.ReadToEndAsync();
         var errorTask = process.StandardError.ReadToEndAsync();
+        var exited = await Task.WhenAny(process.WaitForExitAsync(), Task.Delay(TimeSpan.FromSeconds(15)));
+        if (exited != process.WaitForExitAsync())
+        {
+            try { process.Kill(entireProcessTree: true); } catch { }
+            throw new TimeoutException("nslookup timed out after 15 seconds.");
+        }
         await Task.WhenAll(outputTask, errorTask);
-        await process.WaitForExitAsync();
 
         if (process.ExitCode != 0)
             throw new InvalidOperationException(string.IsNullOrWhiteSpace(errorTask.Result.Trim())
