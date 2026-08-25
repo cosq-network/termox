@@ -69,10 +69,10 @@ properties.
 | Shortcut | Action | Context |
 |----------|--------|---------|
 | **F2** | Rename selected file | SFTP file list |
-| **Ctrl+U** | Open upload dialog | SFTP file list |
-| **Ctrl+D** | Download selected file(s) | SFTP file list |
+| **Ctrl+U** (Cmd on macOS) | Open upload dialog | SFTP file list |
+| **Ctrl+D** (Cmd on macOS) | Download selected file(s) | SFTP file list |
 | **Ctrl+Del** or **Delete** | Delete selected file/folder | SFTP file list |
-| **Ctrl+S** | Add current path as bookmark | SFTP file list |
+| **Ctrl+S** (Cmd on macOS) | Add current path as bookmark | SFTP file list |
 
 Shortcuts are captured via the `KeyDown` event on the SFTP list, run without
 blocking the UI thread, and follow common application standards.
@@ -90,7 +90,9 @@ Read-only text file preview for code (`.cs`, `.py`, `.js`, `.html`, `.css`,
 `.conf`, `.cfg`), and documents (`.txt`, `.md`, `.log`).
 
 - Monospace font, scrollable content area, full path in the title.
-- Maximum file size of 1 MB prevents loading huge files.
+- Line numbers, read-only editing surface (AvaloniaEdit), and copy
+  (full or selection) to the clipboard.
+- Maximum file size of 20 MB prevents loading huge files.
 - Graceful error handling with in-modal error display.
 - Close button and ESC key support.
 
@@ -115,6 +117,8 @@ Secure credential storage using the platform credential store.
 - **Linux**: Secret Service storage through `secret-tool`.
 - Passwords are never stored in plain text on disk; encrypted values carry an
   `ENCRYPTED:` prefix.
+- Private-key passphrases are encrypted separately from account passwords
+  (distinct key id), and are never substituted for the account password.
 - `Services/CredentialManager.cs` exposes `EncryptCredential()`,
   `DecryptCredential()`, `IsEncrypted()`, `EncryptProfile()`, and
   `DecryptProfile()`.
@@ -133,7 +137,8 @@ Secure credential storage using the platform credential store.
 ### File permissions editor
 
 - Shows current permissions in Unix format (e.g., `-rw-r--r--`).
-- Direct octal input (644, 755, 777, 600, ...).
+- Direct octal input (644, 755, 777, 600, ...), validated as 3-4 octal digits
+  (0-7); invalid input shows an error instead of silently closing the dialog.
 - Quick presets:
 
 | Preset | Usage | Octal |
@@ -198,11 +203,16 @@ The Connection Tester reuses saved profiles from `MainViewModel`.
 
 - **Design pattern**: MVVM (Model-View-ViewModel)
 - **UI framework**: Avalonia 12.1.0
-- **SSH library**: Renci.SshNet (SSH.NET v2025.1.0)
+- **SSH library**: Renci.SshNet (SSH.NET)
 - **Framework**: .NET 10.0
 - **Data persistence**: JSON serialization to the platform application-data
   directory under `Termox/`
-- **Threading**: Async operations for non-blocking UI
+- **Threading**: Async operations for non-blocking UI; per-tab operation gate
+  serializes SFTP work; persistence writes are serialized with a lock
+- **Client construction**: centralized in `Services/SshConnectionFactory.cs`
+  for consistent host-key policy, timeouts, and key-passphrase handling
+- **External tools**: `dig`/`nslookup` and `gpg` run with 15s and 30s timeouts
+  respectively, so a hung system utility cannot block the application
 
 ### Data storage locations
 
@@ -217,11 +227,28 @@ The Connection Tester reuses saved profiles from `MainViewModel`.
 ```text
 SaveConnection()
   └─> CredentialManager.EncryptProfile()
+       ├─> EncryptCredential(password, profile.Id)
+       ├─> EncryptCredential(keyPassphrase, profile.Id + ":key")
        └─> JsonSerializer.Serialize(encrypted)
 
 LoadConnections()
   ├─> JsonSerializer.Deserialize()
   └─> CredentialManager.DecryptProfile()
+```
+
+### Host-key verification flow
+
+```text
+First connection to a host (no stored fingerprint)
+  └─> HostKeyReceived fires
+       └─> "Verify Host Key" modal shows the SHA-256 fingerprint
+            ├─> Trust  -> fingerprint persisted to the profile
+            └─> Reject -> connection refused
+
+Later connections
+  └─> Stored fingerprint compared against the presented host key
+       ├─> match    -> proceed
+       └─> mismatch -> connection refused
 ```
 
 ### Utility performance
@@ -250,7 +277,7 @@ LoadConnections()
 
 - **Debug build**: ✅ 0 warnings, 0 errors
 - **Release build**: ✅ 0 warnings, 0 errors
-- **Automated tests**: 8 passing unit tests in `tests/Termox.Tests`
+- **Automated tests**: 19 passing unit tests in `tests/Termox.Tests`
 - **CI/CD**: GitHub Actions validation and release workflows
 
 ### Feature verification
@@ -262,11 +289,12 @@ LoadConnections()
 - [x] Sessions auto-save on connect and restore on startup
 - [x] Keyboard shortcuts work correctly (F2, Ctrl+U, Ctrl+D, Ctrl+Del, Ctrl+S)
 - [x] Context menu appears on right-click with functional items
-- [x] File preview opens for text files; large files (>1 MB) handled gracefully
+- [x] File preview opens for text files; large files (>20 MB) handled gracefully
 - [x] File properties modal displays all metadata
-- [x] Password encryption on save / decryption on load
+- [x] Password and key-passphrase encryption on save / decryption on load
+- [x] First-connect host-key fingerprint requires explicit user confirmation
 - [x] Bulk delete with success/failure tracking
-- [x] Permissions editor modal, presets, and octal input work
+- [x] Permissions editor modal, presets, and validated octal input work
 - [x] Port Scanner identifies open/closed ports
 - [x] Ping Test measures latency
 - [x] SSH Key Generator supports RSA/ED25519
@@ -284,7 +312,7 @@ LoadConnections()
 
 - **Drag & drop** upload is not implemented (Avalonia `IDataObject` API
   complexity); placeholder handlers exist.
-- **File preview** is read-only, limited to text files under 1 MB, and has no
+- **File preview** is read-only, limited to text files under 20 MB, and has no
   syntax highlighting.
 - **File permissions** cannot be modified from the Properties dialog.
 - **Bulk operations** currently cover only delete (rename/chmod can be added).
@@ -293,6 +321,8 @@ LoadConnections()
 - **Permission presets** are limited to 4 common patterns.
 - **Linux** requires an available Secret Service provider for credential
   storage.
+- **SSH agent** (for unlocking keys without entering passphrases) is not yet
+  integrated.
 
 ### Future enhancements
 
@@ -316,13 +346,22 @@ LoadConnections()
 
 | File | Type | Purpose |
 | --- | --- | --- |
-| `Services/CredentialManager.cs` | New | Password encryption/decryption |
-| `ViewModels/ToolsTabViewModel.cs` | New | Network utility implementations |
-| `ViewModels/MainViewModel.cs` | Modified | Session management, bookmarks, modals, credential integration |
-| `ViewModels/SftpTabViewModel.cs` | Modified | File operations, search, preview, bulk ops, permissions |
-| `Models/RemoteFileModel.cs` | Modified | Added `IsSelected` property |
-| `Views/MainWindow.axaml` | Modified | Toolbar, buttons, modals, context menu, Tools tab UI |
-| `Views/MainWindow.axaml.cs` | Modified | Event handlers, keyboard shortcuts, dialogs |
+| `Services/CredentialManager.cs` | Modified | Password/key-passphrase encryption and decryption |
+| `Services/SshConnectionFactory.cs` | New | Centralized SSH/SFTP client construction |
+| `Services/SshSecurity.cs` | Modified | Host-key policy with first-connect confirmation |
+| `Services/LocalPathSafety.cs` | Existing | Download path-traversal and symlink guards |
+| `Services/DnsRecordInspector.cs` | Modified | DNS queries with subprocess timeouts |
+| `Services/GpgKeyManager.cs` | Modified | GPG operations with subprocess timeouts |
+| `Services/ServerStatsService.cs` | Modified | Uses shared connection factory |
+| `ViewModels/ToolsTabViewModel.cs` | Modified | Network utilities; connection test via factory |
+| `ViewModels/MainViewModel.cs` | Modified | Session management, bookmarks, modals, host-key confirmation, credential integration |
+| `ViewModels/SftpTabViewModel.cs` | Modified | File operations, search, preview, bulk ops, permissions, gate/dispose hardening |
+| `ViewModels/TerminalTabViewModel.cs` | Modified | Terminal sessions, keep-alive/idle, input locking, reconnect settings |
+| `ViewModels/FileEditorTabViewModel.cs` | Modified | Remote file editing via shared factory |
+| `Models/RemoteFileModel.cs` | Modified | `IsSelected`, `TypeDisplay` properties |
+| `Models/SshConnectionProfile.cs` | Modified | `PrivateKeyPassphrase` field |
+| `Views/MainWindow.axaml` | Modified | Toolbar, buttons, modals (incl. host-key verify), context menu, Tools tab UI |
+| `Views/MainWindow.axaml.cs` | Modified | Event handlers, keyboard shortcuts, dialogs, octal validation |
 
 All changes are additive and backward-compatible. Release and repository setup
 instructions are documented in [CI-CD-INTEGRATION.md](CI-CD-INTEGRATION.md).
