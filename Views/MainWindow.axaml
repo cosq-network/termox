@@ -5,6 +5,7 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:terminal="using:SvcSystems.UI.Terminal"
     xmlns:edit="using:AvaloniaEdit"
+    xmlns:primitives="using:Avalonia.Controls.Primitives"
     mc:Ignorable="d" d:DesignWidth="1050" d:DesignHeight="700"
     x:Class="Termox.Views.MainWindow"
     x:DataType="vm:MainViewModel"
@@ -26,19 +27,28 @@
 
             <!-- Termox application menu -->
             <Menu DockPanel.Dock="Top" Background="#202124" Foreground="#e8eaed">
-                <MenuItem Header="_Termox">
+                <MenuItem>
+                    <MenuItem.Header>
+                        <primitives:AccessText Text="_Termox" Foreground="#f4f7fb" />
+                    </MenuItem.Header>
                     <MenuItem Header="About Termox"
                         Command="{Binding ShowAboutDialogCommand}" />
                     <Separator />
                     <MenuItem Header="Exit Termox" Click="ExitTermox_Click" />
                 </MenuItem>
-                <MenuItem Header="_Session">
+                <MenuItem>
+                    <MenuItem.Header>
+                        <primitives:AccessText Text="_Session" Foreground="#f4f7fb" />
+                    </MenuItem.Header>
                     <MenuItem Header="New Connection"
                         Command="{Binding ShowConnectionModalCommand}" />
                     <MenuItem Header="Disconnect Current Tab"
                         Command="{Binding DisconnectCommand}" />
                 </MenuItem>
-                <MenuItem Header="_Help">
+                <MenuItem>
+                    <MenuItem.Header>
+                        <primitives:AccessText Text="_Help" Foreground="#f4f7fb" />
+                    </MenuItem.Header>
                     <MenuItem Header="About Termox"
                         Command="{Binding ShowAboutDialogCommand}" />
                 </MenuItem>
@@ -76,15 +86,19 @@
                             </Style>
                         </TabControl.Styles>
 
-                        <TabItem Header="Sessions">
+                        <TabItem>
+                            <TabItem.Header>
+                                <TextBlock Text="Sessions" Foreground="#f4f7fb" />
+                            </TabItem.Header>
                             <ScrollViewer>
                                 <StackPanel Margin="15" Spacing="10">
                                     <StackPanel Orientation="Horizontal" Spacing="6">
-                                        <Button Content="New Connection"
-                                            Command="{Binding ShowConnectionModalCommand}"
-                                            Background="#333337" Foreground="#e0e0e0" Padding="12,6"
+                                        <Button Command="{Binding ShowConnectionModalCommand}"
+                                            Classes="newConnectionButton" Padding="12,6"
                                             CornerRadius="4" FontSize="11"
-                                            HorizontalAlignment="Left" />
+                                            HorizontalAlignment="Left">
+                                            <TextBlock Text="New Connection" />
+                                        </Button>
                                     </StackPanel>
 
                                     <TextBlock Text="Recently Used" FontWeight="SemiBold"
@@ -183,7 +197,10 @@
                                 </StackPanel>
                             </ScrollViewer>
                         </TabItem>
-                        <TabItem Header="Bookmarks">
+                        <TabItem>
+                            <TabItem.Header>
+                                <TextBlock Text="Bookmarks" Foreground="#f4f7fb" />
+                            </TabItem.Header>
                             <ScrollViewer>
                                 <StackPanel Margin="15" Spacing="10">
 
@@ -315,7 +332,10 @@
                                 </StackPanel>
                             </ScrollViewer>
                         </TabItem>
-                        <TabItem Header="Tools">
+                        <TabItem>
+                            <TabItem.Header>
+                                <TextBlock Text="Tools" Foreground="#f4f7fb" />
+                            </TabItem.Header>
                             <ScrollViewer VerticalScrollBarVisibility="Auto"
                                 HorizontalScrollBarVisibility="Disabled">
                                 <WrapPanel Margin="15" Orientation="Horizontal"
@@ -387,7 +407,7 @@
                                             <Button Grid.Column="1" Content="Reconnect"
                                                 Command="{Binding ReconnectCommand}"
                                                 IsVisible="{Binding IsReconnectAvailable}"
-                                                Background="#3a3a3a" Foreground="White"
+                                                Classes="neutralButton"
                                                 Padding="12,5" CornerRadius="3" />
                                         </Grid>
                                         <terminal:TerminalControl Grid.Row="1" Model="{Binding TerminalModel}"
@@ -432,20 +452,18 @@
                                             Margin="0,0,0,10">
                                             <Button Grid.Column="0" Content="↑"
                                                 Command="{Binding NavigateUpCommand}"
-                                                Margin="0,0,5,0" Background="#333" Foreground="#fff"
+                                                Margin="0,0,5,0" Classes="neutralButton"
                                                 ToolTip.Tip="Navigate to parent directory" />
                                             <TextBox Grid.Column="1" Text="{Binding CurrentPath}"
-                                                Background="#252526" Foreground="#ccc"
-                                                BorderThickness="1" BorderBrush="#444"
                                                 IsReadOnly="False" VerticalContentAlignment="Center"
                                                 KeyDown="SftpPathBox_KeyDown" />
                                             <Button Grid.Column="2" Content="⭐"
                                                 Click="AddBookmark_Click" Margin="5,0,0,0"
-                                                Background="#f39c12" Foreground="#fff"
+                                                Classes="warningButton"
                                                 ToolTip.Tip="Add current path as bookmark" />
                                             <Button Grid.Column="3" Content="Refresh"
                                                 Command="{Binding RefreshCommand}" Margin="5,0,0,0"
-                                                Background="#333" Foreground="#fff"
+                                                Classes="neutralButton"
                                                 ToolTip.Tip="Reload directory contents" />
                                         </Grid>
 
@@ -459,8 +477,7 @@
                                                 TextTrimming="CharacterEllipsis"
                                                 ToolTip.Tip="{Binding Status}" Margin="0,0,10,0" />
                                             <Button Grid.Column="1"
-                                                Click="UploadFile_Click" Background="#3a3a3a"
-                                                Foreground="White" Padding="12,6" CornerRadius="4"
+                                                Click="UploadFile_Click" Classes="neutralButton" Padding="12,6" CornerRadius="4"
                                                 Cursor="Hand" ToolTip.Tip="Upload local files"
                                                 Margin="0,0,3,0"
                                                 IsVisible="{Binding !IsTransferring}" FontSize="12">
@@ -469,7 +486,7 @@
                                             <Button Grid.Column="2"
                                                 Click="DownloadFile_Click"
                                                 CommandParameter="{Binding #SftpListBox.SelectedItems}"
-                                                Background="#3a3a3a" Foreground="White"
+                                                Classes="neutralButton"
                                                 Padding="12,6" CornerRadius="4" Cursor="Hand"
                                                 ToolTip.Tip="Download selected"
                                                 IsEnabled="{Binding CanDownload}"
@@ -479,7 +496,7 @@
                                             </Button>
                                             <Button Grid.Column="3"
                                                 Command="{Binding DeleteFileCommand}"
-                                                Background="#3a3a3a" Foreground="White"
+                                                Classes="neutralButton"
                                                 Padding="12,6" CornerRadius="4" Cursor="Hand"
                                                 ToolTip.Tip="Delete selected file"
                                                 IsEnabled="{Binding SelectedFile, Converter={x:Static ObjectConverters.IsNotNull}}"
@@ -488,8 +505,7 @@
                                                 <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="&#xE872;" />
                                             </Button>
                                             <Button Grid.Column="4"
-                                                Click="RenameFile_Click" Background="#3a3a3a"
-                                                Foreground="White" Padding="12,6" CornerRadius="4"
+                                                Click="RenameFile_Click" Classes="neutralButton" Padding="12,6" CornerRadius="4"
                                                 Cursor="Hand" ToolTip.Tip="Rename file"
                                                 IsEnabled="{Binding SelectedFile, Converter={x:Static ObjectConverters.IsNotNull}}"
                                                 IsVisible="{Binding !IsTransferring}"
@@ -497,8 +513,7 @@
                                                 <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="&#xE3C9;" />
                                             </Button>
                                             <Button Grid.Column="5"
-                                                Click="EditFile_Click" Background="#3a3a3a"
-                                                Foreground="White" Padding="12,6" CornerRadius="4"
+                                                Click="EditFile_Click" Classes="neutralButton" Padding="12,6" CornerRadius="4"
                                                 Cursor="Hand" ToolTip.Tip="Edit selected file"
                                                 IsEnabled="{Binding SelectedFile, Converter={x:Static ObjectConverters.IsNotNull}}"
                                                 IsVisible="{Binding !IsTransferring}"
@@ -506,8 +521,7 @@
                                                 <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="&#xE70F;" />
                                             </Button>
                                             <Button Grid.Column="6"
-                                                Click="EditPermissions_Click" Background="#3a3a3a"
-                                                Foreground="White" Padding="12,6" CornerRadius="4"
+                                                Click="EditPermissions_Click" Classes="neutralButton" Padding="12,6" CornerRadius="4"
                                                 Cursor="Hand" ToolTip.Tip="Edit file permissions"
                                                 IsEnabled="{Binding SelectedFile, Converter={x:Static ObjectConverters.IsNotNull}}"
                                                 IsVisible="{Binding !IsTransferring}"
@@ -516,7 +530,7 @@
                                             </Button>
                                             <Button Grid.Column="7"
                                                 Command="{Binding BulkDeleteCommand}"
-                                                Background="#3a3a3a" Foreground="White"
+                                                Classes="neutralButton"
                                                 Padding="12,6" CornerRadius="4" Cursor="Hand"
                                                 ToolTip.Tip="Delete all selected files"
                                                 IsEnabled="{Binding CanBulkDelete}"
@@ -527,13 +541,13 @@
                                             <Button Grid.Column="8"
                                                 Content="{Binding PauseButtonText}"
                                                 Command="{Binding TogglePauseCommand}"
-                                                Background="#f39c12" Foreground="White"
+                                                Classes="warningButton"
                                                 Padding="12,6" CornerRadius="4" Cursor="Hand"
                                                 Margin="0,0,3,0"
                                                 IsVisible="{Binding IsTransferring}" FontSize="12" />
                                             <Button Grid.Column="9" Content="Cancel Transfer"
                                                 Command="{Binding CancelTransferCommand}"
-                                                Background="#f44336" Foreground="White"
+                                                Classes="dangerButton"
                                                 Padding="12,6" CornerRadius="4" Cursor="Hand"
                                                 IsVisible="{Binding IsTransferring}" FontSize="12" />
                                         </Grid>
@@ -541,9 +555,6 @@
                                         <Grid Grid.Row="2" ColumnDefinitions="*, Auto"
                                             Margin="0,0,0,10">
                                             <TextBox Grid.Column="0" Text="{Binding SearchQuery}"
-                                                Background="#252526" Foreground="#ccc"
-                                                BorderThickness="1" BorderBrush="#444" Padding="8"
-                                                CornerRadius="4"
                                                 PlaceholderText="🔍 Search files..."
                                                 ToolTip.Tip="Filter files by name" />
                                         </Grid>
@@ -634,9 +645,9 @@
                                                     Foreground="#ccc" />
                                                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10">
                                                     <Button Content="Cancel" Command="{Binding CancelDeleteCommand}"
-                                                        Background="#444" Foreground="#e0e0e0" Padding="14,7" />
+                                                        Classes="neutralButton" Padding="14,7" />
                                                     <Button Content="Delete" Command="{Binding ConfirmDeleteCommand}"
-                                                        Background="#d32f2f" Foreground="White" Padding="14,7" />
+                                                        Classes="dangerButton" Padding="14,7" />
                                                 </StackPanel>
                                             </StackPanel>
                                         </Border>
@@ -653,9 +664,9 @@
                                                     Foreground="#ccc" />
                                                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10">
                                                     <Button Content="Cancel" Command="{Binding CancelFileSizeWarningCommand}"
-                                                        Background="#444" Foreground="#e0e0e0" Padding="14,7" />
+                                                        Classes="neutralButton" Padding="14,7" />
                                                     <Button Content="Download Anyway" Command="{Binding ConfirmFileSizeWarningCommand}"
-                                                        Background="#f39c12" Foreground="White" Padding="14,7" />
+                                                        Classes="warningButton" Padding="14,7" />
                                                 </StackPanel>
                                             </StackPanel>
                                         </Border>
@@ -678,19 +689,19 @@
                                                 <Button Grid.Column="1" Content="{Binding SaveButtonText}"
                                                     Command="{Binding SaveCommand}"
                                                     IsEnabled="{Binding IsDirty}"
-                                                    Background="#3a3a3a" Foreground="White"
+                                                    Classes="neutralButton"
                                                     Padding="12,6" CornerRadius="4" Cursor="Hand"
                                                     ToolTip.Tip="Save changes to remote file"
                                                     Margin="0,0,3,0" FontSize="12" />
                                                 <Button Grid.Column="2" Content="Save &amp; Close"
                                                     Command="{Binding SaveAndCloseCommand}"
-                                                    Background="#20a53a" Foreground="White"
+                                                    Classes="successButton"
                                                     Padding="12,6" CornerRadius="4" Cursor="Hand"
                                                     ToolTip.Tip="Save changes and close this editor tab"
                                                     Margin="0,0,3,0" FontSize="12" />
                                                 <Button Grid.Column="3" Content="✕"
                                                     Command="{Binding CloseTabCommand}"
-                                                    Background="#f44336" Foreground="White"
+                                                    Classes="dangerButton"
                                                     Padding="12,6" CornerRadius="4" Cursor="Hand"
                                                     ToolTip.Tip="Close editor (prompts if unsaved changes)"
                                                     FontSize="12" />
@@ -726,11 +737,11 @@
                                                         HorizontalAlignment="Right" Spacing="10">
                                                         <Button Content="Cancel"
                                                             Command="{Binding CancelDiscardCommand}"
-                                                            Background="#444" Foreground="#e0e0e0"
+                                                            Classes="neutralButton"
                                                             Padding="14,7" />
                                                         <Button Content="Discard Changes"
                                                             Command="{Binding ConfirmDiscardCommand}"
-                                                            Background="#d32f2f" Foreground="White"
+                                                            Classes="dangerButton"
                                                             Padding="14,7" />
                                                     </StackPanel>
                                                 </StackPanel>
@@ -796,12 +807,11 @@
                         <TextBlock Text="Ports to scan" Foreground="#aaa"
                             FontSize="11" FontWeight="SemiBold" />
                         <TextBox Text="{Binding ScanPorts}" PlaceholderText="22, 80, 443"
-                            Background="#1e1e1e" Foreground="#e5e5e5"
-                            BorderBrush="#555" Padding="10" CornerRadius="4" />
+                            Padding="10" />
                     </StackPanel>
                     <Button Grid.Column="1" Content="Start Scan"
                         Command="{Binding ScanPortsCommand}"
-                        Background="#007acc" Foreground="White"
+                        Classes="primaryButton"
                         Padding="22,9" CornerRadius="4" FontSize="12"
                         VerticalAlignment="Bottom" IsEnabled="{Binding !IsScanning}" />
                 </Grid>
@@ -887,19 +897,16 @@
                                                         <TextBlock Text="Target host" Foreground="#aaa"
                                                             FontSize="11" FontWeight="SemiBold" />
                                                         <TextBox Text="{Binding PingHost}" PlaceholderText="example.com or 192.168.1.1"
-                                                            Background="#1e1e1e" Foreground="#e5e5e5"
-                                                            BorderBrush="#555" Padding="10" MinHeight="42" CornerRadius="4" />
+                                                            Padding="10" MinHeight="42" />
                                                     </StackPanel>
                                                     <StackPanel Grid.Row="1" Grid.Column="0" Spacing="5">
                                                         <TextBlock Text="Requests" Foreground="#aaa"
                                                             FontSize="11" FontWeight="SemiBold" />
                                                         <NumericUpDown Value="{Binding PingCount}" Minimum="1" Maximum="10"
-                                                            Background="#1e1e1e" Foreground="#e5e5e5"
-                                                            BorderBrush="#555" MinHeight="42" CornerRadius="4" />
+                                                            MinHeight="42" />
                                                     </StackPanel>
                                                     <Button Grid.Row="1" Grid.Column="1" Content="Start Ping"
-                                                        Command="{Binding PingCommand}" Background="#007acc"
-                                                        Foreground="White" Padding="22,9" CornerRadius="4"
+                                                        Command="{Binding PingCommand}" Classes="primaryButton" Padding="22,9" CornerRadius="4"
                                                         VerticalAlignment="Bottom" IsEnabled="{Binding !IsPinging}" />
                                                     <Border Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2"
                                                         Background="#1e1e1e" CornerRadius="4" Padding="12,9">
@@ -955,12 +962,10 @@
                                                         <TextBlock Text="RSA key size" Foreground="#aaa"
                                                             FontSize="11" FontWeight="SemiBold" />
                                                         <NumericUpDown Value="{Binding KeySize}" Minimum="1024" Maximum="4096"
-                                                            Background="#1e1e1e" Foreground="#e5e5e5"
-                                                            BorderBrush="#555" MinHeight="42" CornerRadius="4" />
+                                                            MinHeight="42" />
                                                     </StackPanel>
                                                     <Button Grid.Row="1" Grid.Column="0" Content="Generate Key"
-                                                        Command="{Binding GenerateKeyCommand}" Background="#007acc"
-                                                        Foreground="White" Padding="22,9" CornerRadius="4"
+                                                        Command="{Binding GenerateKeyCommand}" Classes="primaryButton" Padding="22,9" CornerRadius="4"
                                                         HorizontalAlignment="Left" IsEnabled="{Binding !IsGeneratingKey}" />
                                                     <TextBlock Grid.Row="1" Grid.Column="1" Text="Uses the system ssh-keygen command"
                                                         Foreground="#888" FontSize="11" VerticalAlignment="Center" />
@@ -980,7 +985,7 @@
                                                         Height="150" IsReadOnly="True" TextWrapping="Wrap"
                                                         FontFamily="Consolas, Fira Code, monospace" FontSize="12" />
                                                     <Button Content="Copy Public Key" Command="{Binding CopyPublicKeyCommand}"
-                                                        Background="#333337" Foreground="#e0e0e0" Padding="10,6"
+                                                        Classes="neutralButton" Padding="10,6"
                                                         CornerRadius="4" HorizontalAlignment="Left" />
                                                 </StackPanel>
                                                 <StackPanel Grid.Column="1" Spacing="8">
@@ -991,7 +996,7 @@
                                                         Height="150" IsReadOnly="True" TextWrapping="Wrap"
                                                         FontFamily="Consolas, Fira Code, monospace" FontSize="12" />
                                                     <Button Content="Copy Private Key" Command="{Binding CopyPrivateKeyCommand}"
-                                                        Background="#333337" Foreground="#e0e0e0" Padding="10,6"
+                                                        Classes="neutralButton" Padding="10,6"
                                                         CornerRadius="4" HorizontalAlignment="Left" />
                                                 </StackPanel>
                                             </Grid>
@@ -1021,7 +1026,7 @@
                                                     </StackPanel>
                                                     <Button Grid.Column="1" Content="Test All Connections"
                                                         Command="{Binding TestAllConnectionsCommand}"
-                                                        Background="#007acc" Foreground="White"
+                                                        Classes="primaryButton"
                                                         Padding="18,9" CornerRadius="4"
                                                         VerticalAlignment="Center" IsEnabled="{Binding !IsTesting}" />
                                                 </Grid>
@@ -1078,15 +1083,13 @@
                                                         <TextBlock Text="Target host" Foreground="#aaa"
                                                             FontSize="11" FontWeight="SemiBold" />
                                                         <TextBox Text="{Binding SpeedTestHost}" PlaceholderText="hostname or IP address"
-                                                            Background="#1e1e1e" Foreground="#e5e5e5"
-                                                            BorderBrush="#555" Padding="10" MinHeight="42" CornerRadius="4" />
+                                                            Padding="10" MinHeight="42" />
                                                     </StackPanel>
                                                     <TextBlock Grid.Row="1" Grid.Column="0"
                                                         Text="The endpoint test reports connection latency and SFTP benchmarking requirements."
                                                         Foreground="#8fbed0" FontSize="12" VerticalAlignment="Center" />
                                                     <Button Grid.Row="1" Grid.Column="1" Content="Test SSH Endpoint"
-                                                        Command="{Binding RunSpeedTestCommand}" Background="#007acc"
-                                                        Foreground="White" Padding="18,9" CornerRadius="4"
+                                                        Command="{Binding RunSpeedTestCommand}" Classes="primaryButton" Padding="18,9" CornerRadius="4"
                                                         IsEnabled="{Binding !IsSpeedTesting}" />
                                                 </Grid>
                                             </Border>
@@ -1117,12 +1120,12 @@
                                                     <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="10">
                                                         <Button Content="Refresh Keys" 
                                                             Command="{Binding RefreshKeysCommand}"
-                                                            Background="#007acc" Foreground="White"
+                                                            Classes="primaryButton"
                                                             Padding="14,8" CornerRadius="4"
                                                             IsEnabled="{Binding !IsLoading}" />
                                                         <Button Content="Import Key"
                                                             Command="{Binding ShowImportModalCommand}"
-                                                            Background="#28a745" Foreground="White"
+                                                            Classes="successButton"
                                                             Padding="14,8" CornerRadius="4"
                                                             IsEnabled="{Binding !IsLoading}" />
                                                         <TextBlock Text="{Binding Status}"
@@ -1165,12 +1168,12 @@
                                                 <StackPanel Orientation="Horizontal" Spacing="8">
                                                     <Button Content="Export Public Key"
                                                         Command="{Binding ExportPublicKeyCommand}"
-                                                        Background="#17a2b8" Foreground="White"
+                                                        Classes="infoButton"
                                                         Padding="12,6" CornerRadius="4"
                                                         IsEnabled="{Binding CanExportKey}" />
                                                     <Button Content="Delete Key"
                                                         Command="{Binding DeleteKeyCommand}"
-                                                        Background="#dc3545" Foreground="White"
+                                                        Classes="dangerButton"
                                                         Padding="12,6" CornerRadius="4"
                                                         IsEnabled="{Binding CanDeleteKey}" />
                                                 </StackPanel>
@@ -1202,7 +1205,7 @@
                                                 </ListBox>
                                                 <Button Content="Export Secret Key"
                                                     Command="{Binding ExportSecretKeyCommand}"
-                                                    Background="#ffc107" Foreground="#000"
+                                                    Classes="warningButton"
                                                     Padding="12,6" CornerRadius="4"
                                                     IsEnabled="{Binding CanExportSecretKey}" />
                                             </StackPanel>
@@ -1218,17 +1221,15 @@
                                                         <TextBlock Text="Paste the ASCII-armored key data below:"
                                                             Foreground="#ccc" FontSize="12" />
                                                         <TextBox Text="{Binding ImportKeyData}"
-                                                            Background="#1e1e1e" Foreground="#e0e0e0"
-                                                            BorderBrush="#555" Padding="10"
-                                                            MinHeight="200" TextWrapping="Wrap"
+                                                            Padding="10" MinHeight="200" TextWrapping="Wrap"
                                                             AcceptsReturn="True" />
                                                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10">
                                                             <Button Content="Cancel" 
                                                                 Command="{Binding CloseImportModalCommand}"
-                                                                Background="#444" Foreground="#e0e0e0" Padding="14,7" />
+                                                                Classes="neutralButton" Padding="14,7" />
                                                             <Button Content="Import" 
                                                                 Command="{Binding ImportKeyCommand}"
-                                                                Background="#28a745" Foreground="White" Padding="14,7"
+                                                                Classes="successButton" Padding="14,7"
                                                                 IsEnabled="{Binding !IsLoading}" />
                                                         </StackPanel>
                                                     </StackPanel>
@@ -1251,10 +1252,10 @@
                                                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10">
                                                             <Button Content="Copy to Clipboard"
                                                                 Command="{Binding CopyExportedKeyCommand}"
-                                                                Background="#17a2b8" Foreground="White" Padding="14,7" />
+                                                                Classes="infoButton" Padding="14,7" />
                                                             <Button Content="Close"
                                                                 Command="{Binding CloseExportModalCommand}"
-                                                                Background="#444" Foreground="#e0e0e0" Padding="14,7" />
+                                                                Classes="neutralButton" Padding="14,7" />
                                                         </StackPanel>
                                                     </StackPanel>
                                                 </Border>
@@ -1291,14 +1292,12 @@
                                                         FontSize="12" FontWeight="SemiBold" />
                                                     <TextBox Grid.Row="1" Grid.Column="1"
                                                         Text="{Binding InputText}" PlaceholderText="Enter text or paste content"
-                                                        Background="#1e1e1e" Foreground="#e0e0e0"
-                                                        BorderBrush="#555" Padding="10"
-                                                        MinHeight="100" TextWrapping="Wrap"
+                                                        Padding="10" MinHeight="100" TextWrapping="Wrap"
                                                         AcceptsReturn="True" />
                                                     <Button Grid.Row="2" Grid.Column="1" HorizontalAlignment="Left"
                                                         Content="Calculate Fingerprint"
                                                         Command="{Binding CalculateFingerprintCommand}"
-                                                        Background="#007acc" Foreground="White"
+                                                        Classes="primaryButton"
                                                         Padding="14,8" CornerRadius="4"
                                                         IsEnabled="{Binding !IsCalculating}" />
                                                 </Grid>
@@ -1318,7 +1317,7 @@
                                                                 TextWrapping="Wrap" />
                                                             <Button Content="Copy"
                                                                 Command="{Binding CopyCalculatedCommand}"
-                                                                Background="#444" Foreground="#e0e0e0"
+                                                                Classes="neutralButton"
                                                                 Padding="10,4" CornerRadius="3" Margin="0,4,0,0"
                                                                 HorizontalAlignment="Left" FontSize="11" />
                                                         </StackPanel>
@@ -1331,7 +1330,7 @@
                                                                 TextWrapping="Wrap" />
                                                             <Button Content="Copy"
                                                                 Command="{Binding CopyFormattedCommand}"
-                                                                Background="#444" Foreground="#e0e0e0"
+                                                                Classes="neutralButton"
                                                                 Padding="10,4" CornerRadius="3" Margin="0,4,0,0"
                                                                 HorizontalAlignment="Left" FontSize="11" />
                                                         </StackPanel>
@@ -1344,7 +1343,7 @@
                                                                 TextWrapping="Wrap" />
                                                             <Button Content="Copy"
                                                                 Command="{Binding CopySshStyleCommand}"
-                                                                Background="#444" Foreground="#e0e0e0"
+                                                                Classes="neutralButton"
                                                                 Padding="10,4" CornerRadius="3" Margin="0,4,0,0"
                                                                 HorizontalAlignment="Left" FontSize="11" />
                                                         </StackPanel>
@@ -1363,15 +1362,13 @@
                                                                 FontSize="11" FontWeight="SemiBold" />
                                                             <TextBox Text="{Binding ExpectedFingerprint}"
                                                                 PlaceholderText="Paste expected fingerprint here"
-                                                                Background="#1e1e1e" Foreground="#e0e0e0"
-                                                                BorderBrush="#555" Padding="10"
-                                                                MinHeight="60" TextWrapping="Wrap"
+                                                                Padding="10" MinHeight="60" TextWrapping="Wrap"
                                                                 AcceptsReturn="True" />
                                                         </StackPanel>
                                                         <Button Grid.Row="1"
                                                             Content="Compare Fingerprints"
                                                             Command="{Binding CompareFingerprintsCommand}"
-                                                            Background="#007acc" Foreground="White"
+                                                            Classes="primaryButton"
                                                             Padding="14,8" CornerRadius="4"
                                                             HorizontalAlignment="Left" />
                                                         <StackPanel Grid.Row="2">
@@ -1384,7 +1381,7 @@
                                             </StackPanel>
                                             <Button Content="Clear All"
                                                 Command="{Binding ClearCommand}"
-                                                Background="#6c757d" Foreground="White"
+                                                Classes="neutralButton"
                                                 Padding="14,8" CornerRadius="4"
                                                 HorizontalAlignment="Left" />
                                         </StackPanel>
@@ -1412,8 +1409,7 @@
                                                             FontSize="12" FontWeight="SemiBold" />
                                                         <TextBox Grid.Row="0" Grid.Column="1"
                                                             Text="{Binding DomainName}" PlaceholderText="e.g., example.com"
-                                                            Background="#1e1e1e" Foreground="#e0e0e0"
-                                                            BorderBrush="#555" Padding="10" />
+                                                            Padding="10" />
                                                         <TextBlock Grid.Row="1" Grid.Column="0" Text="Record Type:"
                                                             Foreground="#aaa" VerticalAlignment="Center"
                                                             FontSize="12" FontWeight="SemiBold" />
@@ -1426,13 +1422,13 @@
                                                     <StackPanel Orientation="Horizontal" Spacing="10">
                                                         <Button Content="Query Record Type"
                                                             Command="{Binding QueryDnsCommand}"
-                                                            Background="#007acc" Foreground="White"
+                                                            Classes="primaryButton"
                                                             Padding="16,10" CornerRadius="4" FontSize="12"
                                                             IsEnabled="{Binding !IsQuerying}"
                                                             HorizontalAlignment="Left" />
                                                         <Button Content="Query All Record Types"
                                                             Command="{Binding QueryAllCommand}"
-                                                            Background="#28a745" Foreground="White"
+                                                            Classes="successButton"
                                                             Padding="16,10" CornerRadius="4" FontSize="12"
                                                             IsEnabled="{Binding !IsQuerying}"
                                                             HorizontalAlignment="Left" />
@@ -1484,11 +1480,11 @@
                                             HorizontalAlignment="Right" Margin="0,8,0,0">
                                             <Button Content="Copy Results"
                                                 Command="{Binding CopyResultCommand}"
-                                                Background="#17a2b8" Foreground="White"
+                                                Classes="infoButton"
                                                 Padding="12,6" CornerRadius="4" FontSize="11" />
                                             <Button Content="Clear"
                                                 Command="{Binding ClearResultsCommand}"
-                                                Background="#6c757d" Foreground="White"
+                                                Classes="neutralButton"
                                                 Padding="12,6" CornerRadius="4" FontSize="11" />
                                         </StackPanel>
                                     </Grid>
@@ -1539,7 +1535,7 @@
                                                     <StackPanel Orientation="Horizontal" Spacing="10">
                                                         <Button Content="Collect Stats"
                                                             Command="{Binding CollectStatsCommand}"
-                                                            Background="#007acc" Foreground="White"
+                                                            Classes="primaryButton"
                                                             Padding="16,10" CornerRadius="4" FontSize="12"
                                                             IsEnabled="{Binding !IsCollecting}"
                                                             HorizontalAlignment="Left" />
@@ -2009,21 +2005,15 @@
                                                     <TextBlock Text="Scan Host" Foreground="#aaaaaa"
                                                         FontSize="12" FontWeight="SemiBold" />
                                                     <TextBox Text="{Binding ScanHost}"
-                                                        Background="#252526" Foreground="#e0e0e0"
-                                                        BorderThickness="1" BorderBrush="#555"
-                                                        Padding="8" CornerRadius="4"
                                                         Margin="0,0,0,10" />
                                                     <TextBlock Text="Ports (comma-separated)"
                                                         Foreground="#aaaaaa" FontSize="12"
                                                         FontWeight="SemiBold" />
                                                     <TextBox Text="{Binding ScanPorts}"
-                                                        Background="#252526" Foreground="#e0e0e0"
-                                                        BorderThickness="1" BorderBrush="#555"
-                                                        Padding="8" CornerRadius="4"
                                                         Margin="0,0,0,10" />
                                                     <Button Content="Start Scan"
                                                         Command="{Binding ScanPortsCommand}"
-                                                        Background="#007acc" Foreground="White"
+                                                        Classes="primaryButton"
                                                         Padding="12,7" CornerRadius="4"
                                                         FontSize="12"
                                                         IsEnabled="{Binding !IsScanning}"
@@ -2068,19 +2058,15 @@
                                                         Foreground="#aaaaaa" FontSize="12"
                                                         FontWeight="SemiBold" />
                                                     <TextBox Text="{Binding PingHost}"
-                                                        Background="#252526" Foreground="#e0e0e0"
-                                                        BorderThickness="1" BorderBrush="#555"
-                                                        Padding="8" CornerRadius="4"
                                                         Margin="0,0,0,10" />
                                                     <TextBlock Text="Count" Foreground="#aaaaaa"
                                                         FontSize="12" FontWeight="SemiBold" />
                                                     <NumericUpDown Value="{Binding PingCount}"
                                                         Minimum="1" Maximum="10"
-                                                        Background="#252526" Foreground="#e0e0e0"
                                                         Margin="0,0,0,10" />
                                                     <Button Content="Start Ping"
                                                         Command="{Binding PingCommand}"
-                                                        Background="#007acc" Foreground="White"
+                                                        Classes="primaryButton"
                                                         Padding="12,7" CornerRadius="4"
                                                         FontSize="12"
                                                         IsEnabled="{Binding !IsPinging}"
@@ -2137,13 +2123,11 @@
                                                             FontWeight="SemiBold" />
                                                         <NumericUpDown Value="{Binding KeySize}"
                                                             Minimum="1024" Maximum="4096"
-                                                            Background="#252526"
-                                                            Foreground="#e0e0e0"
                                                             Margin="0,0,0,10" />
                                                     </StackPanel>
                                                     <Button Content="Generate Key"
                                                         Command="{Binding GenerateKeyCommand}"
-                                                        Background="#007acc" Foreground="White"
+                                                        Classes="primaryButton"
                                                         Padding="12,7" CornerRadius="4"
                                                         FontSize="12"
                                                         IsEnabled="{Binding !IsGeneratingKey}"
@@ -2161,7 +2145,7 @@
                                                         FontSize="12" />
                                                     <Button Content="Copy Public Key"
                                                         Command="{Binding CopyPublicKeyCommand}"
-                                                        Background="#333337" Foreground="#e0e0e0"
+                                                        Classes="neutralButton"
                                                         Padding="10,6" CornerRadius="4"
                                                         FontSize="11"
                                                         HorizontalAlignment="Left" />
@@ -2178,7 +2162,7 @@
                                                         FontSize="12" />
                                                     <Button Content="Copy Private Key"
                                                         Command="{Binding CopyPrivateKeyCommand}"
-                                                        Background="#333337" Foreground="#e0e0e0"
+                                                        Classes="neutralButton"
                                                         Padding="10,6" CornerRadius="4"
                                                         FontSize="11"
                                                         HorizontalAlignment="Left" />
@@ -2201,7 +2185,7 @@
                                                         Foreground="#aaaaaa" FontSize="12" />
                                                     <Button Content="Test All Connections"
                                                         Command="{Binding TestAllConnectionsCommand}"
-                                                        Background="#007acc" Foreground="White"
+                                                        Classes="primaryButton"
                                                         Padding="12,7" CornerRadius="4"
                                                         FontSize="12"
                                                         IsEnabled="{Binding !IsTesting}"
@@ -2253,14 +2237,11 @@
                                                         Foreground="#aaaaaa"
                                                         FontSize="12" FontWeight="SemiBold" />
                                                     <TextBox Text="{Binding SpeedTestHost}"
-                                                        Background="#252526" Foreground="#e0e0e0"
-                                                        BorderThickness="1" BorderBrush="#555"
-                                                        Padding="8" CornerRadius="4"
                                                         PlaceholderText="hostname or IP"
                                                         Margin="0,0,0,10" />
                                                     <Button Content="Test SSH Endpoint"
                                                         Command="{Binding RunSpeedTestCommand}"
-                                                        Background="#007acc" Foreground="White"
+                                                        Classes="primaryButton"
                                                         Padding="12,7" CornerRadius="4"
                                                         FontSize="12"
                                                         IsEnabled="{Binding !IsSpeedTesting}"
@@ -2291,10 +2272,16 @@
                                 FontSize="25" FontWeight="SemiBold" HorizontalAlignment="Center" />
                             <TextBlock Text="Your secure SSH and SFTP workspace"
                                 Foreground="#9aa4b2" FontSize="13" HorizontalAlignment="Center" />
-                            <Button Content="＋  New Connection"
-                                Command="{Binding ShowConnectionModalCommand}"
-                                Classes="primaryButton" Padding="18,10"
-                                HorizontalAlignment="Center" Margin="0,8,0,0" />
+                            <Button Command="{Binding ShowConnectionModalCommand}"
+                                Classes="newConnectionButton" Padding="18,10"
+                                HorizontalAlignment="Center" Margin="0,8,0,0">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <TextBlock Text="+" FontSize="16"
+                                        FontWeight="SemiBold" VerticalAlignment="Center" />
+                                    <TextBlock Text="New Connection"
+                                        FontWeight="SemiBold" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
                             <TextBlock Text="Double-click a saved session to open it, or use the Tools tab for network utilities."
                                 Foreground="#737d8a" FontSize="11" TextWrapping="Wrap"
                                 TextAlignment="Center" HorizontalAlignment="Center" />
@@ -2321,139 +2308,166 @@
         <Border Background="#99000000" IsVisible="{Binding IsConnectionModalVisible}" ZIndex="100">
             <Border Background="#2d2d30" BorderBrush="#444" BorderThickness="1" CornerRadius="8"
                 HorizontalAlignment="Center" VerticalAlignment="Center"
-                Width="450" Padding="25" BoxShadow="0 10 30 0 #55000000">
-                <Border Padding="16">
-                    <StackPanel Spacing="15">
-                        <Grid>
-                            <TextBlock Text="New Connection Profile" FontWeight="Bold" FontSize="18"
-                                Foreground="#e0e0e0" VerticalAlignment="Center" />
-                            <Button Content="✕" Command="{Binding HideConnectionModalCommand}"
-                                Background="Transparent" Foreground="#888"
-                                HorizontalAlignment="Right"
-                                FontSize="16" BorderThickness="0" />
+                Width="640" MaxWidth="760" MaxHeight="640" Padding="0"
+                BoxShadow="0 10 30 0 #55000000">
+                <Grid RowDefinitions="Auto,*,Auto">
+                    <Border Grid.Row="0" Background="#252932" Padding="22,16"
+                        BorderBrush="#3c4350" BorderThickness="0,0,0,1">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel Spacing="3">
+                                <TextBlock Text="New Connection Profile" FontWeight="SemiBold"
+                                    FontSize="18" Foreground="#f3f5f7" />
+                                <TextBlock Text="Server, authentication, and connection behavior"
+                                    Foreground="#9aa4b2" FontSize="12" />
+                            </StackPanel>
+                            <Button Grid.Column="1" Content="✕"
+                                Command="{Binding HideConnectionModalCommand}"
+                                Background="Transparent" Foreground="#aeb7c4"
+                                HorizontalAlignment="Right" VerticalAlignment="Top"
+                                FontSize="16" BorderThickness="0" Padding="8" />
                         </Grid>
+                    </Border>
 
-                        <Rectangle Height="1" Fill="#444" Margin="0,5,0,10" />
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
+                        HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel Margin="22,18" Spacing="16">
+                            <Grid ColumnDefinitions="*,18,*" RowDefinitions="Auto,Auto,Auto,Auto"
+                                RowSpacing="9">
+                                <TextBlock Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="3"
+                                    Text="SERVER" Foreground="#6ea9d4" FontSize="10"
+                                    FontWeight="Bold" LetterSpacing="1.2" />
 
-                        <TextBlock Text="SERVER" Foreground="#6ea9d4" FontSize="10"
-                            FontWeight="Bold" LetterSpacing="1.2" />
-                        <TextBlock Text="Connection Name" Foreground="#aaaaaa" FontSize="13" />
-                        <TextBox Text="{Binding ConnectionName}" Background="#1e1e1e"
-                            Foreground="#e0e0e0" BorderThickness="1" BorderBrush="#555" Padding="8"
-                            CornerRadius="4" PlaceholderText="My Server" />
+                                <StackPanel Grid.Row="1" Grid.Column="0" Spacing="5">
+                                    <TextBlock Text="Connection Name" Foreground="#aaaaaa"
+                                        FontSize="12" />
+                                    <TextBox Text="{Binding ConnectionName}"
+                                        Classes="connectionInput" PlaceholderText="My Server" />
+                                </StackPanel>
 
-                        <TextBlock Text="Remote Host" Foreground="#aaaaaa" FontSize="13"
-                            Margin="0,5,0,0" />
-                        <TextBox Text="{Binding Host}" Background="#1e1e1e" Foreground="#e0e0e0"
-                            BorderThickness="1" BorderBrush="#555" Padding="8" CornerRadius="4"
-                            PlaceholderText="e.g., example.com" />
+                                <StackPanel Grid.Row="1" Grid.Column="2" Spacing="5">
+                                    <TextBlock Text="Remote Host" Foreground="#aaaaaa"
+                                        FontSize="12" />
+                                    <TextBox Text="{Binding Host}" Classes="connectionInput"
+                                        PlaceholderText="example.com" />
+                                </StackPanel>
 
-                        <Grid ColumnDefinitions="*, 15, *">
-                            <StackPanel Grid.Column="0" Spacing="5">
-                                <TextBlock Text="Username" Foreground="#aaaaaa" FontSize="13" />
-                                <TextBox Text="{Binding Username}" Background="#1e1e1e"
-                                    Foreground="#e0e0e0" BorderThickness="1" BorderBrush="#555"
-                                    Padding="8" CornerRadius="4" PlaceholderText="user" />
-                            </StackPanel>
-                            <StackPanel Grid.Column="2" Spacing="5">
-                                <TextBlock Text="Port" Foreground="#aaaaaa" FontSize="13" />
-                                <TextBox Text="{Binding Port}" Background="#1e1e1e"
-                                    Foreground="#e0e0e0"
-                                    BorderThickness="1" BorderBrush="#555" Padding="8"
-                                    CornerRadius="4"
-                                    PlaceholderText="22" />
-                            </StackPanel>
-                        </Grid>
+                                <StackPanel Grid.Row="2" Grid.Column="0" Spacing="5">
+                                    <TextBlock Text="Username" Foreground="#aaaaaa" FontSize="12" />
+                                    <TextBox Text="{Binding Username}" Classes="connectionInput"
+                                        PlaceholderText="user" />
+                                </StackPanel>
 
-                        <TextBlock Text="AUTHENTICATION" Foreground="#6ea9d4" FontSize="10"
-                            FontWeight="Bold" LetterSpacing="1.2" Margin="0,5,0,0" />
-                        <TextBlock Text="Password" Foreground="#aaaaaa" FontSize="13"
-                            Margin="0,5,0,0" />
-                        <TextBox Text="{Binding Password}" Background="#1e1e1e" Foreground="#e0e0e0"
-                            BorderThickness="1" BorderBrush="#555" Padding="8" CornerRadius="4"
-                            PasswordChar="•" ToolTip.Tip="Account password (leave blank for key-based auth)" />
+                                <StackPanel Grid.Row="2" Grid.Column="2" Spacing="5">
+                                    <TextBlock Text="Port" Foreground="#aaaaaa" FontSize="12" />
+                                    <TextBox Text="{Binding Port}" Classes="connectionInput"
+                                        PlaceholderText="22" />
+                                </StackPanel>
+                            </Grid>
 
-                        <TextBlock Text="Private Key Passphrase (Optional)" Foreground="#aaaaaa"
-                            FontSize="13" Margin="0,5,0,0" />
-                        <TextBox Text="{Binding PrivateKeyPassphrase}" Background="#1e1e1e"
-                            Foreground="#e0e0e0" BorderThickness="1" BorderBrush="#555" Padding="8"
-                            CornerRadius="4" PasswordChar="•"
-                            ToolTip.Tip="Passphrase for the private key, if it has one" />
+                            <Rectangle Height="1" Fill="#3c4350" />
 
-                        <TextBlock Text="Private Key File (Optional)" Foreground="#aaaaaa"
-                            FontSize="13"
-                            Margin="0,5,0,0" />
-                        <Grid ColumnDefinitions="*, Auto">
-                            <TextBox Grid.Column="0" Text="{Binding PrivateKeyPath}"
-                                Background="#1e1e1e" Foreground="#e0e0e0" BorderThickness="1"
-                                BorderBrush="#555" Padding="8" CornerRadius="4"
-                                PlaceholderText="/path/to/id_rsa" />
-                            <Button Grid.Column="1" Content="Browse..."
-                                Click="BrowsePrivateKey_Click"
-                                Background="#444" Foreground="#e0e0e0" Padding="12,8"
-                                Margin="8,0,0,0"
-                                CornerRadius="4" ToolTip.Tip="Browse for Private Key" />
-                        </Grid>
+                            <Grid ColumnDefinitions="*,18,*" RowDefinitions="Auto,Auto,Auto"
+                                RowSpacing="9">
+                                <TextBlock Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="3"
+                                    Text="AUTHENTICATION" Foreground="#6ea9d4" FontSize="10"
+                                    FontWeight="Bold" LetterSpacing="1.2" />
 
-                        <TextBlock Text="CONNECTION RETRY" Foreground="#6ea9d4" FontSize="10"
-                            FontWeight="Bold" LetterSpacing="1.2" Margin="0,5,0,0" />
-                        <Grid ColumnDefinitions="*, 15, *">
-                            <StackPanel Grid.Column="0" Spacing="5">
-                                <TextBlock Text="Retry Count" Foreground="#aaaaaa" FontSize="13" />
-                                <TextBox Text="{Binding ConnectionRetryCount}" Background="#1e1e1e"
-                                    Foreground="#e0e0e0" BorderThickness="1" BorderBrush="#555"
-                                    Padding="8" CornerRadius="4" ToolTip.Tip="Connection attempts (min 1)" />
-                            </StackPanel>
-                            <StackPanel Grid.Column="2" Spacing="5">
-                                <TextBlock Text="Retry Delay (s)" Foreground="#aaaaaa" FontSize="13" />
-                                <TextBox Text="{Binding ConnectionRetryDelaySeconds}" Background="#1e1e1e"
-                                    Foreground="#e0e0e0" BorderThickness="1" BorderBrush="#555"
-                                    Padding="8" CornerRadius="4" ToolTip.Tip="Seconds between attempts" />
-                            </StackPanel>
-                        </Grid>
+                                <StackPanel Grid.Row="1" Grid.Column="0" Spacing="5">
+                                    <TextBlock Text="Password" Foreground="#aaaaaa" FontSize="12" />
+                                    <TextBox Text="{Binding Password}" Classes="connectionInput"
+                                        PasswordChar="•"
+                                        ToolTip.Tip="Account password (leave blank for key-based auth)" />
+                                </StackPanel>
 
-                        <TextBlock Text="IDLE SESSION" Foreground="#6ea9d4" FontSize="10"
-                            FontWeight="Bold" LetterSpacing="1.2" Margin="0,5,0,0" />
-                        <Grid ColumnDefinitions="*, 15, *">
-                            <StackPanel Grid.Column="0" Spacing="5">
-                                <TextBlock Text="Keep-Alive (s)" Foreground="#aaaaaa" FontSize="13" />
-                                <TextBox Text="{Binding KeepAliveIntervalSeconds}" Background="#1e1e1e"
-                                    Foreground="#e0e0e0" BorderThickness="1" BorderBrush="#555"
-                                    Padding="8" CornerRadius="4"
-                                    ToolTip.Tip="Send keep-alive every N seconds to prevent idle disconnects (0 to disable)" />
-                            </StackPanel>
-                            <StackPanel Grid.Column="2" Spacing="5">
-                                <TextBlock Text="Idle Timeout (min)" Foreground="#aaaaaa" FontSize="13" />
-                                <TextBox Text="{Binding IdleTimeoutMinutes}" Background="#1e1e1e"
-                                    Foreground="#e0e0e0" BorderThickness="1" BorderBrush="#555"
-                                    Padding="8" CornerRadius="4"
-                                    ToolTip.Tip="Auto-disconnect after N minutes without activity (0 keeps the session open indefinitely)" />
-                            </StackPanel>
-                        </Grid>
+                                <StackPanel Grid.Row="1" Grid.Column="2" Spacing="5">
+                                    <TextBlock Text="Key Passphrase" Foreground="#aaaaaa"
+                                        FontSize="12" />
+                                    <TextBox Text="{Binding PrivateKeyPassphrase}"
+                                        Classes="connectionInput" PasswordChar="•"
+                                        ToolTip.Tip="Passphrase for the private key, if it has one" />
+                                </StackPanel>
 
-                        <TextBlock Text="VERIFICATION" Foreground="#6ea9d4" FontSize="10"
-                            FontWeight="Bold" LetterSpacing="1.2" Margin="0,5,0,0" />
-                        <StackPanel Margin="0,5,0,0" Spacing="15">
+                                <StackPanel Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="3"
+                                    Spacing="5">
+                                    <TextBlock Text="Private Key File" Foreground="#aaaaaa"
+                                        FontSize="12" />
+                                    <Grid ColumnDefinitions="*,Auto">
+                                        <TextBox Grid.Column="0" Text="{Binding PrivateKeyPath}"
+                                            Classes="connectionInput"
+                                            PlaceholderText="/path/to/id_rsa" />
+                                        <Button Grid.Column="1" Content="Browse..."
+                                            Click="BrowsePrivateKey_Click"
+                                            Classes="neutralButton" Padding="12,8"
+                                            Margin="8,0,0,0" CornerRadius="4"
+                                            ToolTip.Tip="Browse for Private Key" />
+                                    </Grid>
+                                </StackPanel>
+                            </Grid>
+
+                            <Rectangle Height="1" Fill="#3c4350" />
+
+                            <Grid ColumnDefinitions="*,18,*" RowDefinitions="Auto,Auto,Auto"
+                                RowSpacing="9">
+                                <TextBlock Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="3"
+                                    Text="CONNECTION BEHAVIOR" Foreground="#6ea9d4"
+                                    FontSize="10" FontWeight="Bold" LetterSpacing="1.2" />
+
+                                <StackPanel Grid.Row="1" Grid.Column="0" Spacing="5">
+                                    <TextBlock Text="Retry Count" Foreground="#aaaaaa"
+                                        FontSize="12" />
+                                    <TextBox Text="{Binding ConnectionRetryCount}"
+                                        Classes="connectionInput"
+                                        ToolTip.Tip="Connection attempts (min 1)" />
+                                </StackPanel>
+
+                                <StackPanel Grid.Row="1" Grid.Column="2" Spacing="5">
+                                    <TextBlock Text="Retry Delay (s)" Foreground="#aaaaaa"
+                                        FontSize="12" />
+                                    <TextBox Text="{Binding ConnectionRetryDelaySeconds}"
+                                        Classes="connectionInput"
+                                        ToolTip.Tip="Seconds between attempts" />
+                                </StackPanel>
+
+                                <StackPanel Grid.Row="2" Grid.Column="0" Spacing="5">
+                                    <TextBlock Text="Keep-Alive (s)" Foreground="#aaaaaa"
+                                        FontSize="12" />
+                                    <TextBox Text="{Binding KeepAliveIntervalSeconds}"
+                                        Classes="connectionInput"
+                                        ToolTip.Tip="Send keep-alive every N seconds to prevent idle disconnects (0 to disable)" />
+                                </StackPanel>
+
+                                <StackPanel Grid.Row="2" Grid.Column="2" Spacing="5">
+                                    <TextBlock Text="Idle Timeout (min)" Foreground="#aaaaaa"
+                                        FontSize="12" />
+                                    <TextBox Text="{Binding IdleTimeoutMinutes}"
+                                        Classes="connectionInput"
+                                        ToolTip.Tip="Auto-disconnect after N minutes without activity (0 keeps the session open indefinitely)" />
+                                </StackPanel>
+                            </Grid>
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <Border Grid.Row="2" Background="#252932" Padding="18,14"
+                        BorderBrush="#3c4350" BorderThickness="0,1,0,0">
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="14">
                             <TextBlock Text="{Binding TestStatus}"
                                 Foreground="{Binding TestStatusColor}" TextWrapping="Wrap"
-                                HorizontalAlignment="Left" FontSize="13" FontWeight="Medium" />
-                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right"
-                                Spacing="10">
+                                VerticalAlignment="Center" FontSize="13" FontWeight="Medium" />
+                            <StackPanel Grid.Column="1" Orientation="Horizontal"
+                                HorizontalAlignment="Right" Spacing="10">
                                 <Button Content="Cancel"
                                     Command="{Binding HideConnectionModalCommand}"
-                                    Background="#444" Foreground="#e0e0e0" Padding="15,8"
+                                    Classes="neutralButton" Padding="15,8"
                                     CornerRadius="4" />
                                 <Button Content="Test Connection" Classes="primaryButton"
-                                    Command="{Binding TestConnectionCommand}" Background="#1769aa"
-                                    Foreground="White" Padding="15,8" CornerRadius="4" />
+                                    Command="{Binding TestConnectionCommand}" Padding="15,8" CornerRadius="4" />
                                 <Button Content="Save Connection"
                                     Command="{Binding SaveConnectionCommand}"
-                                    IsEnabled="{Binding IsTestSuccessful}" Background="#20a53a"
-                                    Foreground="White" Padding="15,8" CornerRadius="4" />
+                                    IsEnabled="{Binding IsTestSuccessful}" Classes="successButton" Padding="15,8" CornerRadius="4" />
                             </StackPanel>
-                        </StackPanel>
-                    </StackPanel>
-                </Border>
+                        </Grid>
+                    </Border>
+                </Grid>
             </Border>
         </Border>
 
@@ -2475,9 +2489,9 @@
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10"
                         Margin="0,10,0,0">
                         <Button Content="Cancel" Command="{Binding CancelDeleteCommand}"
-                            Background="#444" Foreground="#e0e0e0" Padding="15,8" CornerRadius="4" />
+                            Classes="neutralButton" Padding="15,8" CornerRadius="4" />
                         <Button Content="Delete" Command="{Binding ConfirmDeleteCommand}"
-                            Background="#f44336" Foreground="White" Padding="15,8" CornerRadius="4" />
+                            Classes="dangerButton" Padding="15,8" CornerRadius="4" />
                     </StackPanel>
                 </StackPanel>
             </Border>
@@ -2501,9 +2515,9 @@
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10"
                         Margin="0,10,0,0">
                         <Button Content="Cancel" Command="{Binding CancelRemoveBookmarkCommand}"
-                            Background="#444" Foreground="#e0e0e0" Padding="15,8" CornerRadius="4" />
+                            Classes="neutralButton" Padding="15,8" CornerRadius="4" />
                         <Button Content="Delete" Command="{Binding ConfirmRemoveBookmarkCommand}"
-                            Background="#f44336" Foreground="White" Padding="15,8" CornerRadius="4" />
+                            Classes="dangerButton" Padding="15,8" CornerRadius="4" />
                     </StackPanel>
                 </StackPanel>
             </Border>
@@ -2526,9 +2540,9 @@
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10"
                         Margin="0,10,0,0">
                         <Button Content="Cancel" Command="{Binding CancelCloseTabCommand}"
-                            Background="#444" Foreground="#e0e0e0" Padding="15,8" CornerRadius="4" />
+                            Classes="neutralButton" Padding="15,8" CornerRadius="4" />
                         <Button Content="Close Session" Command="{Binding ConfirmCloseTabCommand}"
-                            Background="#f44336" Foreground="White" Padding="15,8" CornerRadius="4" />
+                            Classes="dangerButton" Padding="15,8" CornerRadius="4" />
                     </StackPanel>
                 </StackPanel>
             </Border>
@@ -2547,16 +2561,12 @@
 
                     <TextBlock Text="New Name" Foreground="#aaaaaa" FontSize="13" />
                     <TextBox x:Name="RenameTextBox" Text="{Binding RenameModalText}"
-                        Background="#1e1e1e" Foreground="#e0e0e0" BorderThickness="1"
-                        BorderBrush="#555" Padding="8" CornerRadius="4"
                         PlaceholderText="Enter new filename" />
 
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10"
                         Margin="0,10,0,0">
-                        <Button Content="Cancel" Click="CancelRename_Click" Background="#444"
-                            Foreground="#e0e0e0" Padding="15,8" CornerRadius="4" />
-                        <Button Content="Rename" Click="ConfirmRename_Click" Background="#20a53a"
-                            Foreground="White" Padding="15,8" CornerRadius="4" />
+                        <Button Content="Cancel" Click="CancelRename_Click" Classes="neutralButton" Padding="15,8" CornerRadius="4" />
+                        <Button Content="Rename" Click="ConfirmRename_Click" Classes="successButton" Padding="15,8" CornerRadius="4" />
                     </StackPanel>
                 </StackPanel>
             </Border>
@@ -2632,8 +2642,7 @@
 
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10"
                         Margin="0,15,0,0">
-                        <Button Content="Close" Click="ClosePropertiesModal_Click" Background="#444"
-                            Foreground="#e0e0e0" Padding="15,8" CornerRadius="4" />
+                        <Button Content="Close" Click="ClosePropertiesModal_Click" Classes="neutralButton" Padding="15,8" CornerRadius="4" />
                     </StackPanel>
                 </StackPanel>
             </Border>
@@ -2693,10 +2702,10 @@
                                     VerticalAlignment="Center" />
                             </StackPanel>
                             <Button Grid.Column="1" Content="Copy All" Click="CopyPreview_Click"
-                                Background="#2f80c9" Foreground="White" Padding="16,8"
+                                Classes="infoButton" Padding="16,8"
                                 CornerRadius="5" BorderThickness="0" ToolTip.Tip="Copy the full preview to the system clipboard" />
                             <Button Grid.Column="2" Content="Close Preview" Click="ClosePreviewModal_Click"
-                                Background="#3b4654" Foreground="#f3f5f7" Padding="16,8"
+                                Classes="neutralButton" Padding="16,8"
                                 CornerRadius="5" BorderThickness="0" />
                         </Grid>
                     </Border>
@@ -2720,10 +2729,9 @@
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10"
                         Margin="0,10,0,0">
                         <Button Content="Reject" Command="{Binding RejectHostKeyCommand}"
-                            Background="#444" Foreground="#e0e0e0" Padding="15,8" CornerRadius="4" />
+                            Classes="neutralButton" Padding="15,8" CornerRadius="4" />
                         <Button Content="Trust This Host"
-                            Command="{Binding ConfirmHostKeyCommand}" Background="#f39c12"
-                            Foreground="#1e1e1e" Padding="15,8" CornerRadius="4" FontWeight="Bold" />
+                            Command="{Binding ConfirmHostKeyCommand}" Classes="warningButton" Padding="15,8" CornerRadius="4" FontWeight="Bold" />
                     </StackPanel>
                 </StackPanel>
             </Border>
@@ -2758,8 +2766,7 @@
                     <StackPanel Spacing="10" Margin="0,15,0,0">
                         <TextBlock Text="Set Permissions (Octal):" Foreground="#aaaaaa"
                             FontSize="13" FontWeight="SemiBold" />
-                        <TextBox x:Name="PermissionsInput" Background="#1e1e1e" Foreground="#e0e0e0"
-                            BorderThickness="1" BorderBrush="#555" Padding="8" CornerRadius="4"
+                        <TextBox x:Name="PermissionsInput"
                             PlaceholderText="e.g., 755, 644, 777" Text="755"
                             ToolTip.Tip="Enter 3-digit octal notation (0-7 for each digit)" />
 
@@ -2767,16 +2774,16 @@
                             <TextBlock Text="Common Presets:" Foreground="#aaaaaa" FontSize="11" />
                             <Grid ColumnDefinitions="*, *, *, *" ColumnSpacing="5">
                                 <Button Grid.Column="0" Content="644" Click="SetPermissions_Click"
-                                    Tag="644" Background="#333" Foreground="#e0e0e0" Padding="8,6"
+                                    Tag="644" Classes="neutralButton" Padding="8,6"
                                     CornerRadius="3" FontSize="11" Margin="0,0,2,0" />
                                 <Button Grid.Column="1" Content="755" Click="SetPermissions_Click"
-                                    Tag="755" Background="#333" Foreground="#e0e0e0" Padding="8,6"
+                                    Tag="755" Classes="neutralButton" Padding="8,6"
                                     CornerRadius="3" FontSize="11" Margin="0,0,2,0" />
                                 <Button Grid.Column="2" Content="777" Click="SetPermissions_Click"
-                                    Tag="777" Background="#333" Foreground="#e0e0e0" Padding="8,6"
+                                    Tag="777" Classes="neutralButton" Padding="8,6"
                                     CornerRadius="3" FontSize="11" Margin="0,0,2,0" />
                                 <Button Grid.Column="3" Content="600" Click="SetPermissions_Click"
-                                    Tag="600" Background="#333" Foreground="#e0e0e0" Padding="8,6"
+                                    Tag="600" Classes="neutralButton" Padding="8,6"
                                     CornerRadius="3" FontSize="11" />
                             </Grid>
                         </StackPanel>
@@ -2785,9 +2792,8 @@
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10"
                         Margin="0,15,0,0">
                         <Button Content="Cancel" Click="ClosePermissionsModal_Click"
-                            Background="#444" Foreground="#e0e0e0" Padding="15,8" CornerRadius="4" />
-                        <Button Content="Apply" Click="ApplyPermissions_Click" Background="#20a53a"
-                            Foreground="White" Padding="15,8" CornerRadius="4" />
+                            Classes="neutralButton" Padding="15,8" CornerRadius="4" />
+                        <Button Content="Apply" Click="ApplyPermissions_Click" Classes="successButton" Padding="15,8" CornerRadius="4" />
                     </StackPanel>
                 </StackPanel>
             </Border>
@@ -2861,7 +2867,7 @@
                         <!-- Action Buttons -->
                         <StackPanel Orientation="Horizontal" Spacing="10"
                             HorizontalAlignment="Center" Margin="0,20,0,0">
-                            <Button Content="Close" Background="#444" Foreground="#e0e0e0"
+                            <Button Content="Close" Classes="neutralButton"
                                 Padding="15,8" CornerRadius="4" Click="CloseAboutDialog_Click" />
                         </StackPanel>
                     </StackPanel>

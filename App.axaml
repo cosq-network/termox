@@ -3,8 +3,8 @@
              x:Class="Termox.App"
              xmlns:local="using:Termox"
              Name="termox"
-             RequestedThemeVariant="Default">
-             <!-- "Default" ThemeVariant follows system theme variant. "Dark" or "Light" are other available options. -->
+             RequestedThemeVariant="Dark">
+             <!-- The app uses a custom dark workspace, so keep Fluent controls in dark mode on every OS. -->
 
     <Application.DataTemplates>
         <local:ViewLocator />
@@ -23,14 +23,218 @@
         </Style>
         <Style Selector="Button.toolButton:pointerover">
             <Setter Property="Background" Value="#414750" />
+            <Setter Property="Foreground" Value="#ffffff" />
+            <Setter Property="BorderBrush" Value="#6b7890" />
+        </Style>
+        <Style Selector="Button.toolButton:pressed">
+            <Setter Property="Background" Value="#1769aa" />
+            <Setter Property="Foreground" Value="#ffffff" />
+            <Setter Property="BorderBrush" Value="#4f9dde" />
         </Style>
         <Style Selector="Button.primaryButton">
-            <Setter Property="Background" Value="#1769aa" />
-            <Setter Property="Foreground" Value="White" />
+            <Setter Property="Background" Value="#007acc" />
+            <Setter Property="Foreground" Value="#ffffff" />
+            <Setter Property="BorderBrush" Value="#3b9ee8" />
             <Setter Property="CornerRadius" Value="6" />
         </Style>
         <Style Selector="Button.primaryButton:pointerover">
             <Setter Property="Background" Value="#2185c5" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="BorderBrush" Value="#73b7ff" />
+        </Style>
+        <Style Selector="Button.primaryButton:pressed">
+            <Setter Property="Background" Value="#0f4f82" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="BorderBrush" Value="#73b7ff" />
+        </Style>
+        <Style Selector="Button.primaryButton:pointerover TextBlock">
+            <Setter Property="Foreground" Value="#ffffff" />
+        </Style>
+        <Style Selector="Button.primaryButton:pressed TextBlock">
+            <Setter Property="Foreground" Value="#ffffff" />
+        </Style>
+        <Style Selector="Button.newConnectionButton">
+            <Setter Property="Background" Value="#333337" />
+            <Setter Property="Foreground" Value="#f4f7fb" />
+            <Setter Property="BorderBrush" Value="#4a5563" />
+        </Style>
+        <Style Selector="Button.newConnectionButton:pointerover">
+            <Setter Property="Background" Value="#1769aa" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="BorderBrush" Value="#4f9dde" />
+        </Style>
+        <Style Selector="Button.newConnectionButton:pointerover TextBlock">
+            <Setter Property="Foreground" Value="White" />
+        </Style>
+        <Style Selector="Button.newConnectionButton:pressed">
+            <Setter Property="Background" Value="#0f4f82" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="BorderBrush" Value="#73b7ff" />
+        </Style>
+        <Style Selector="Button.newConnectionButton:pressed TextBlock">
+            <Setter Property="Foreground" Value="White" />
+        </Style>
+        <Style Selector="TextBox">
+            <Setter Property="Background" Value="#151a22" />
+            <Setter Property="Foreground" Value="#f3f5f7" />
+            <Setter Property="PlaceholderForeground" Value="#8b95a5" />
+            <Setter Property="CaretBrush" Value="#ffffff" />
+            <Setter Property="SelectionBrush" Value="#1769aa" />
+            <Setter Property="SelectionForegroundBrush" Value="#ffffff" />
+            <Setter Property="BorderBrush" Value="#566173" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="8" />
+            <Setter Property="CornerRadius" Value="4" />
+        </Style>
+        <Style Selector="TextBox:pointerover">
+            <Setter Property="Background" Value="#1c2330" />
+            <Setter Property="Foreground" Value="#ffffff" />
+            <Setter Property="PlaceholderForeground" Value="#a8b2c2" />
+            <Setter Property="BorderBrush" Value="#73b7ff" />
+        </Style>
+        <Style Selector="TextBox:focus">
+            <Setter Property="Background" Value="#0b111a" />
+            <Setter Property="Foreground" Value="#ffffff" />
+            <Setter Property="PlaceholderForeground" Value="#a8b2c2" />
+            <Setter Property="CaretBrush" Value="#ffffff" />
+            <Setter Property="SelectionBrush" Value="#2f80c9" />
+            <Setter Property="SelectionForegroundBrush" Value="#ffffff" />
+            <Setter Property="BorderBrush" Value="#73b7ff" />
+        </Style>
+        <Style Selector="TextBox:disabled">
+            <Setter Property="Background" Value="#242a33" />
+            <Setter Property="Foreground" Value="#7f8896" />
+            <Setter Property="PlaceholderForeground" Value="#6b7280" />
+            <Setter Property="BorderBrush" Value="#3c4350" />
+        </Style>
+        <Style Selector="TextBox.connectionInput">
+            <Setter Property="Padding" Value="9,8" />
+        </Style>
+        <Style Selector="NumericUpDown">
+            <Setter Property="Background" Value="#151a22" />
+            <Setter Property="Foreground" Value="#f3f5f7" />
+            <Setter Property="PlaceholderForeground" Value="#8b95a5" />
+            <Setter Property="BorderBrush" Value="#566173" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="MinHeight" Value="38" />
+        </Style>
+        <Style Selector="NumericUpDown:pointerover">
+            <Setter Property="Background" Value="#1c2330" />
+            <Setter Property="Foreground" Value="#ffffff" />
+            <Setter Property="PlaceholderForeground" Value="#a8b2c2" />
+            <Setter Property="BorderBrush" Value="#73b7ff" />
+        </Style>
+        <Style Selector="NumericUpDown:focus">
+            <Setter Property="Background" Value="#0b111a" />
+            <Setter Property="Foreground" Value="#ffffff" />
+            <Setter Property="PlaceholderForeground" Value="#a8b2c2" />
+            <Setter Property="BorderBrush" Value="#73b7ff" />
+        </Style>
+        <Style Selector="Button.neutralButton">
+            <Setter Property="Background" Value="#3a3a3a" />
+            <Setter Property="Foreground" Value="#f3f5f7" />
+            <Setter Property="BorderBrush" Value="#555f6d" />
+        </Style>
+        <Style Selector="Button.neutralButton:pointerover">
+            <Setter Property="Background" Value="#586474" />
+            <Setter Property="Foreground" Value="#ffffff" />
+            <Setter Property="BorderBrush" Value="#7b8798" />
+        </Style>
+        <Style Selector="Button.neutralButton:pressed">
+            <Setter Property="Background" Value="#343b46" />
+            <Setter Property="Foreground" Value="#ffffff" />
+            <Setter Property="BorderBrush" Value="#7b8798" />
+        </Style>
+        <Style Selector="Button.neutralButton:pointerover TextBlock">
+            <Setter Property="Foreground" Value="#ffffff" />
+        </Style>
+        <Style Selector="Button.neutralButton:pressed TextBlock">
+            <Setter Property="Foreground" Value="#ffffff" />
+        </Style>
+        <Style Selector="Button.successButton">
+            <Setter Property="Background" Value="#20a53a" />
+            <Setter Property="Foreground" Value="#ffffff" />
+            <Setter Property="BorderBrush" Value="#4fc66a" />
+        </Style>
+        <Style Selector="Button.successButton:pointerover">
+            <Setter Property="Background" Value="#2eb85c" />
+            <Setter Property="Foreground" Value="#ffffff" />
+            <Setter Property="BorderBrush" Value="#66d289" />
+        </Style>
+        <Style Selector="Button.successButton:pressed">
+            <Setter Property="Background" Value="#16833a" />
+            <Setter Property="Foreground" Value="#ffffff" />
+            <Setter Property="BorderBrush" Value="#66d289" />
+        </Style>
+        <Style Selector="Button.successButton:pointerover TextBlock">
+            <Setter Property="Foreground" Value="#ffffff" />
+        </Style>
+        <Style Selector="Button.successButton:pressed TextBlock">
+            <Setter Property="Foreground" Value="#ffffff" />
+        </Style>
+        <Style Selector="Button.dangerButton">
+            <Setter Property="Background" Value="#dc3545" />
+            <Setter Property="Foreground" Value="#ffffff" />
+            <Setter Property="BorderBrush" Value="#ef6672" />
+        </Style>
+        <Style Selector="Button.dangerButton:pointerover">
+            <Setter Property="Background" Value="#e04545" />
+            <Setter Property="Foreground" Value="#ffffff" />
+            <Setter Property="BorderBrush" Value="#ff7373" />
+        </Style>
+        <Style Selector="Button.dangerButton:pressed">
+            <Setter Property="Background" Value="#a42626" />
+            <Setter Property="Foreground" Value="#ffffff" />
+            <Setter Property="BorderBrush" Value="#ff7373" />
+        </Style>
+        <Style Selector="Button.dangerButton:pointerover TextBlock">
+            <Setter Property="Foreground" Value="#ffffff" />
+        </Style>
+        <Style Selector="Button.dangerButton:pressed TextBlock">
+            <Setter Property="Foreground" Value="#ffffff" />
+        </Style>
+        <Style Selector="Button.warningButton">
+            <Setter Property="Background" Value="#f39c12" />
+            <Setter Property="Foreground" Value="#111827" />
+            <Setter Property="BorderBrush" Value="#f9bd4f" />
+        </Style>
+        <Style Selector="Button.warningButton:pointerover">
+            <Setter Property="Background" Value="#f7a928" />
+            <Setter Property="Foreground" Value="#111827" />
+            <Setter Property="BorderBrush" Value="#ffd166" />
+        </Style>
+        <Style Selector="Button.warningButton:pressed">
+            <Setter Property="Background" Value="#c77800" />
+            <Setter Property="Foreground" Value="#111827" />
+            <Setter Property="BorderBrush" Value="#ffd166" />
+        </Style>
+        <Style Selector="Button.warningButton:pointerover TextBlock">
+            <Setter Property="Foreground" Value="#111827" />
+        </Style>
+        <Style Selector="Button.warningButton:pressed TextBlock">
+            <Setter Property="Foreground" Value="#111827" />
+        </Style>
+        <Style Selector="Button.infoButton">
+            <Setter Property="Background" Value="#17a2b8" />
+            <Setter Property="Foreground" Value="#ffffff" />
+            <Setter Property="BorderBrush" Value="#55c7d8" />
+        </Style>
+        <Style Selector="Button.infoButton:pointerover">
+            <Setter Property="Background" Value="#22abc2" />
+            <Setter Property="Foreground" Value="#ffffff" />
+            <Setter Property="BorderBrush" Value="#68d7e8" />
+        </Style>
+        <Style Selector="Button.infoButton:pressed">
+            <Setter Property="Background" Value="#117383" />
+            <Setter Property="Foreground" Value="#ffffff" />
+            <Setter Property="BorderBrush" Value="#68d7e8" />
+        </Style>
+        <Style Selector="Button.infoButton:pointerover TextBlock">
+            <Setter Property="Foreground" Value="#ffffff" />
+        </Style>
+        <Style Selector="Button.infoButton:pressed TextBlock">
+            <Setter Property="Foreground" Value="#ffffff" />
         </Style>
         <Style Selector="Button.tableHeader">
             <Setter Property="Background" Value="Transparent" />
@@ -46,6 +250,21 @@
         <Style Selector="Button.tableHeader:pointerover">
             <Setter Property="Background" Value="#2d2d2d" />
             <Setter Property="Foreground" Value="#e0e0e0" />
+        </Style>
+        <Style Selector="Button.closeTabBtn">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="#aeb7c4" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+        </Style>
+        <Style Selector="Button.closeTabBtn:pointerover">
+            <Setter Property="Background" Value="#d32f2f" />
+            <Setter Property="Foreground" Value="#ffffff" />
+            <Setter Property="BorderBrush" Value="#ef5350" />
+        </Style>
+        <Style Selector="Button.closeTabBtn:pressed">
+            <Setter Property="Background" Value="#9f2323" />
+            <Setter Property="Foreground" Value="#ffffff" />
+            <Setter Property="BorderBrush" Value="#ef5350" />
         </Style>
 
         <!--
