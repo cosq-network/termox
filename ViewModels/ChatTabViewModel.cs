@@ -40,8 +40,44 @@ public class ChatTabViewModel : INotifyPropertyChanged, ITabViewModel
     private bool _isSettingsPanelOpen;
     public bool IsSettingsPanelOpen { get => _isSettingsPanelOpen; set { _isSettingsPanelOpen = value; OnPropertyChanged(); } }
 
-    private ChatSettings _settings;
-    public ChatSettings Settings { get => _settings; set { _settings = value; OnPropertyChanged(); } }
+    // ChatSettings is a plain POCO (no INotifyPropertyChanged) so it must never be bound
+    // to directly from XAML — each field below is its own flat, individually-notifying
+    // property that reads/writes through to it. A previous version bound XAML controls
+    // straight to "Settings.X" and forced updates by raising OnPropertyChanged(nameof(Settings))
+    // on every edit; that re-subscribed every Settings.* binding at once and, combined with
+    // a TwoWay-bound ComboBox/NumericUpDown, produced an infinite bind/re-publish loop that
+    // stack-overflowed the app. Keep these flat and this stays impossible.
+    private readonly ChatSettings _settings;
+
+    public string BaseUrl
+    {
+        get => _settings.BaseUrl;
+        set { if (_settings.BaseUrl == value) return; _settings.BaseUrl = value; OnPropertyChanged(); }
+    }
+
+    public string ApiKey
+    {
+        get => _settings.ApiKey;
+        set { if (_settings.ApiKey == value) return; _settings.ApiKey = value; OnPropertyChanged(); }
+    }
+
+    public double Temperature
+    {
+        get => _settings.Temperature;
+        set { if (_settings.Temperature == value) return; _settings.Temperature = value; OnPropertyChanged(); }
+    }
+
+    public int ContextWindowTokens
+    {
+        get => _settings.ContextWindowTokens;
+        set { if (_settings.ContextWindowTokens == value) return; _settings.ContextWindowTokens = value; OnPropertyChanged(); }
+    }
+
+    public bool AutoApproveReadOnlyTools
+    {
+        get => _settings.AutoApproveReadOnlyTools;
+        set { if (_settings.AutoApproveReadOnlyTools == value) return; _settings.AutoApproveReadOnlyTools = value; OnPropertyChanged(); }
+    }
 
     public IReadOnlyList<ChatModelInfo> ModelOptions { get; } = ChatModelCatalog.KnownModels
         .Append(new ChatModelInfo { Id = ChatModelCatalog.CustomModelSentinel, DisplayName = "Custom…", Provider = "" })
@@ -53,14 +89,14 @@ public class ChatTabViewModel : INotifyPropertyChanged, ITabViewModel
         get => _selectedModel;
         set
         {
+            if (ReferenceEquals(_selectedModel, value)) return;
             _selectedModel = value;
             OnPropertyChanged();
             OnPropertyChanged(nameof(IsCustomModelSelected));
             if (value != null && value.Id != ChatModelCatalog.CustomModelSentinel)
             {
-                Settings.Model = value.Id;
-                Settings.ContextWindowTokens = value.ContextWindowTokens;
-                OnPropertyChanged(nameof(Settings));
+                _settings.Model = value.Id;
+                ContextWindowTokens = value.ContextWindowTokens;
             }
             OnPropertyChanged(nameof(IsModelUnrecognized));
         }
@@ -74,13 +110,11 @@ public class ChatTabViewModel : INotifyPropertyChanged, ITabViewModel
         get => _customModelId;
         set
         {
+            if (_customModelId == value) return;
             _customModelId = value;
             OnPropertyChanged();
             if (IsCustomModelSelected)
-            {
-                Settings.Model = value;
-                OnPropertyChanged(nameof(Settings));
-            }
+                _settings.Model = value;
             OnPropertyChanged(nameof(IsModelUnrecognized));
         }
     }
@@ -89,7 +123,7 @@ public class ChatTabViewModel : INotifyPropertyChanged, ITabViewModel
     /// True when the resolved model string isn't in the curated catalog — shown as a
     /// non-blocking warning; Termox's OpenAI-compatible client will still try it as-is.
     /// </summary>
-    public bool IsModelUnrecognized => !string.IsNullOrWhiteSpace(Settings.Model) && !ChatModelCatalog.IsKnownModel(Settings.Model);
+    public bool IsModelUnrecognized => !string.IsNullOrWhiteSpace(_settings.Model) && !ChatModelCatalog.IsKnownModel(_settings.Model);
 
     private ChatToolCall? _pendingApprovalCall;
     public ChatToolCall? PendingApprovalCall { get => _pendingApprovalCall; set { _pendingApprovalCall = value; OnPropertyChanged(); OnPropertyChanged(nameof(HasPendingApproval)); } }
@@ -142,7 +176,7 @@ public class ChatTabViewModel : INotifyPropertyChanged, ITabViewModel
         CloseSettingsCommand = new RelayCommand(() => IsSettingsPanelOpen = false);
         SaveSettingsCommand = new RelayCommand(() =>
         {
-            _settingsService.Save(Settings);
+            _settingsService.Save(_settings);
             IsSettingsPanelOpen = false;
         });
         ClearTranscriptCommand = new RelayCommand(() => Messages.Clear());
@@ -161,7 +195,7 @@ public class ChatTabViewModel : INotifyPropertyChanged, ITabViewModel
     private async Task SendMessageAsync()
     {
         if (IsStreaming || string.IsNullOrWhiteSpace(DraftInput)) return;
-        if (string.IsNullOrWhiteSpace(Settings.BaseUrl) || string.IsNullOrWhiteSpace(Settings.Model))
+        if (string.IsNullOrWhiteSpace(_settings.BaseUrl) || string.IsNullOrWhiteSpace(_settings.Model))
         {
             Messages.Add(new ChatMessage
             {
@@ -215,7 +249,7 @@ public class ChatTabViewModel : INotifyPropertyChanged, ITabViewModel
 
             Dispatcher.UIThread.Post(() => Messages.Add(assistantMessage));
 
-            await foreach (var evt in _client.StreamCompletionAsync(history, tools, Settings, cancellationToken))
+            await foreach (var evt in _client.StreamCompletionAsync(history, tools, _settings, cancellationToken))
             {
                 switch (evt)
                 {
@@ -281,7 +315,7 @@ public class ChatTabViewModel : INotifyPropertyChanged, ITabViewModel
     /// </summary>
     private List<ChatMessage> TrimHistory(List<ChatMessage> messages)
     {
-        var budget = Math.Max(500, Settings.ContextWindowTokens - ReservedResponseTokens);
+        var budget = Math.Max(500, _settings.ContextWindowTokens - ReservedResponseTokens);
         var result = new List<ChatMessage>();
         var used = 0;
 

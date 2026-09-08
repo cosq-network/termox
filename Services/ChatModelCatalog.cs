@@ -16,6 +16,8 @@ public class ChatModelInfo
     public required string DisplayName { get; init; }
     public required string Provider { get; init; }
     public int ContextWindowTokens { get; init; }
+
+    public string Label => string.IsNullOrEmpty(Provider) ? DisplayName : $"{DisplayName} ({Provider})";
 }
 
 public static class ChatModelCatalog

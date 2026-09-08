@@ -2304,7 +2304,7 @@
                                                 FontWeight="SemiBold" FontSize="12" />
                                             <TextBlock Text="Base URL (OpenAI-compatible, e.g. https://api.openai.com/v1)"
                                                 Foreground="#aaaaaa" FontSize="11" />
-                                            <TextBox Text="{Binding Settings.BaseUrl}"
+                                            <TextBox Text="{Binding BaseUrl}"
                                                 PlaceholderText="https://api.openai.com/v1" />
                                             <TextBlock Text="Model" Foreground="#aaaaaa" FontSize="11" />
                                             <ComboBox ItemsSource="{Binding ModelOptions}"
@@ -2312,10 +2312,7 @@
                                                 HorizontalAlignment="Stretch">
                                                 <ComboBox.ItemTemplate>
                                                     <DataTemplate DataType="services:ChatModelInfo">
-                                                        <TextBlock>
-                                                            <Run Text="{Binding DisplayName}" />
-                                                            <Run Text="{Binding Provider, StringFormat=' ({0})'}" />
-                                                        </TextBlock>
+                                                        <TextBlock Text="{Binding Label}" />
                                                     </DataTemplate>
                                                 </ComboBox.ItemTemplate>
                                             </ComboBox>
@@ -2326,21 +2323,21 @@
                                                 Foreground="#f39c12" FontSize="11" TextWrapping="Wrap"
                                                 IsVisible="{Binding IsModelUnrecognized}" />
                                             <TextBlock Text="API Key" Foreground="#aaaaaa" FontSize="11" />
-                                            <TextBox Text="{Binding Settings.ApiKey}" PasswordChar="•" />
+                                            <TextBox Text="{Binding ApiKey}" PasswordChar="•" />
                                             <TextBlock Text="Temperature" Foreground="#aaaaaa" FontSize="11" />
-                                            <NumericUpDown Value="{Binding Settings.Temperature}"
+                                            <NumericUpDown Value="{Binding Temperature}"
                                                 Minimum="0" Maximum="2" Increment="0.1"
                                                 HorizontalAlignment="Left" Width="140" />
                                             <TextBlock Text="Context window (tokens)"
                                                 Foreground="#aaaaaa" FontSize="11" />
                                             <TextBlock Text="How much conversation history to send per request. Picking a known model above fills this in automatically."
                                                 Foreground="#777777" FontSize="10" TextWrapping="Wrap" />
-                                            <NumericUpDown Value="{Binding Settings.ContextWindowTokens}"
+                                            <NumericUpDown Value="{Binding ContextWindowTokens}"
                                                 Minimum="1000" Maximum="2000000" Increment="1000"
                                                 FormatString="0"
                                                 HorizontalAlignment="Left" Width="160" />
                                             <CheckBox Content="Auto-approve read-only tools"
-                                                IsChecked="{Binding Settings.AutoApproveReadOnlyTools}"
+                                                IsChecked="{Binding AutoApproveReadOnlyTools}"
                                                 Foreground="#ccc" FontSize="12" />
                                             <StackPanel Orientation="Horizontal" Spacing="8">
                                                 <Button Content="Save" Command="{Binding SaveSettingsCommand}"
