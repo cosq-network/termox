@@ -1,6 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:vm="using:Termox.ViewModels"
+    xmlns:models="using:Termox.Models"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:terminal="using:SvcSystems.UI.Terminal"
@@ -368,6 +369,21 @@
                                         Command="{Binding OpenServerStatsTabCommand}"
                                         ToolTip.Tip="View CPU, memory, process, and disk stats over SSH" />
                                 </WrapPanel>
+                            </ScrollViewer>
+                        </TabItem>
+                        <TabItem>
+                            <TabItem.Header>
+                                <TextBlock Text="Chat" Foreground="#f4f7fb" />
+                            </TabItem.Header>
+                            <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                HorizontalScrollBarVisibility="Disabled">
+                                <StackPanel Margin="15" Spacing="10">
+                                    <TextBlock Text="Ask an LLM to inspect and operate on your saved connections."
+                                        Foreground="#aaaaaa" FontSize="12" TextWrapping="Wrap" />
+                                    <Button Content="Open Chat" Classes="toolButton"
+                                        Command="{Binding OpenChatTabCommand}"
+                                        ToolTip.Tip="Open the chat assistant tab" />
+                                </StackPanel>
                             </ScrollViewer>
                         </TabItem>
                     </TabControl>
@@ -2259,6 +2275,114 @@
                                         </ScrollViewer>
                                     </TabItem>
                                 </TabControl>
+                            </DataTemplate>
+                            <DataTemplate DataType="vm:ChatTabViewModel">
+                                <Grid Background="#1e1e1e" RowDefinitions="Auto,Auto,*,Auto,Auto" Margin="8">
+                                    <!-- Header -->
+                                    <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto,Auto" Margin="2,0,2,8">
+                                        <TextBlock Grid.Column="0" Text="Chat" FontWeight="SemiBold"
+                                            Foreground="#e0e0e0" FontSize="14" VerticalAlignment="Center" />
+                                        <Button Grid.Column="1" Content="Stop"
+                                            Command="{Binding CancelStreamingCommand}"
+                                            IsVisible="{Binding IsStreaming}"
+                                            Classes="toolButton" Padding="8,4" FontSize="11" Margin="0,0,6,0" />
+                                        <Button Grid.Column="2" Content="Clear"
+                                            Command="{Binding ClearTranscriptCommand}"
+                                            Classes="toolButton" Padding="8,4" FontSize="11" Margin="0,0,6,0" />
+                                        <Button Grid.Column="3" Content="⚙ Settings"
+                                            Command="{Binding OpenSettingsCommand}"
+                                            Classes="toolButton" Padding="8,4" FontSize="11" />
+                                    </Grid>
+
+                                    <!-- Settings drawer -->
+                                    <Border Grid.Row="1" IsVisible="{Binding IsSettingsPanelOpen}"
+                                        Background="#161616" BorderBrush="#333" BorderThickness="1"
+                                        CornerRadius="4" Padding="12" Margin="0,0,0,8">
+                                        <StackPanel Spacing="8">
+                                            <TextBlock Text="Inference endpoint" Foreground="#e0e0e0"
+                                                FontWeight="SemiBold" FontSize="12" />
+                                            <TextBlock Text="Base URL (OpenAI-compatible, e.g. https://api.openai.com/v1)"
+                                                Foreground="#aaaaaa" FontSize="11" />
+                                            <TextBox Text="{Binding Settings.BaseUrl}"
+                                                PlaceholderText="https://api.openai.com/v1" />
+                                            <TextBlock Text="Model" Foreground="#aaaaaa" FontSize="11" />
+                                            <TextBox Text="{Binding Settings.Model}" PlaceholderText="gpt-4o-mini" />
+                                            <TextBlock Text="API Key" Foreground="#aaaaaa" FontSize="11" />
+                                            <TextBox Text="{Binding Settings.ApiKey}" PasswordChar="•" />
+                                            <TextBlock Text="Temperature" Foreground="#aaaaaa" FontSize="11" />
+                                            <NumericUpDown Value="{Binding Settings.Temperature}"
+                                                Minimum="0" Maximum="2" Increment="0.1"
+                                                HorizontalAlignment="Left" Width="140" />
+                                            <CheckBox Content="Auto-approve read-only tools"
+                                                IsChecked="{Binding Settings.AutoApproveReadOnlyTools}"
+                                                Foreground="#ccc" FontSize="12" />
+                                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                                <Button Content="Save" Command="{Binding SaveSettingsCommand}"
+                                                    Classes="primaryButton" Padding="12,7" CornerRadius="4"
+                                                    FontSize="12" />
+                                                <Button Content="Close" Command="{Binding CloseSettingsCommand}"
+                                                    Classes="toolButton" Padding="12,7" FontSize="12" />
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <!-- Transcript -->
+                                    <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+                                        <ItemsControl ItemsSource="{Binding Messages}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate DataType="models:ChatMessage">
+                                                    <Border Background="#252525" CornerRadius="6" Padding="10"
+                                                        Margin="0,4">
+                                                        <StackPanel Spacing="4">
+                                                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                                                <TextBlock Text="You" FontWeight="Bold"
+                                                                    Foreground="#4caf50" FontSize="11"
+                                                                    IsVisible="{Binding IsUser}" />
+                                                                <TextBlock Text="Assistant" FontWeight="Bold"
+                                                                    Foreground="#5bc0de" FontSize="11"
+                                                                    IsVisible="{Binding IsAssistant}" />
+                                                                <TextBlock Text="Tool result" FontWeight="Bold"
+                                                                    Foreground="#f39c12" FontSize="11"
+                                                                    IsVisible="{Binding IsTool}" />
+                                                            </StackPanel>
+                                                            <TextBlock Text="{Binding Content}" TextWrapping="Wrap"
+                                                                Foreground="#e0e0e0" FontSize="13"
+                                                                FontFamily="Consolas, Fira Code, monospace" />
+                                                        </StackPanel>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </ScrollViewer>
+
+                                    <!-- Tool-call approval banner -->
+                                    <Border Grid.Row="3" IsVisible="{Binding HasPendingApproval}"
+                                        Background="#3a2a12" BorderBrush="#f39c12" BorderThickness="1"
+                                        CornerRadius="4" Padding="10" Margin="0,8,0,0">
+                                        <StackPanel Spacing="8">
+                                            <TextBlock Text="{Binding PendingApprovalDescription}"
+                                                Foreground="#f4d9a8" FontSize="12" TextWrapping="Wrap" />
+                                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                                <Button Content="Approve" Command="{Binding ApproveToolCallCommand}"
+                                                    Classes="primaryButton" Padding="12,6" CornerRadius="4"
+                                                    FontSize="12" />
+                                                <Button Content="Deny" Command="{Binding DenyToolCallCommand}"
+                                                    Classes="toolButton" Padding="12,6" FontSize="12" />
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <!-- Input row -->
+                                    <Grid Grid.Row="4" ColumnDefinitions="*,Auto" Margin="0,8,0,0">
+                                        <TextBox Grid.Column="0" Text="{Binding DraftInput}"
+                                            PlaceholderText="Ask about your servers…" AcceptsReturn="False"
+                                            IsEnabled="{Binding !IsStreaming}" />
+                                        <Button Grid.Column="1" Content="Send"
+                                            Command="{Binding SendMessageCommand}"
+                                            Classes="primaryButton" Padding="14,7" CornerRadius="4"
+                                            FontSize="12" Margin="8,0,0,0" />
+                                    </Grid>
+                                </Grid>
                             </DataTemplate>
                         </TabControl.DataTemplates>
                         </TabControl>

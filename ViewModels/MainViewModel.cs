@@ -399,6 +399,9 @@ public class MainViewModel : INotifyPropertyChanged
     public ICommand OpenFingerprintTabCommand { get; }
     public ICommand OpenDnsTabCommand { get; }
     public ICommand OpenServerStatsTabCommand { get; }
+    public ICommand OpenChatTabCommand { get; }
+
+    private readonly ChatSettingsService _chatSettingsService = new();
 
     private string _configPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Termox", "connections.json");
     private string _bookmarksPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Termox", "bookmarks.json");
@@ -448,6 +451,7 @@ public class MainViewModel : INotifyPropertyChanged
         OpenFingerprintTabCommand = new RelayCommand(OpenFingerprintTab);
         OpenDnsTabCommand = new RelayCommand(OpenDnsTab);
         OpenServerStatsTabCommand = new RelayCommand(OpenServerStatsTab);
+        OpenChatTabCommand = new RelayCommand(OpenChatTab);
         ShowAboutDialogCommand = new RelayCommand(() => IsAboutDialogVisible = true);
 
         LoadConnections();
@@ -1185,6 +1189,17 @@ public class MainViewModel : INotifyPropertyChanged
         }, SavedConnections);
         Tabs.Add(statsTab);
         SelectedTab = statsTab;
+    }
+
+    private void OpenChatTab()
+    {
+        var chatTab = new ChatTabViewModel(tab =>
+        {
+            Tabs.Remove(tab);
+            SaveCurrentSessions();
+        }, SavedConnections, _chatSettingsService);
+        Tabs.Add(chatTab);
+        SelectedTab = chatTab;
     }
 
     private void RememberHostKey(SshConnectionProfile profile, string fingerprint)
