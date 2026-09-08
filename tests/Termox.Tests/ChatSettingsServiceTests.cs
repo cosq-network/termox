@@ -24,7 +24,7 @@ public class ChatSettingsServiceTests
                 ApiKey = "sk-test-secret",
                 Model = "gpt-4o-mini",
                 Temperature = 0.5,
-                MaxHistoryMessages = 20,
+                ContextWindowTokens = 32_000,
                 AutoApproveReadOnlyTools = false
             };
 
@@ -35,7 +35,7 @@ public class ChatSettingsServiceTests
             Assert.Equal(settings.ApiKey, loaded.ApiKey);
             Assert.Equal(settings.Model, loaded.Model);
             Assert.Equal(settings.Temperature, loaded.Temperature);
-            Assert.Equal(settings.MaxHistoryMessages, loaded.MaxHistoryMessages);
+            Assert.Equal(settings.ContextWindowTokens, loaded.ContextWindowTokens);
             Assert.Equal(settings.AutoApproveReadOnlyTools, loaded.AutoApproveReadOnlyTools);
         }
         finally

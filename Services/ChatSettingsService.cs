@@ -62,7 +62,7 @@ public class ChatSettingsService
                 ApiKey = CredentialManager.EncryptCredential(settings.ApiKey, ApiKeyCredentialId),
                 Model = settings.Model,
                 Temperature = settings.Temperature,
-                MaxHistoryMessages = settings.MaxHistoryMessages,
+                ContextWindowTokens = settings.ContextWindowTokens,
                 AutoApproveReadOnlyTools = settings.AutoApproveReadOnlyTools
             };
 

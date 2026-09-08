@@ -2,6 +2,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:vm="using:Termox.ViewModels"
     xmlns:models="using:Termox.Models"
+    xmlns:services="using:Termox.Services"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:terminal="using:SvcSystems.UI.Terminal"
@@ -2306,13 +2307,38 @@
                                             <TextBox Text="{Binding Settings.BaseUrl}"
                                                 PlaceholderText="https://api.openai.com/v1" />
                                             <TextBlock Text="Model" Foreground="#aaaaaa" FontSize="11" />
-                                            <TextBox Text="{Binding Settings.Model}" PlaceholderText="gpt-4o-mini" />
+                                            <ComboBox ItemsSource="{Binding ModelOptions}"
+                                                SelectedItem="{Binding SelectedModel}"
+                                                HorizontalAlignment="Stretch">
+                                                <ComboBox.ItemTemplate>
+                                                    <DataTemplate DataType="services:ChatModelInfo">
+                                                        <TextBlock>
+                                                            <Run Text="{Binding DisplayName}" />
+                                                            <Run Text="{Binding Provider, StringFormat=' ({0})'}" />
+                                                        </TextBlock>
+                                                    </DataTemplate>
+                                                </ComboBox.ItemTemplate>
+                                            </ComboBox>
+                                            <TextBox Text="{Binding CustomModelId}"
+                                                IsVisible="{Binding IsCustomModelSelected}"
+                                                PlaceholderText="custom-model-id" />
+                                            <TextBlock Text="This model isn't in the known list — tool calling support isn't guaranteed."
+                                                Foreground="#f39c12" FontSize="11" TextWrapping="Wrap"
+                                                IsVisible="{Binding IsModelUnrecognized}" />
                                             <TextBlock Text="API Key" Foreground="#aaaaaa" FontSize="11" />
                                             <TextBox Text="{Binding Settings.ApiKey}" PasswordChar="•" />
                                             <TextBlock Text="Temperature" Foreground="#aaaaaa" FontSize="11" />
                                             <NumericUpDown Value="{Binding Settings.Temperature}"
                                                 Minimum="0" Maximum="2" Increment="0.1"
                                                 HorizontalAlignment="Left" Width="140" />
+                                            <TextBlock Text="Context window (tokens)"
+                                                Foreground="#aaaaaa" FontSize="11" />
+                                            <TextBlock Text="How much conversation history to send per request. Picking a known model above fills this in automatically."
+                                                Foreground="#777777" FontSize="10" TextWrapping="Wrap" />
+                                            <NumericUpDown Value="{Binding Settings.ContextWindowTokens}"
+                                                Minimum="1000" Maximum="2000000" Increment="1000"
+                                                FormatString="0"
+                                                HorizontalAlignment="Left" Width="160" />
                                             <CheckBox Content="Auto-approve read-only tools"
                                                 IsChecked="{Binding Settings.AutoApproveReadOnlyTools}"
                                                 Foreground="#ccc" FontSize="12" />

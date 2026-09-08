@@ -43,6 +43,54 @@ public class ChatTabViewModel : INotifyPropertyChanged, ITabViewModel
     private ChatSettings _settings;
     public ChatSettings Settings { get => _settings; set { _settings = value; OnPropertyChanged(); } }
 
+    public IReadOnlyList<ChatModelInfo> ModelOptions { get; } = ChatModelCatalog.KnownModels
+        .Append(new ChatModelInfo { Id = ChatModelCatalog.CustomModelSentinel, DisplayName = "Custom…", Provider = "" })
+        .ToList();
+
+    private ChatModelInfo? _selectedModel;
+    public ChatModelInfo? SelectedModel
+    {
+        get => _selectedModel;
+        set
+        {
+            _selectedModel = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(IsCustomModelSelected));
+            if (value != null && value.Id != ChatModelCatalog.CustomModelSentinel)
+            {
+                Settings.Model = value.Id;
+                Settings.ContextWindowTokens = value.ContextWindowTokens;
+                OnPropertyChanged(nameof(Settings));
+            }
+            OnPropertyChanged(nameof(IsModelUnrecognized));
+        }
+    }
+
+    public bool IsCustomModelSelected => SelectedModel?.Id == ChatModelCatalog.CustomModelSentinel;
+
+    private string _customModelId = "";
+    public string CustomModelId
+    {
+        get => _customModelId;
+        set
+        {
+            _customModelId = value;
+            OnPropertyChanged();
+            if (IsCustomModelSelected)
+            {
+                Settings.Model = value;
+                OnPropertyChanged(nameof(Settings));
+            }
+            OnPropertyChanged(nameof(IsModelUnrecognized));
+        }
+    }
+
+    /// <summary>
+    /// True when the resolved model string isn't in the curated catalog — shown as a
+    /// non-blocking warning; Termox's OpenAI-compatible client will still try it as-is.
+    /// </summary>
+    public bool IsModelUnrecognized => !string.IsNullOrWhiteSpace(Settings.Model) && !ChatModelCatalog.IsKnownModel(Settings.Model);
+
     private ChatToolCall? _pendingApprovalCall;
     public ChatToolCall? PendingApprovalCall { get => _pendingApprovalCall; set { _pendingApprovalCall = value; OnPropertyChanged(); OnPropertyChanged(nameof(HasPendingApproval)); } }
 
@@ -69,6 +117,17 @@ public class ChatTabViewModel : INotifyPropertyChanged, ITabViewModel
         _settingsService = settingsService;
         _settings = _settingsService.Load();
         _toolRegistry = new ChatToolRegistry(savedConnections);
+
+        var knownModel = ChatModelCatalog.Find(_settings.Model);
+        if (knownModel != null)
+        {
+            _selectedModel = knownModel;
+        }
+        else
+        {
+            _selectedModel = ModelOptions.First(m => m.Id == ChatModelCatalog.CustomModelSentinel);
+            _customModelId = _settings.Model;
+        }
 
         DisconnectCommand = new RelayCommand(() => { });
         CloseTabCommand = new RelayCommand(() =>
@@ -212,11 +271,37 @@ public class ChatTabViewModel : INotifyPropertyChanged, ITabViewModel
         return tcs.Task;
     }
 
+    /// <summary>Tokens reserved out of the context window for the model's own reply and tool schemas.</summary>
+    private const int ReservedResponseTokens = 2000;
+
+    /// <summary>
+    /// Keeps the newest messages that fit inside Settings.ContextWindowTokens (minus a
+    /// reserve for the reply itself), dropping the oldest first. Always keeps at least
+    /// the most recent message, even if it alone exceeds the budget.
+    /// </summary>
     private List<ChatMessage> TrimHistory(List<ChatMessage> messages)
     {
-        var limit = Settings.MaxHistoryMessages;
-        if (limit <= 0 || messages.Count <= limit) return messages;
-        return messages.Skip(messages.Count - limit).ToList();
+        var budget = Math.Max(500, Settings.ContextWindowTokens - ReservedResponseTokens);
+        var result = new List<ChatMessage>();
+        var used = 0;
+
+        for (var i = messages.Count - 1; i >= 0; i--)
+        {
+            var tokens = EstimateMessageTokens(messages[i]);
+            if (used + tokens > budget && result.Count > 0) break;
+            result.Insert(0, messages[i]);
+            used += tokens;
+        }
+
+        return result;
+    }
+
+    private static int EstimateMessageTokens(ChatMessage message)
+    {
+        var total = TokenEstimator.EstimateTokens(message.Content);
+        if (message.ToolCalls != null)
+            total += message.ToolCalls.Sum(c => TokenEstimator.EstimateTokens(c.ArgumentsJson));
+        return total;
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
