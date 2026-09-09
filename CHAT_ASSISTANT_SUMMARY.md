@@ -34,7 +34,7 @@ Added an in-app LLM chatbot ("Helm") to Termox, modeled on Claude Code's editor 
 - **`Services/ChatModelCatalog.cs`** — curated list of known tool-calling-capable models (OpenAI, OpenRouter, Ollama) with their context windows, plus a `Custom…` sentinel; backs the settings drawer's model dropdown.
 - **`Services/TokenEstimator.cs`** — rough character-based token-count heuristic (no tokenizer dependency) used to trim outgoing history to `ContextWindowTokens`.
 - **`Services/ChatSettingsService.cs`** — loads/saves `chatsettings.json`, encrypting the API key via `CredentialManager` under a dedicated key id (`chat:apiKey`) distinct from SSH credentials.
-- **`Services/ChatHistoryService.cs`** — persists sessions/messages to `%AppData%\Termox\chathistory.db` (SQLite, via `Microsoft.Data.Sqlite`, pooling disabled). Each public method opens/disposes its own short-lived connection — simplest safe pattern for a single-window desktop app. Tool calls round-trip through a JSON column.
+- **`Services/ChatHistoryService.cs`** — persists sessions/messages to `%AppData%\Termox\termox.db` (SQLite, via `Microsoft.Data.Sqlite`, pooling disabled). Each public method opens/disposes its own short-lived connection — simplest safe pattern for a single-window desktop app. Tool calls round-trip through a JSON column.
 - **`Services/MarkdownRenderer.cs`** / **`Services/MiniMarkdown.cs`** / **`Services/MarkdownContentConverter.cs`** — a small first-party Markdown renderer (parser + Avalonia visual builder + binding converter) for assistant replies, after confirming the obvious third-party option (Markdown.Avalonia) is binary-incompatible with Avalonia 12.
 - Reuses **`DnsRecordInspector`**, **`FingerprintUtility`**, and **`GpgKeyManager`** as-is for the corresponding tools.
 
@@ -50,7 +50,7 @@ Added an in-app LLM chatbot ("Helm") to Termox, modeled on Claude Code's editor 
 - **No raw host/port ever reaches the model** — only saved, named `profileId`s.
 - **Destructive actions are always gated**, regardless of the "auto-approve read-only tools" setting.
 - **API key encrypted at rest** (DPAPI on Windows / OS keychain elsewhere) via the existing `CredentialManager`, under its own key id.
-- **Chat history content encrypted at rest too** — `ChatHistoryService` encrypts `content` and `tool_calls_json` per-message via the same `CredentialManager` (key id `chat:history`, distinct from the API key's and every SSH profile's) before writing to `chathistory.db`, since tool results routinely contain SSH command output/file contents. Rows written before this existed stay readable (not silently discarded) — only new writes are encrypted.
+- **Chat history content encrypted at rest too** — `ChatHistoryService` encrypts `content` and `tool_calls_json` per-message via the same `CredentialManager` (key id `chat:history`, distinct from the API key's and every SSH profile's) before writing to `termox.db`, since tool results routinely contain SSH command output/file contents. Rows written before this existed stay readable (not silently discarded) — only new writes are encrypted.
 
 ## Tests
 

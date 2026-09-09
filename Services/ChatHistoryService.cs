@@ -10,7 +10,7 @@ namespace Termox.Services;
 
 /// <summary>
 /// Persists chat sessions and their full message history (including tool calls/results)
-/// to a local SQLite database at %AppData%\Termox\chathistory.db, so conversations survive
+/// to a local SQLite database at %AppData%\Termox\termox.db, so conversations survive
 /// app restarts and can be browsed/resumed from the Chat tab's History panel. Each public
 /// method opens and disposes its own short-lived connection — simplest safe pattern for a
 /// single-window desktop app, avoids shared-connection concurrency handling entirely.
@@ -20,13 +20,13 @@ public class ChatHistoryService
     private const string DateFormat = "O"; // round-trippable ISO 8601
 
     // Distinct from "chat:apiKey" (ChatSettingsService) and every SSH profile's own key id,
-    // so a leaked chathistory.db can't be decrypted using entropy derived from those.
+    // so a leaked termox.db can't be decrypted using entropy derived from those.
     private const string ContentEncryptionKeyId = "chat:history";
 
     private readonly string _connectionString;
 
     public ChatHistoryService()
-        : this(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Termox", "chathistory.db"))
+        : this(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Termox", "termox.db"))
     {
     }
 
