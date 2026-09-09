@@ -32,10 +32,18 @@ public class ChatTabViewModel : INotifyPropertyChanged, ITabViewModel
     public ObservableCollection<ChatMessage> Messages { get; } = new();
 
     private string _draftInput = "";
-    public string DraftInput { get => _draftInput; set { _draftInput = value; OnPropertyChanged(); } }
+    public string DraftInput
+    {
+        get => _draftInput;
+        set { _draftInput = value; OnPropertyChanged(); _sendMessageCommand?.RaiseCanExecuteChanged(); }
+    }
 
     private bool _isStreaming;
-    public bool IsStreaming { get => _isStreaming; set { _isStreaming = value; OnPropertyChanged(); } }
+    public bool IsStreaming
+    {
+        get => _isStreaming;
+        set { _isStreaming = value; OnPropertyChanged(); _sendMessageCommand?.RaiseCanExecuteChanged(); }
+    }
 
     private bool _isSettingsPanelOpen;
     public bool IsSettingsPanelOpen { get => _isSettingsPanelOpen; set { _isSettingsPanelOpen = value; OnPropertyChanged(); } }
@@ -133,7 +141,11 @@ public class ChatTabViewModel : INotifyPropertyChanged, ITabViewModel
     private string _pendingApprovalDescription = "";
     public string PendingApprovalDescription { get => _pendingApprovalDescription; set { _pendingApprovalDescription = value; OnPropertyChanged(); } }
 
-    public ICommand SendMessageCommand { get; }
+    // Concrete RelayCommand (not just ICommand) so DraftInput/IsStreaming's setters can call
+    // RaiseCanExecuteChanged() directly — Avalonia has no WPF-style automatic CanExecute
+    // requery, so without this the Send button silently never re-enables as you type.
+    private RelayCommand? _sendMessageCommand;
+    public ICommand SendMessageCommand => _sendMessageCommand!;
     public ICommand CancelStreamingCommand { get; }
     public ICommand OpenSettingsCommand { get; }
     public ICommand CloseSettingsCommand { get; }
@@ -170,7 +182,7 @@ public class ChatTabViewModel : INotifyPropertyChanged, ITabViewModel
             _onClose(this);
         });
 
-        SendMessageCommand = new RelayCommand(() => _ = SendMessageAsync(), () => !IsStreaming && !string.IsNullOrWhiteSpace(DraftInput));
+        _sendMessageCommand = new RelayCommand(() => _ = SendMessageAsync(), () => !IsStreaming && !string.IsNullOrWhiteSpace(DraftInput));
         CancelStreamingCommand = new RelayCommand(() => _streamCts?.Cancel());
         OpenSettingsCommand = new RelayCommand(() => IsSettingsPanelOpen = true);
         CloseSettingsCommand = new RelayCommand(() => IsSettingsPanelOpen = false);
@@ -200,6 +212,7 @@ public class ChatTabViewModel : INotifyPropertyChanged, ITabViewModel
             Messages.Add(new ChatMessage
             {
                 Role = ChatRole.Assistant,
+                IsError = true,
                 Content = "Configure a base URL and model in settings before sending a message."
             });
             IsSettingsPanelOpen = true;
@@ -222,7 +235,7 @@ public class ChatTabViewModel : INotifyPropertyChanged, ITabViewModel
         }
         catch (Exception ex)
         {
-            Messages.Add(new ChatMessage { Role = ChatRole.Assistant, Content = $"Error: {ex.Message}" });
+            Messages.Add(new ChatMessage { Role = ChatRole.Assistant, IsError = true, Content = ex.Message });
         }
         finally
         {
@@ -230,6 +243,21 @@ public class ChatTabViewModel : INotifyPropertyChanged, ITabViewModel
             _streamCts = null;
         }
     }
+
+    // Not shown in the transcript — prepended to every request so the model has identity
+    // and behavioral guidance instead of inferring everything from tool names alone.
+    // Sent fresh with each request like the rest of the history (the Chat Completions
+    // protocol is stateless; there's no server-side session to configure this once).
+    private const string SystemPrompt =
+        "You are Helm, the built-in AI copilot inside Termox, a cross-platform SSH/SFTP desktop client. " +
+        "You can inspect and operate on the user's saved SSH connections using the tools provided. " +
+        "Prefer read-only tools (list, read, lookup, scan, ping, hash) when they're enough to answer. " +
+        "Tools that run commands or write/rename/upload files require the user's explicit approval before " +
+        "they execute — expect a short pause while they approve or deny, and don't repeat the call while " +
+        "waiting. Tools that delete files/keys or export secret keys are irreversible — be explicit about " +
+        "exactly what will happen before calling them. Every SSH/SFTP tool needs a profileId; call " +
+        "list_connections first if you don't already know it, and never guess one. Keep responses concise " +
+        "and use markdown (tables, code spans, bullet/numbered lists) where it improves readability.";
 
     private async Task RunConversationLoopAsync(CancellationToken cancellationToken)
     {
@@ -243,26 +271,39 @@ public class ChatTabViewModel : INotifyPropertyChanged, ITabViewModel
 
             var tools = _toolRegistry.BuildToolDefinitions();
             var history = TrimHistory(Messages.ToList());
+            history.Insert(0, new ChatMessage { Role = ChatRole.System, Content = SystemPrompt });
             var assistantMessage = new ChatMessage { Role = ChatRole.Assistant };
             var accumulator = new ChatToolCallAccumulator();
             string? finishReason = null;
 
             Dispatcher.UIThread.Post(() => Messages.Add(assistantMessage));
 
-            await foreach (var evt in _client.StreamCompletionAsync(history, tools, _settings, cancellationToken))
+            try
             {
-                switch (evt)
+                await foreach (var evt in _client.StreamCompletionAsync(history, tools, _settings, cancellationToken))
                 {
-                    case ChatStreamEvent.ContentDelta delta:
-                        assistantMessage.Content += delta.Text;
-                        break;
-                    case ChatStreamEvent.ToolCallDelta toolDelta:
-                        accumulator.Apply(toolDelta.Index, toolDelta.Id, toolDelta.FunctionName, toolDelta.ArgumentsFragment);
-                        break;
-                    case ChatStreamEvent.FinishReason reason:
-                        finishReason = reason.Reason;
-                        break;
+                    switch (evt)
+                    {
+                        case ChatStreamEvent.ContentDelta delta:
+                            assistantMessage.Content += delta.Text;
+                            break;
+                        case ChatStreamEvent.ToolCallDelta toolDelta:
+                            accumulator.Apply(toolDelta.Index, toolDelta.Id, toolDelta.FunctionName, toolDelta.ArgumentsFragment);
+                            break;
+                        case ChatStreamEvent.FinishReason reason:
+                            finishReason = reason.Reason;
+                            break;
+                    }
                 }
+            }
+            catch
+            {
+                // The request failed before (or partway through) producing content — drop
+                // the empty placeholder bubble so the caller's single error message is the
+                // only thing shown, instead of a blank "Helm" bubble followed by the error.
+                if (string.IsNullOrEmpty(assistantMessage.Content))
+                    Dispatcher.UIThread.Post(() => Messages.Remove(assistantMessage));
+                throw;
             }
 
             if (finishReason != "tool_calls" || !accumulator.HasAny)
@@ -305,8 +346,8 @@ public class ChatTabViewModel : INotifyPropertyChanged, ITabViewModel
         return tcs.Task;
     }
 
-    /// <summary>Tokens reserved out of the context window for the model's own reply and tool schemas.</summary>
-    private const int ReservedResponseTokens = 2000;
+    /// <summary>Tokens reserved out of the context window for the system prompt, tool schemas, and the model's own reply.</summary>
+    private const int ReservedResponseTokens = 2200;
 
     /// <summary>
     /// Keeps the newest messages that fit inside Settings.ContextWindowTokens (minus a

@@ -68,8 +68,7 @@ public class OpenAiChatClient
         if (!response.IsSuccessStatusCode)
         {
             var body = await response.Content.ReadAsStringAsync(linkedCts.Token).ConfigureAwait(false);
-            throw new HttpRequestException(
-                $"Chat endpoint returned {(int)response.StatusCode} {response.ReasonPhrase}: {Truncate(body, 2000)}");
+            throw new HttpRequestException(BuildFriendlyErrorMessage((int)response.StatusCode, response.ReasonPhrase, body));
         }
 
         await using var stream = await response.Content.ReadAsStreamAsync(linkedCts.Token).ConfigureAwait(false);
@@ -214,6 +213,45 @@ public class OpenAiChatClient
         }
 
         return node;
+    }
+
+    /// <summary>
+    /// Turns an OpenAI/OpenRouter-shaped error body ({"error":{"message":...}}, optionally
+    /// with an OpenRouter "metadata.remedy_hint") into one short human-readable line instead
+    /// of dumping the raw JSON (which includes noise like request/user ids). Falls back to a
+    /// generic status-code message when the body isn't recognized or fails to parse — this
+    /// is a pure function so it's unit-testable without a live HTTP call.
+    /// </summary>
+    internal static string BuildFriendlyErrorMessage(int statusCode, string? reasonPhrase, string body)
+    {
+        var prefix = statusCode switch
+        {
+            401 => "The API key was rejected.",
+            402 => "Payment required.",
+            404 => "Model or endpoint not found.",
+            429 => "Rate limited — too many requests.",
+            >= 500 => "The endpoint is having trouble right now.",
+            _ => $"Request failed ({statusCode} {reasonPhrase})."
+        };
+
+        try
+        {
+            var root = JsonNode.Parse(body);
+            var message = root?["error"]?["message"]?.GetValue<string>();
+            if (!string.IsNullOrWhiteSpace(message))
+            {
+                var hint = root?["error"]?["metadata"]?["remedy_hint"]?.GetValue<string>();
+                return string.IsNullOrWhiteSpace(hint)
+                    ? $"{prefix} {message.Trim()}"
+                    : $"{prefix} {message.Trim()} {hint.Trim()}";
+            }
+        }
+        catch (JsonException)
+        {
+            // Not the expected error shape — fall through to the raw-body fallback below.
+        }
+
+        return string.IsNullOrWhiteSpace(body) ? prefix : $"{prefix} {Truncate(body, 300)}";
     }
 
     private static string Truncate(string value, int maxLength) =>
