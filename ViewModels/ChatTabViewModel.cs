@@ -16,12 +16,15 @@ namespace Termox.ViewModels;
 public class ChatTabViewModel : INotifyPropertyChanged, ITabViewModel
 {
     private readonly ChatSettingsService _settingsService;
+    private readonly ChatHistoryService _historyService;
     private readonly ChatToolRegistry _toolRegistry;
     private readonly OpenAiChatClient _client = new();
     private readonly Action<ChatTabViewModel> _onClose;
 
     private CancellationTokenSource? _streamCts;
     private TaskCompletionSource<bool>? _pendingApprovalTcs;
+    private string? _currentSessionId;
+    private int _nextSequence;
 
     private string _title = "Chat";
     public string Title { get => _title; set { _title = value; OnPropertyChanged(); } }
@@ -47,6 +50,11 @@ public class ChatTabViewModel : INotifyPropertyChanged, ITabViewModel
 
     private bool _isSettingsPanelOpen;
     public bool IsSettingsPanelOpen { get => _isSettingsPanelOpen; set { _isSettingsPanelOpen = value; OnPropertyChanged(); } }
+
+    private bool _isHistoryPanelOpen;
+    public bool IsHistoryPanelOpen { get => _isHistoryPanelOpen; set { _isHistoryPanelOpen = value; OnPropertyChanged(); } }
+
+    public ObservableCollection<ChatSessionSummary> HistorySessions { get; } = new();
 
     // ChatSettings is a plain POCO (no INotifyPropertyChanged) so it must never be bound
     // to directly from XAML — each field below is its own flat, individually-notifying
@@ -153,14 +161,21 @@ public class ChatTabViewModel : INotifyPropertyChanged, ITabViewModel
     public ICommand ClearTranscriptCommand { get; }
     public ICommand ApproveToolCallCommand { get; }
     public ICommand DenyToolCallCommand { get; }
+    public ICommand OpenHistoryCommand { get; }
+    public ICommand CloseHistoryCommand { get; }
+    public ICommand NewChatCommand { get; }
+    public ICommand LoadSessionCommand { get; }
+    public ICommand DeleteSessionCommand { get; }
 
     public ChatTabViewModel(
         Action<ChatTabViewModel> onClose,
         ObservableCollection<SshConnectionProfile> savedConnections,
-        ChatSettingsService settingsService)
+        ChatSettingsService settingsService,
+        ChatHistoryService historyService)
     {
         _onClose = onClose;
         _settingsService = settingsService;
+        _historyService = historyService;
         _settings = _settingsService.Load();
         _toolRegistry = new ChatToolRegistry(savedConnections);
 
@@ -184,7 +199,7 @@ public class ChatTabViewModel : INotifyPropertyChanged, ITabViewModel
 
         _sendMessageCommand = new RelayCommand(() => _ = SendMessageAsync(), () => !IsStreaming && !string.IsNullOrWhiteSpace(DraftInput));
         CancelStreamingCommand = new RelayCommand(() => _streamCts?.Cancel());
-        OpenSettingsCommand = new RelayCommand(() => IsSettingsPanelOpen = true);
+        OpenSettingsCommand = new RelayCommand(() => { IsSettingsPanelOpen = true; IsHistoryPanelOpen = false; });
         CloseSettingsCommand = new RelayCommand(() => IsSettingsPanelOpen = false);
         SaveSettingsCommand = new RelayCommand(() =>
         {
@@ -194,6 +209,90 @@ public class ChatTabViewModel : INotifyPropertyChanged, ITabViewModel
         ClearTranscriptCommand = new RelayCommand(() => Messages.Clear());
         ApproveToolCallCommand = new RelayCommand(() => ResolveApproval(true));
         DenyToolCallCommand = new RelayCommand(() => ResolveApproval(false));
+        OpenHistoryCommand = new RelayCommand(() =>
+        {
+            RefreshHistoryList();
+            IsHistoryPanelOpen = true;
+            IsSettingsPanelOpen = false;
+        });
+        CloseHistoryCommand = new RelayCommand(() => IsHistoryPanelOpen = false);
+        NewChatCommand = new RelayCommand(StartNewChat);
+        LoadSessionCommand = new RelayCommand<ChatSessionSummary>(LoadSession);
+        DeleteSessionCommand = new RelayCommand<ChatSessionSummary>(DeleteSession);
+    }
+
+    private void RefreshHistoryList()
+    {
+        List<ChatSessionSummary> sessions;
+        try
+        {
+            sessions = _historyService.ListSessions();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to load chat history list: {ex.Message}");
+            return;
+        }
+
+        HistorySessions.Clear();
+        foreach (var session in sessions)
+            HistorySessions.Add(session);
+    }
+
+    private void StartNewChat()
+    {
+        _streamCts?.Cancel();
+        Messages.Clear();
+        _currentSessionId = null;
+        _nextSequence = 0;
+        IsHistoryPanelOpen = false;
+    }
+
+    private void LoadSession(ChatSessionSummary? summary)
+    {
+        if (summary == null) return;
+
+        List<ChatMessage> loaded;
+        try
+        {
+            loaded = _historyService.LoadMessages(summary.Id);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to load chat session '{summary.Id}': {ex.Message}");
+            return;
+        }
+
+        _streamCts?.Cancel();
+        Messages.Clear();
+        foreach (var message in loaded)
+            Messages.Add(message);
+        _currentSessionId = summary.Id;
+        _nextSequence = loaded.Count;
+        IsHistoryPanelOpen = false;
+    }
+
+    private void DeleteSession(ChatSessionSummary? summary)
+    {
+        if (summary == null) return;
+
+        try
+        {
+            _historyService.DeleteSession(summary.Id);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to delete chat session '{summary.Id}': {ex.Message}");
+            return;
+        }
+
+        if (_currentSessionId == summary.Id)
+        {
+            _currentSessionId = null;
+            _nextSequence = 0;
+            Messages.Clear();
+        }
+        RefreshHistoryList();
     }
 
     private void ResolveApproval(bool approved)
@@ -221,7 +320,8 @@ public class ChatTabViewModel : INotifyPropertyChanged, ITabViewModel
 
         var userText = DraftInput.Trim();
         DraftInput = "";
-        Messages.Add(new ChatMessage { Role = ChatRole.User, Content = userText });
+        EnsureSession(userText);
+        AddMessage(new ChatMessage { Role = ChatRole.User, Content = userText });
 
         IsStreaming = true;
         _streamCts = new CancellationTokenSource();
@@ -235,13 +335,75 @@ public class ChatTabViewModel : INotifyPropertyChanged, ITabViewModel
         }
         catch (Exception ex)
         {
-            Messages.Add(new ChatMessage { Role = ChatRole.Assistant, IsError = true, Content = ex.Message });
+            AddMessage(new ChatMessage { Role = ChatRole.Assistant, IsError = true, Content = ex.Message });
         }
         finally
         {
             IsStreaming = false;
             _streamCts = null;
         }
+    }
+
+    /// <summary>
+    /// Creates a new persisted session (titled from the first message) the first time
+    /// a real message is sent in this tab — no DB row for a tab that's opened but never used.
+    /// </summary>
+    private void EnsureSession(string firstUserText)
+    {
+        if (_currentSessionId != null) return;
+        try
+        {
+            _currentSessionId = _historyService.CreateSession(DeriveTitle(firstUserText));
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to create chat history session: {ex.Message}");
+        }
+    }
+
+    private static string DeriveTitle(string text)
+    {
+        var oneLine = text.Replace('\n', ' ').Replace('\r', ' ').Trim();
+        return oneLine.Length <= 48 ? oneLine : oneLine[..48] + "…";
+    }
+
+    private void AddToTranscript(ChatMessage message)
+    {
+        if (Dispatcher.UIThread.CheckAccess()) Messages.Add(message);
+        else Dispatcher.UIThread.Post(() => Messages.Add(message));
+    }
+
+    /// <summary>
+    /// Writes a message to the current session in the background, using its content/tool
+    /// calls as they stand right now. Call this only once a message's content is final —
+    /// for a streaming assistant reply that means after the stream completes, not when the
+    /// (still-empty) placeholder is first added to the transcript.
+    /// </summary>
+    private void PersistMessage(ChatMessage message)
+    {
+        var sessionId = _currentSessionId;
+        if (sessionId == null) return;
+
+        var sequence = _nextSequence++;
+        Task.Run(() =>
+        {
+            try
+            {
+                _historyService.AppendMessage(sessionId, message, sequence);
+                _historyService.TouchSession(sessionId);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Failed to persist chat message: {ex.Message}");
+            }
+        });
+    }
+
+    /// <summary>Adds a message with already-final content to both the transcript and history.</summary>
+    private void AddMessage(ChatMessage message)
+    {
+        AddToTranscript(message);
+        PersistMessage(message);
     }
 
     // Not shown in the transcript — prepended to every request so the model has identity
@@ -276,7 +438,7 @@ public class ChatTabViewModel : INotifyPropertyChanged, ITabViewModel
             var accumulator = new ChatToolCallAccumulator();
             string? finishReason = null;
 
-            Dispatcher.UIThread.Post(() => Messages.Add(assistantMessage));
+            AddToTranscript(assistantMessage);
 
             try
             {
@@ -301,18 +463,23 @@ public class ChatTabViewModel : INotifyPropertyChanged, ITabViewModel
                 // The request failed before (or partway through) producing content — drop
                 // the empty placeholder bubble so the caller's single error message is the
                 // only thing shown, instead of a blank "Helm" bubble followed by the error.
+                // Never persisted (PersistMessage hasn't run yet), so nothing to clean up there.
                 if (string.IsNullOrEmpty(assistantMessage.Content))
                     Dispatcher.UIThread.Post(() => Messages.Remove(assistantMessage));
                 throw;
             }
 
             if (finishReason != "tool_calls" || !accumulator.HasAny)
+            {
+                PersistMessage(assistantMessage); // Final content now that streaming is done.
                 return; // Plain assistant reply — conversation round complete.
+            }
 
             var calls = accumulator.Build();
             assistantMessage.ToolCalls = calls;
             if (string.IsNullOrEmpty(assistantMessage.Content))
                 assistantMessage.Content = "Calling " + string.Join(", ", calls.Select(c => c.FunctionName)) + "…";
+            PersistMessage(assistantMessage);
 
             foreach (var call in calls)
             {
@@ -324,7 +491,7 @@ public class ChatTabViewModel : INotifyPropertyChanged, ITabViewModel
                     Content = result.Content,
                     ToolCallId = call.Id
                 };
-                Dispatcher.UIThread.Post(() => Messages.Add(toolMessage));
+                AddMessage(toolMessage);
             }
         }
     }

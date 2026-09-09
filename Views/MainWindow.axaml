@@ -2280,7 +2280,7 @@
                             <DataTemplate DataType="vm:ChatTabViewModel">
                                 <Grid Background="#1e1e1e" RowDefinitions="Auto,Auto,*,Auto,Auto" Margin="8">
                                     <!-- Header -->
-                                    <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto,Auto" Margin="2,0,2,8">
+                                    <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto,Auto,Auto,Auto" Margin="2,0,2,8">
                                         <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8"
                                             VerticalAlignment="Center">
                                             <TextBlock Text="Helm" FontWeight="SemiBold"
@@ -2292,10 +2292,16 @@
                                             Command="{Binding CancelStreamingCommand}"
                                             IsVisible="{Binding IsStreaming}"
                                             Classes="toolButton" Padding="8,4" FontSize="11" Margin="0,0,6,0" />
-                                        <Button Grid.Column="2" Content="Clear"
+                                        <Button Grid.Column="2" Content="+ New Chat"
+                                            Command="{Binding NewChatCommand}"
+                                            Classes="toolButton" Padding="8,4" FontSize="11" Margin="0,0,6,0" />
+                                        <Button Grid.Column="3" Content="🕘 History"
+                                            Command="{Binding OpenHistoryCommand}"
+                                            Classes="toolButton" Padding="8,4" FontSize="11" Margin="0,0,6,0" />
+                                        <Button Grid.Column="4" Content="Clear"
                                             Command="{Binding ClearTranscriptCommand}"
                                             Classes="toolButton" Padding="8,4" FontSize="11" Margin="0,0,6,0" />
-                                        <Button Grid.Column="3" Content="⚙ Settings"
+                                        <Button Grid.Column="5" Content="⚙ Settings"
                                             Command="{Binding OpenSettingsCommand}"
                                             Classes="toolButton" Padding="8,4" FontSize="11" Margin="0" />
                                     </Grid>
@@ -2352,6 +2358,57 @@
                                                     Classes="toolButton" Padding="12,7" FontSize="12" Margin="0" />
                                             </StackPanel>
                                         </StackPanel>
+                                    </Border>
+
+                                    <!-- History drawer -->
+                                    <Border Grid.Row="1" IsVisible="{Binding IsHistoryPanelOpen}"
+                                        Background="#161616" BorderBrush="#333" BorderThickness="1"
+                                        CornerRadius="4" Padding="12" Margin="0,0,0,8" MaxHeight="360">
+                                        <Grid RowDefinitions="Auto,*,Auto">
+                                            <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,8">
+                                                <TextBlock Grid.Column="0" Text="Chat history" Foreground="#e0e0e0"
+                                                    FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center" />
+                                                <Button Grid.Column="1" Content="+ New Chat"
+                                                    Command="{Binding NewChatCommand}"
+                                                    Classes="toolButton" Padding="8,4" FontSize="11" Margin="0" />
+                                            </Grid>
+                                            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
+                                                HorizontalScrollBarVisibility="Disabled">
+                                                <ItemsControl ItemsSource="{Binding HistorySessions}">
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate DataType="models:ChatSessionSummary">
+                                                            <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,4">
+                                                                <Button Grid.Column="0"
+                                                                    Command="{Binding $parent[ItemsControl].((vm:ChatTabViewModel)DataContext).LoadSessionCommand}"
+                                                                    CommandParameter="{Binding}"
+                                                                    HorizontalAlignment="Stretch"
+                                                                    HorizontalContentAlignment="Left"
+                                                                    Classes="toolButton" Padding="8,6" FontSize="12" Margin="0">
+                                                                    <StackPanel Spacing="1">
+                                                                        <TextBlock Text="{Binding Title}"
+                                                                            Foreground="#e0e0e0" FontSize="12"
+                                                                            TextTrimming="CharacterEllipsis" />
+                                                                        <TextBlock Text="{Binding UpdatedAt, StringFormat='{}{0:MMM d, HH:mm}'}"
+                                                                            Foreground="#777777" FontSize="10" />
+                                                                    </StackPanel>
+                                                                </Button>
+                                                                <Button Grid.Column="1" Content="✕"
+                                                                    Command="{Binding $parent[ItemsControl].((vm:ChatTabViewModel)DataContext).DeleteSessionCommand}"
+                                                                    CommandParameter="{Binding}"
+                                                                    Classes="toolButton" Padding="8,6" FontSize="11"
+                                                                    Margin="4,0,0,0"
+                                                                    ToolTip.Tip="Delete this session" />
+                                                            </Grid>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </ScrollViewer>
+                                            <TextBlock Grid.Row="1" Text="No saved chats yet — send a message to start one."
+                                                Foreground="#666666" FontSize="12" TextWrapping="Wrap"
+                                                IsVisible="{Binding !HistorySessions.Count}" Margin="0,4,0,0" />
+                                            <Button Grid.Row="2" Content="Close" Command="{Binding CloseHistoryCommand}"
+                                                Classes="toolButton" Padding="12,7" FontSize="12" Margin="0,8,0,0" />
+                                        </Grid>
                                     </Border>
 
                                     <!-- Transcript -->

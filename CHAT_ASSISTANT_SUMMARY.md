@@ -1,7 +1,7 @@
 # Chat Assistant — Feature Implementation
 
 ## Overview
-Added an in-app LLM chatbot to Termox, modeled on Claude Code's editor extension: a user configures their own OpenAI-compatible inference endpoint (base URL, API key, model), and the model can call Termox's own SSH/SFTP/network tools as function-calling "tools" to inspect and operate on saved connections — instead of the user driving every action by hand. Lives in a new **Chat** tab, launched from a new sidebar section alongside Sessions/Bookmarks/Tools.
+Added an in-app LLM chatbot ("Helm") to Termox, modeled on Claude Code's editor extension: a user configures their own OpenAI-compatible inference endpoint (base URL, API key, model), and the model can call Termox's own SSH/SFTP/network tools as function-calling "tools" to inspect and operate on saved connections — instead of the user driving every action by hand. Lives in a new **Chat** tab, launched from a new sidebar section alongside Sessions/Bookmarks/Tools. Conversations persist locally (SQLite) as named, resumable sessions.
 
 ## How it works, end to end
 
@@ -10,6 +10,7 @@ Added an in-app LLM chatbot to Termox, modeled on Claude Code's editor extension
 3. **The response streams back token by token** over Server-Sent Events and renders live in the transcript.
 4. **If the model decides to call a tool** (`finish_reason == "tool_calls"`), Termox looks the tool up, checks its risk tier, executes it, and feeds the result back to the model as a `role: "tool"` message — then loops back to step 3. This repeats (bounded at 8 rounds) until the model returns a plain answer.
 5. **Risk-gated execution**: read-only tools (DNS lookup, port scan, ping, fingerprint hash, SFTP list/read, GPG public-key list) run immediately. Anything that mutates state (SSH command exec, SFTP upload/rename/chmod) or is irreversible (SFTP delete, GPG secret-key delete/export) blocks on an approval banner in the transcript — you click Approve or Deny before it runs.
+6. **Every message is persisted** to a local SQLite session (title auto-derived from the first message) as soon as its content is final — including tool calls/results, so resuming a session shows exactly what happened. **🕘 History** in the tab header lists past sessions (click to resume, ✕ to delete); **+ New Chat** starts a fresh one.
 
 ## New Files Created
 
@@ -33,6 +34,8 @@ Added an in-app LLM chatbot to Termox, modeled on Claude Code's editor extension
 - **`Services/ChatModelCatalog.cs`** — curated list of known tool-calling-capable models (OpenAI, OpenRouter, Ollama) with their context windows, plus a `Custom…` sentinel; backs the settings drawer's model dropdown.
 - **`Services/TokenEstimator.cs`** — rough character-based token-count heuristic (no tokenizer dependency) used to trim outgoing history to `ContextWindowTokens`.
 - **`Services/ChatSettingsService.cs`** — loads/saves `chatsettings.json`, encrypting the API key via `CredentialManager` under a dedicated key id (`chat:apiKey`) distinct from SSH credentials.
+- **`Services/ChatHistoryService.cs`** — persists sessions/messages to `%AppData%\Termox\chathistory.db` (SQLite, via `Microsoft.Data.Sqlite`, pooling disabled). Each public method opens/disposes its own short-lived connection — simplest safe pattern for a single-window desktop app. Tool calls round-trip through a JSON column.
+- **`Services/MarkdownRenderer.cs`** / **`Services/MiniMarkdown.cs`** / **`Services/MarkdownContentConverter.cs`** — a small first-party Markdown renderer (parser + Avalonia visual builder + binding converter) for assistant replies, after confirming the obvious third-party option (Markdown.Avalonia) is binary-incompatible with Avalonia 12.
 - Reuses **`DnsRecordInspector`**, **`FingerprintUtility`**, and **`GpgKeyManager`** as-is for the corresponding tools.
 
 ### ViewModel & View
@@ -50,4 +53,4 @@ Added an in-app LLM chatbot to Termox, modeled on Claude Code's editor extension
 
 ## Tests
 
-`tests/Termox.Tests/`: `ChatSseParserTests`, `ChatToolCallAccumulatorTests`, `ChatSettingsServiceTests` (round-trip + on-disk plaintext-key check), `NetworkDiagnosticsTests` (real local `TcpListener`, no mocks), `ChatToolRegistryTests` (unknown profile / unpinned host / unknown tool all fail safely, not by throwing), `TokenEstimatorTests`, `ChatModelCatalogTests`.
+`tests/Termox.Tests/`: `ChatSseParserTests`, `ChatToolCallAccumulatorTests`, `ChatSettingsServiceTests` (round-trip + on-disk plaintext-key check), `NetworkDiagnosticsTests` (real local `TcpListener`, no mocks), `ChatToolRegistryTests` (unknown profile / unpinned host / unknown tool all fail safely, not by throwing), `TokenEstimatorTests`, `ChatModelCatalogTests`, `OpenAiChatClientErrorTests`, `MiniMarkdownTests`, `ChatHistoryServiceTests` (round-trip, tool-call JSON, ordering, delete).

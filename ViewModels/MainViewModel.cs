@@ -402,6 +402,7 @@ public class MainViewModel : INotifyPropertyChanged
     public ICommand OpenChatTabCommand { get; }
 
     private readonly ChatSettingsService _chatSettingsService = new();
+    private readonly ChatHistoryService _chatHistoryService = new();
 
     private string _configPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Termox", "connections.json");
     private string _bookmarksPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Termox", "bookmarks.json");
@@ -1197,7 +1198,7 @@ public class MainViewModel : INotifyPropertyChanged
         {
             Tabs.Remove(tab);
             SaveCurrentSessions();
-        }, SavedConnections, _chatSettingsService);
+        }, SavedConnections, _chatSettingsService, _chatHistoryService);
         Tabs.Add(chatTab);
         SelectedTab = chatTab;
     }
