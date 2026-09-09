@@ -2415,7 +2415,8 @@
 
                                     <!-- Transcript -->
                                     <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto"
-                                        HorizontalScrollBarVisibility="Disabled">
+                                        HorizontalScrollBarVisibility="Disabled"
+                                        Loaded="ChatTranscript_Loaded" Unloaded="ChatTranscript_Unloaded">
                                         <ItemsControl ItemsSource="{Binding Messages}">
                                             <ItemsControl.ItemTemplate>
                                                 <DataTemplate DataType="models:ChatMessage">
@@ -2523,7 +2524,8 @@
                                     <Grid Grid.Row="4" ColumnDefinitions="*,Auto" Margin="0,8,0,0">
                                         <TextBox Grid.Column="0" Text="{Binding DraftInput}"
                                             PlaceholderText="Ask about your servers…" AcceptsReturn="False"
-                                            IsEnabled="{Binding !IsStreaming}" />
+                                            IsEnabled="{Binding !IsStreaming}"
+                                            KeyDown="ChatDraftInput_KeyDown" />
                                         <Button Grid.Column="1" Content="Send"
                                             Command="{Binding SendMessageCommand}"
                                             Classes="primaryButton" Padding="14,7" CornerRadius="4"

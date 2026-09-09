@@ -2,7 +2,9 @@ using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
+using Avalonia.Threading;
 using System;
+using System.Collections.Specialized;
 using System.IO;
 using System.Threading.Tasks;
 using Termox.ViewModels;
@@ -44,6 +46,37 @@ public partial class MainWindow : Window
             foreach (var tab in vm.Tabs.OfType<SftpTabViewModel>())
                 tab.Dispose();
         }
+    }
+
+    private void ChatTranscript_Loaded(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not ScrollViewer scrollViewer) return;
+        if (scrollViewer.DataContext is not ChatTabViewModel vm) return;
+
+        void Handler(object? s, NotifyCollectionChangedEventArgs args)
+        {
+            if (args.Action != NotifyCollectionChangedAction.Add) return;
+            Dispatcher.UIThread.Post(() => scrollViewer.ScrollToEnd(), DispatcherPriority.Background);
+        }
+
+        vm.Messages.CollectionChanged += Handler;
+        scrollViewer.Tag = (Action)(() => vm.Messages.CollectionChanged -= Handler);
+        scrollViewer.ScrollToEnd();
+    }
+
+    private void ChatTranscript_Unloaded(object? sender, RoutedEventArgs e)
+    {
+        if (sender is ScrollViewer { Tag: Action unsubscribe }) unsubscribe();
+    }
+
+    private void ChatDraftInput_KeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter) return;
+        if (sender is not Control control || control.DataContext is not ChatTabViewModel vm) return;
+
+        e.Handled = true;
+        if (vm.SendMessageCommand.CanExecute(null))
+            vm.SendMessageCommand.Execute(null);
     }
 
     private void ExitTermox_Click(object? sender, RoutedEventArgs e)
