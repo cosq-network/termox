@@ -2392,11 +2392,13 @@
                                                                             Foreground="#777777" FontSize="10" />
                                                                     </StackPanel>
                                                                 </Button>
-                                                                <Button Grid.Column="1" Content="✕"
+                                                                <Button Grid.Column="1" Content="🗑"
                                                                     Command="{Binding $parent[ItemsControl].((vm:ChatTabViewModel)DataContext).DeleteSessionCommand}"
                                                                     CommandParameter="{Binding}"
-                                                                    Classes="toolButton" Padding="8,6" FontSize="11"
-                                                                    Margin="4,0,0,0"
+                                                                    Classes="toolButton" Padding="8,6" FontSize="13"
+                                                                    Margin="4,0,0,0" VerticalAlignment="Stretch"
+                                                                    VerticalContentAlignment="Center"
+                                                                    HorizontalContentAlignment="Center"
                                                                     ToolTip.Tip="Delete this session" />
                                                             </Grid>
                                                         </DataTemplate>
