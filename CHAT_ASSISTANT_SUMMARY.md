@@ -50,6 +50,7 @@ Added an in-app LLM chatbot ("Helm") to Termox, modeled on Claude Code's editor 
 - **No raw host/port ever reaches the model** — only saved, named `profileId`s.
 - **Destructive actions are always gated**, regardless of the "auto-approve read-only tools" setting.
 - **API key encrypted at rest** (DPAPI on Windows / OS keychain elsewhere) via the existing `CredentialManager`, under its own key id.
+- **Chat history content encrypted at rest too** — `ChatHistoryService` encrypts `content` and `tool_calls_json` per-message via the same `CredentialManager` (key id `chat:history`, distinct from the API key's and every SSH profile's) before writing to `chathistory.db`, since tool results routinely contain SSH command output/file contents. Rows written before this existed stay readable (not silently discarded) — only new writes are encrypted.
 
 ## Tests
 

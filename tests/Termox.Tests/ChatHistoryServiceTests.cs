@@ -171,6 +171,67 @@ public class ChatHistoryServiceTests
     }
 
     [Fact]
+    public void OnDiskFileNeverContainsPlaintextMessageContent()
+    {
+        var path = TempDbPath();
+        try
+        {
+            var service = new ChatHistoryService(path);
+            var sessionId = service.CreateSession("Secret stuff");
+            service.AppendMessage(sessionId, new ChatMessage
+            {
+                Role = ChatRole.Tool,
+                Content = "super-secret-command-output-value",
+                ToolCalls = new() { new ChatToolCall { Id = "call_1", FunctionName = "ssh_run_command", ArgumentsJson = "{\"command\":\"cat /etc/secret-shadow-file\"}" } }
+            }, 0);
+
+            var raw = File.ReadAllText(path);
+
+            Assert.DoesNotContain("super-secret-command-output-value", raw, StringComparison.Ordinal);
+            Assert.DoesNotContain("secret-shadow-file", raw, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void UnencryptedLegacyRowIsStillReadableNotDiscarded()
+    {
+        var path = TempDbPath();
+        try
+        {
+            var service = new ChatHistoryService(path);
+            var sessionId = service.CreateSession("Legacy row");
+
+            // Simulate a row written before content encryption existed: plain text,
+            // no "ENCRYPTED:"/"KEYCHAIN:" prefix.
+            using (var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={path};Pooling=False"))
+            {
+                connection.Open();
+                using var command = connection.CreateCommand();
+                command.CommandText = """
+                    INSERT INTO chat_messages (id, session_id, sequence, role, content, tool_calls_json, tool_call_id, is_error, timestamp)
+                    VALUES ($id, $sid, 0, 'User', 'plain legacy text', NULL, NULL, 0, $ts)
+                    """;
+                command.Parameters.AddWithValue("$id", Guid.NewGuid().ToString());
+                command.Parameters.AddWithValue("$sid", sessionId);
+                command.Parameters.AddWithValue("$ts", DateTime.UtcNow.ToString("O"));
+                command.ExecuteNonQuery();
+            }
+
+            var loaded = service.LoadMessages(sessionId);
+
+            Assert.Equal("plain legacy text", Assert.Single(loaded).Content);
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
+
+    [Fact]
     public void RenameSessionUpdatesTitle()
     {
         var path = TempDbPath();

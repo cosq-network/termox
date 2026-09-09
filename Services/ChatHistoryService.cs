@@ -19,6 +19,10 @@ public class ChatHistoryService
 {
     private const string DateFormat = "O"; // round-trippable ISO 8601
 
+    // Distinct from "chat:apiKey" (ChatSettingsService) and every SSH profile's own key id,
+    // so a leaked chathistory.db can't be decrypted using entropy derived from those.
+    private const string ContentEncryptionKeyId = "chat:history";
+
     private readonly string _connectionString;
 
     public ChatHistoryService()
@@ -166,9 +170,9 @@ public class ChatHistoryService
         command.Parameters.AddWithValue("$sessionId", sessionId);
         command.Parameters.AddWithValue("$sequence", sequence);
         command.Parameters.AddWithValue("$role", message.Role.ToString());
-        command.Parameters.AddWithValue("$content", message.Content);
+        command.Parameters.AddWithValue("$content", EncryptField(message.Content));
         command.Parameters.AddWithValue("$toolCallsJson",
-            message.ToolCalls is { Count: > 0 } ? (object)JsonSerializer.Serialize(message.ToolCalls) : DBNull.Value);
+            message.ToolCalls is { Count: > 0 } ? (object)EncryptField(JsonSerializer.Serialize(message.ToolCalls)) : DBNull.Value);
         command.Parameters.AddWithValue("$toolCallId", (object?)message.ToolCallId ?? DBNull.Value);
         command.Parameters.AddWithValue("$isError", message.IsError ? 1 : 0);
         command.Parameters.AddWithValue("$timestamp", message.Timestamp.ToString(DateFormat, CultureInfo.InvariantCulture));
@@ -189,13 +193,13 @@ public class ChatHistoryService
         using var reader = command.ExecuteReader();
         while (reader.Read())
         {
-            var toolCallsJson = reader.IsDBNull(3) ? null : reader.GetString(3);
+            var toolCallsJson = reader.IsDBNull(3) ? null : DecryptField(reader.GetString(3));
             messages.Add(new ChatMessage
             {
                 Id = reader.GetString(0),
                 Role = Enum.Parse<ChatRole>(reader.GetString(1)),
-                Content = reader.GetString(2),
-                ToolCalls = toolCallsJson == null ? null : JsonSerializer.Deserialize<List<ChatToolCall>>(toolCallsJson),
+                Content = DecryptField(reader.GetString(2)),
+                ToolCalls = string.IsNullOrEmpty(toolCallsJson) ? null : JsonSerializer.Deserialize<List<ChatToolCall>>(toolCallsJson),
                 ToolCallId = reader.IsDBNull(4) ? null : reader.GetString(4),
                 IsError = reader.GetInt32(5) != 0,
                 Timestamp = ParseDate(reader.GetString(6))
@@ -207,4 +211,22 @@ public class ChatHistoryService
 
     private static DateTime ParseDate(string value) =>
         DateTime.Parse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind);
+
+    private static string EncryptField(string value) =>
+        string.IsNullOrEmpty(value) ? value : CredentialManager.EncryptCredential(value, ContentEncryptionKeyId);
+
+    /// <summary>
+    /// Decrypts a field written by EncryptField. Unlike CredentialManager's normal
+    /// "refuse legacy plaintext" behavior for credentials (correct there, since a
+    /// credential should never have been plaintext), a row written before this field
+    /// was encrypted is legitimate history, not a security smell — so an unprefixed
+    /// value is returned as-is instead of being discarded.
+    /// </summary>
+    private static string DecryptField(string value)
+    {
+        if (string.IsNullOrEmpty(value)) return value;
+        return CredentialManager.IsEncrypted(value)
+            ? CredentialManager.DecryptCredential(value, ContentEncryptionKeyId)
+            : value;
+    }
 }
