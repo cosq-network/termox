@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Product Id="B7E0DF9A-4CF4-4C01-9BC5-000000000002" Name="Termox" Language="1033" Version="$(var.MyAppVersion)" Manufacturer="Termox Project" UpgradeCode="B7E0DF9A-4CF4-4C01-9BC5-000000000003">
+    <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine" />
+    <MediaTemplate EmbedCab="yes" />
+    <MajorUpgrade AllowSameVersionUpgrades="yes" DowngradeErrorMessage="A newer version of Termox is already installed." />
+    <Property Id="ARPPRODUCTICON" Value="TermoxIcon" />
+    <Icon Id="TermoxIcon" SourceFile="$(var.TermoxRoot)\Assets\Icons\termox-icon.ico" />
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="ProgramFiles64Folder">
+        <Directory Id="INSTALLFOLDER" Name="Termox" />
+      </Directory>
+      <Directory Id="ProgramMenuFolder">
+        <Directory Id="ApplicationProgramsFolder" Name="Termox" />
+      </Directory>
+    </Directory>
+    <DirectoryRef Id="ApplicationProgramsFolder">
+      <Component Id="StartMenuShortcut" Guid="B7E0DF9A-4CF4-4C01-9BC5-000000000004">
+        <Shortcut Id="StartMenuTermox" Name="Termox" Description="Termox" Target="[INSTALLFOLDER]Termox.exe" WorkingDirectory="INSTALLFOLDER" Icon="TermoxIcon" />
+        <RemoveFolder Id="RemoveStartMenuFolder" Directory="ApplicationProgramsFolder" On="uninstall" />
+        <RegistryValue Root="HKCU" Key="Software\Termox" Name="installed" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+    </DirectoryRef>
+    <Feature Id="ProductFeature" Title="Termox" Level="1">
+      <ComponentGroupRef Id="TermoxFiles" />
+      <ComponentRef Id="StartMenuShortcut" />
+    </Feature>
+  </Product>
+</Wix>

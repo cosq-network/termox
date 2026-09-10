@@ -206,9 +206,17 @@ jobs:
       - name: Show disk space
         shell: powershell
         run: Get-PSDrive -PSProvider FileSystem
-      - name: Install Inno Setup
+      - name: Install Windows packaging tools
         shell: powershell
-        run: choco install innosetup -y --no-progress
+        run: |
+          choco install innosetup -y --no-progress
+          choco install wixtoolset --version=3.14.1.20250415 -y --no-progress
+          $wixBin = Get-ChildItem "${env:ProgramFiles(x86)}" -Directory -Filter 'WiX Toolset v3.*' -ErrorAction SilentlyContinue |
+            Sort-Object Name -Descending |
+            Select-Object -First 1 |
+            Join-Path -ChildPath bin
+          if (-not (Test-Path (Join-Path $wixBin candle.exe))) { throw 'WiX Toolset binaries not found.' }
+          $wixBin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
       - name: Publish Windows application
         shell: powershell
         env:
@@ -218,7 +226,7 @@ jobs:
           -p:PublishSingleFile=true -p:IncludeAllContentForSelfExtract=true
           -p:Version=$env:VERSION -p:VersionPrefix=$env:VERSION
           -o artifacts/publish/win-x64
-      - name: Build Windows installer
+      - name: Build Windows installer (EXE)
         shell: powershell
         env:
           VERSION: ${{ needs.version.outputs.version }}
@@ -226,22 +234,66 @@ jobs:
           iscc /DMyAppVersion=$env:VERSION
           /DSourceDir="$env:GITHUB_WORKSPACE\artifacts\publish\win-x64"
           /Qp packaging\windows\termox.iss
-      - name: Verify Windows installer
+      - name: Build Windows MSI (WiX)
         shell: powershell
         env:
           VERSION: ${{ needs.version.outputs.version }}
-        run: >
-          if (-not (Test-Path "artifacts/release/Termox-$env:VERSION-windows-x64.exe"))
-          { throw "Windows installer was not created." }
+        run: |
+          $publish = (Resolve-Path 'artifacts/publish/win-x64').Path
+          $workDir = New-Item -ItemType Directory -Force -Path artifacts/wix
+          $fragment = Join-Path $workDir 'TermoxFiles.wxs'
+          & heat.exe dir $publish -dr INSTALLFOLDER -cg TermoxFiles -var var.SourceDir -srd -ag -nologo -out $fragment
+          & candle.exe -arch x64 -out $workDir "-dMyAppVersion=$env:VERSION" "-dTermoxRoot=$env:GITHUB_WORKSPACE" @(
+            'packaging/windows/termox.wxs',
+            $fragment
+          )
+          & light.exe -sval -out "artifacts/release/Termox-$env:VERSION-windows-x64.msi" -b $publish @(
+            (Join-Path $workDir 'termox.wixobj'),
+            (Join-Path $workDir 'TermoxFiles.wixobj')
+          )
+      - name: Build Windows MSIX
+        shell: powershell
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          $publish = (Resolve-Path 'artifacts/publish/win-x64').Path
+          $staging = New-Item -ItemType Directory -Force -Path artifacts/msix-staging
+          Copy-Item -Path "$publish/*" -Destination $staging -Recurse -Force
+          $assets = New-Item -ItemType Directory -Force -Path "$staging/Assets"
+          Copy-Item -Path "$env:GITHUB_WORKSPACE/Assets/Icons/termox-icon.png" -Destination "$assets/termox-icon.png" -Force
+          Copy-Item -Path "$env:GITHUB_WORKSPACE/packaging/windows/AppxManifest.xml" -Destination "$staging/AppxManifest.xml" -Force
+          $manifestText = Get-Content "$staging/AppxManifest.xml" -Raw
+          $manifestText = $manifestText -replace '__PUBLISHER__', 'CN=Termox Project, OID.2.25.311729368913984317654407730594956997722=1'
+          $manifestText = $manifestText -replace '__VERSION__', "$env:VERSION.0"
+          $manifestText = $manifestText -replace '__ARCH__', 'x64'
+          Set-Content -Path "$staging/AppxManifest.xml" -Value $manifestText
+          $makeAppx = Get-ChildItem "$env:ProgramFiles(x86)\Windows Kits\10\bin" -Recurse -Filter 'makeappx.exe' |
+            Where-Object { $_.FullName -like '*x64*' } |
+            Select-Object -First 1
+          if (-not $makeAppx) { throw 'makeappx.exe (x64) not found.' }
+          & $makeAppx.FullName pack /v /o /d $staging /p "artifacts/release/Termox-$env:VERSION-windows-x64.msix"
+      - name: Verify Windows packages
+        shell: powershell
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          $expected = @(
+            "Termox-$env:VERSION-windows-x64.exe",
+            "Termox-$env:VERSION-windows-x64.msi",
+            "Termox-$env:VERSION-windows-x64.msix"
+          )
+          foreach ($artifact in $expected) {
+            if (-not (Test-Path "artifacts/release/$artifact")) { throw "Windows package not created: $artifact" }
+          }
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: release-windows
-          path: artifacts/release/Termox-*.exe
+          path: artifacts/release/Termox-*
           if-no-files-found: error
       - name: Clean Windows intermediates
         if: always()
         shell: powershell
-        run: Remove-Item -Recurse -Force -ErrorAction SilentlyContinue artifacts/publish, artifacts/release
+        run: Remove-Item -Recurse -Force -ErrorAction SilentlyContinue artifacts/publish, artifacts/msix-staging, artifacts/release
 
   linux:
     name: Linux packages (${{ matrix.rid }})
@@ -267,6 +319,9 @@ jobs:
       - name: Show disk space
         if: matrix.enabled
         run: df -h .
+      - name: Install packaging dependencies
+        if: matrix.enabled
+        run: sudo apt-get update && sudo apt-get install -y rpm
       - name: Build Linux packages
         if: matrix.enabled
         run: bash packaging/linux/build-linux.sh "${{ needs.version.outputs.version }}" ${{ matrix.rid }}
@@ -279,8 +334,10 @@ jobs:
           set -euo pipefail
           test -s "artifacts/release/Termox-$VERSION-$RID.tar.gz"
           test -s "artifacts/release/Termox-$VERSION-$RID.deb"
+          test -f "artifacts/release/Termox-$VERSION-$RID.rpm"
           tar -tzf "artifacts/release/Termox-$VERSION-$RID.tar.gz" | grep -E '(^|\./)usr/bin/Termox$'
           dpkg-deb --info "artifacts/release/Termox-$VERSION-$RID.deb" >/dev/null
+          if command -v rpm >/dev/null 2>&1; then rpm -qip "artifacts/release/Termox-$VERSION-$RID.rpm" >/dev/null; fi
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: matrix.enabled
         with:
@@ -371,8 +428,11 @@ jobs:
           set -euo pipefail
           for artifact in \
             "Termox-$VERSION-windows-x64.exe" \
+            "Termox-$VERSION-windows-x64.msi" \
+            "Termox-$VERSION-windows-x64.msix" \
             "Termox-$VERSION-linux-x64.tar.gz" \
             "Termox-$VERSION-linux-x64.deb" \
+            "Termox-$VERSION-linux-x64.rpm" \
             "Termox-$VERSION-osx-x64.dmg" \
             "Termox-$VERSION-osx-x64.zip" \
             "Termox-$VERSION-osx-arm64.dmg" \

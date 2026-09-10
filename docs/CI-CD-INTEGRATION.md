@@ -9,7 +9,7 @@ troubleshooting for Termox.
 | Workflow | Trigger | Purpose |
 | --- | --- | --- |
 | .github/workflows/ci.yml | Pull requests and pushes to main or master | Restores dependencies, runs tests, builds the application, and uploads coverage when available. |
-| .github/workflows/release.yml | Manual workflow dispatch | Calculates a semantic version, validates, packages Windows/Linux/macOS, signs and notarizes macOS, tags, and publishes a GitHub Release. |
+| .github/workflows/release.yml | Automatic on push to `main` | Calculates a semantic version from Conventional Commits, validates, packages Windows/Linux/macOS, signs and notarizes macOS when secrets are present, tags, and publishes a GitHub Release. |
 
 Release outputs are self-contained; end users do not need a separate .NET
 installation.
@@ -133,12 +133,12 @@ Before starting:
 
 1. Merge the intended code into the default branch.
 2. Confirm CI is green on the release commit.
-3. Confirm all Apple secrets are present and valid.
+3. Confirm all Apple secrets are present and valid, if signing/notarization is required.
 4. Confirm the signing certificate has not expired.
 5. Confirm no conflicting vX.Y.Z tag already exists.
 
-Run the workflow from Actions → Release → Run workflow on the default branch,
-choose patch, minor, or major, and start it.
+Releases are automatic: when a push to `main` contains conventional commits,
+the release workflow calculates the next version and packages all platforms.
 
 Sequence:
 
@@ -157,12 +157,13 @@ the incomplete release tag when possible.
 
 | Platform | Artifacts |
 | --- | --- |
-| Windows | Termox-X.Y.Z-windows-x64.exe, an Inno Setup installer. |
-| Linux | Termox-X.Y.Z-linux-x64.deb and Termox-X.Y.Z-linux-x64.tar.gz. The packaging script maps linux-x64 to amd64, linux-arm64 to arm64, and linux-arm to armhf. |
+| Windows | Termox-X.Y.Z-windows-x64.exe (Inno Setup), Termox-X.Y.Z-windows-x64.msi (WiX), Termox-X.Y.Z-windows-x64.msix (MakeAppx). |
+| Linux | Termox-X.Y.Z-linux-x64.tar.gz, Termox-X.Y.Z-linux-x64.deb (dpkg), Termox-X.Y.Z-linux-x64.rpm (rpmbuild). The packaging script maps linux-x64 to amd64, linux-arm64 to arm64, and linux-arm to armhf. |
 | macOS | Termox-X.Y.Z-osx-x64.dmg and .zip, plus equivalent osx-arm64 files. |
 
-macOS DMGs are signed, notarized, and stapled. ZIPs are created from the
-stapled app bundles. SHA256SUMS.txt contains checksums for every Termox artifact:
+macOS DMGs are signed, notarized, and stapled when Apple secrets are configured.
+ZIPs are created from the stapled app bundles. SHA256SUMS.txt contains checksums
+for every Termox artifact:
 
 ```bash
 sha256sum -c SHA256SUMS.txt --ignore-missing

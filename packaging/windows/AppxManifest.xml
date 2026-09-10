@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+         xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+         xmlns:uap10="http://schemas.microsoft.com/appx/manifest/uap/windows10/10"
+         xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+         IgnorableNamespaces="uap uap10 rescap">
+  <Identity Name="com.cosqnetwork.termox" Publisher="__PUBLISHER__" Version="__VERSION__" ProcessorArchitecture="__ARCH__" />
+  <Properties>
+    <DisplayName>Termox</DisplayName>
+    <PublisherDisplayName>Termox Project</PublisherDisplayName>
+    <Description>Cross-platform SSH and SFTP workspace</Description>
+    <Logo>Assets\termox-icon.png</Logo>
+  </Properties>
+  <Resources>
+    <Resource Language="en-us" />
+  </Resources>
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.17763.0" MaxVersionTested="10.0.26100.0" />
+  </Dependencies>
+  <Capabilities>
+    <rescap:Capability Name="runFullTrust" />
+  </Capabilities>
+  <Applications>
+    <Application Id="Termox"
+                 Executable="Termox.exe"
+                 EntryPoint="Windows.FullTrustApplication"
+                 uap10:RuntimeBehavior="packagedClassicApp"
+                 uap10:TrustLevel="mediumIL">
+      <uap:VisualElements DisplayName="Termox"
+                          Description="Cross-platform SSH and SFTP workspace"
+                          BackgroundColor="transparent"
+                          Square150x150Logo="Assets\termox-icon.png"
+                          Square44x44Logo="Assets\termox-icon.png" />
+    </Application>
+  </Applications>
+</Package>
