@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Collections.Specialized;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -241,6 +243,44 @@ public class MainViewModel : INotifyPropertyChanged
         set { _tabToClose = value; OnPropertyChanged(); }
     }
 
+    // Split view: a second pane pinned to one tab, independent of the main tab strip's
+    // SelectedTab, so e.g. Chat and an SFTP session can sit side by side. Just a pinned
+    // reference into the same Tabs collection — not a separate list of tabs.
+    private ITabViewModel? _secondaryTab;
+    public ITabViewModel? SecondaryTab
+    {
+        get => _secondaryTab;
+        set { _secondaryTab = value; OnPropertyChanged(); OnPropertyChanged(nameof(IsSplitViewActive)); }
+    }
+
+    public bool IsSplitViewActive => SecondaryTab != null;
+
+    private bool _isBulkCloseConfirmModalVisible;
+    public bool IsBulkCloseConfirmModalVisible
+    {
+        get => _isBulkCloseConfirmModalVisible;
+        set { _isBulkCloseConfirmModalVisible = value; OnPropertyChanged(); }
+    }
+
+    private string _bulkCloseTitle = "";
+    public string BulkCloseTitle
+    {
+        get => _bulkCloseTitle;
+        set { _bulkCloseTitle = value; OnPropertyChanged(); }
+    }
+
+    private string _bulkCloseMessage = "";
+    public string BulkCloseMessage
+    {
+        get => _bulkCloseMessage;
+        set { _bulkCloseMessage = value; OnPropertyChanged(); }
+    }
+
+    // Which tabs a confirmed bulk-close actually removes — set right before the modal
+    // opens (Close All / Close Others / Close Left / Close Right all funnel through the
+    // same confirm dialog), resolved lazily at confirm time in case Tabs changed meanwhile.
+    private Func<List<ITabViewModel>>? _bulkCloseSelector;
+
     private bool _isRenameModalVisible;
     public bool IsRenameModalVisible
     {
@@ -376,6 +416,14 @@ public class MainViewModel : INotifyPropertyChanged
     public ICommand RequestCloseTabCommand { get; }
     public ICommand ConfirmCloseTabCommand { get; }
     public ICommand CancelCloseTabCommand { get; }
+    public ICommand RequestCloseAllTabsCommand { get; }
+    public ICommand RequestCloseOtherTabsCommand { get; }
+    public ICommand RequestCloseTabsToLeftCommand { get; }
+    public ICommand RequestCloseTabsToRightCommand { get; }
+    public ICommand ConfirmBulkCloseCommand { get; }
+    public ICommand OpenInSplitViewCommand { get; }
+    public ICommand CloseSplitViewCommand { get; }
+    public ICommand CancelBulkCloseCommand { get; }
     public ICommand TestConnectionCommand { get; }
     public ICommand ConfirmHostKeyCommand { get; }
     public ICommand RejectHostKeyCommand { get; }
@@ -412,7 +460,18 @@ public class MainViewModel : INotifyPropertyChanged
     {
         SavedConnections.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasSavedConnections));
         Bookmarks.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasBookmarks));
-        Tabs.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasTabs));
+        Tabs.CollectionChanged += (_, e) =>
+        {
+            OnPropertyChanged(nameof(HasTabs));
+            // A tab pinned into the split pane can be closed from the main strip (or any
+            // other close path) without going through CloseSplitViewCommand — drop the
+            // dangling reference instead of leaving the pane showing a removed tab.
+            if (e.Action == NotifyCollectionChangedAction.Remove && e.OldItems != null && SecondaryTab != null &&
+                e.OldItems.Cast<ITabViewModel>().Contains(SecondaryTab))
+            {
+                SecondaryTab = null;
+            }
+        };
 
         ConnectCommand = new RelayCommand(() => Connect());
         DisconnectCommand = new RelayCommand(() => SelectedTab?.DisconnectCommand.Execute(null));
@@ -429,6 +488,38 @@ public class MainViewModel : INotifyPropertyChanged
         RequestCloseTabCommand = new RelayCommand<ITabViewModel>(t => { TabToClose = t; IsCloseConfirmModalVisible = true; });
         ConfirmCloseTabCommand = new RelayCommand(ConfirmCloseTab);
         CancelCloseTabCommand = new RelayCommand(() => IsCloseConfirmModalVisible = false);
+        RequestCloseAllTabsCommand = new RelayCommand(() => BeginBulkClose(
+            "Close All Tabs?",
+            () => $"Are you sure you want to close all {Tabs.Count} open tabs? Any unsaved terminal or SFTP sessions will be disconnected.",
+            () => Tabs.ToList()));
+        RequestCloseOtherTabsCommand = new RelayCommand<ITabViewModel>(t =>
+        {
+            if (t == null) return;
+            BeginBulkClose(
+                "Close Other Tabs?",
+                () => $"Close the other {Tabs.Count(x => x != t)} tab(s), keeping '{t.Title}' open?",
+                () => Tabs.Where(x => x != t).ToList());
+        });
+        RequestCloseTabsToLeftCommand = new RelayCommand<ITabViewModel>(t =>
+        {
+            if (t == null) return;
+            BeginBulkClose(
+                "Close Tabs to the Left?",
+                () => $"Close the {Math.Max(0, Tabs.IndexOf(t))} tab(s) to the left of '{t.Title}'?",
+                () => { var idx = Tabs.IndexOf(t); return idx <= 0 ? new List<ITabViewModel>() : Tabs.Take(idx).ToList(); });
+        });
+        RequestCloseTabsToRightCommand = new RelayCommand<ITabViewModel>(t =>
+        {
+            if (t == null) return;
+            BeginBulkClose(
+                "Close Tabs to the Right?",
+                () => $"Close the {Math.Max(0, Tabs.Count - Tabs.IndexOf(t) - 1)} tab(s) to the right of '{t.Title}'?",
+                () => { var idx = Tabs.IndexOf(t); return idx < 0 ? new List<ITabViewModel>() : Tabs.Skip(idx + 1).ToList(); });
+        });
+        ConfirmBulkCloseCommand = new RelayCommand(ConfirmBulkClose);
+        CancelBulkCloseCommand = new RelayCommand(() => IsBulkCloseConfirmModalVisible = false);
+        OpenInSplitViewCommand = new RelayCommand<ITabViewModel>(t => SecondaryTab = t);
+        CloseSplitViewCommand = new RelayCommand(() => SecondaryTab = null);
         TestConnectionCommand = new RelayCommand(TestConnection);
         ConfirmHostKeyCommand = new RelayCommand(ConfirmHostKey);
         RejectHostKeyCommand = new RelayCommand(() => IsHostKeyConfirmModalVisible = false);
@@ -738,6 +829,28 @@ public class MainViewModel : INotifyPropertyChanged
         }
         IsCloseConfirmModalVisible = false;
         TabToClose = null;
+        SaveCurrentSessions();
+    }
+
+    private void BeginBulkClose(string title, Func<string> messageFactory, Func<List<ITabViewModel>> selector)
+    {
+        BulkCloseTitle = title;
+        BulkCloseMessage = messageFactory();
+        _bulkCloseSelector = selector;
+        IsBulkCloseConfirmModalVisible = true;
+    }
+
+    private void ConfirmBulkClose()
+    {
+        // Each tab type's own CloseTabCommand already handles its proper teardown
+        // (e.g. SftpTabViewModel disconnects async before removing itself) — snapshot
+        // first since every one of these removes itself from Tabs as it runs.
+        var toClose = _bulkCloseSelector?.Invoke() ?? new List<ITabViewModel>();
+        foreach (var tab in toClose)
+            tab.CloseTabCommand.Execute(null);
+
+        IsBulkCloseConfirmModalVisible = false;
+        _bulkCloseSelector = null;
         SaveCurrentSessions();
     }
 

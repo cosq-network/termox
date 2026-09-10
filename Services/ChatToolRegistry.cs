@@ -30,6 +30,14 @@ public class ChatToolRegistry
         _savedConnections = savedConnections;
     }
 
+    /// <summary>
+    /// When set, every SSH/SFTP tool is locked to this saved connection: the "profileId"
+    /// parameter is dropped from the tool schema entirely (the model never sees it and
+    /// can't supply one) and resolution always uses this profile instead. Set from the
+    /// chat UI's server picker so a chat session can be scoped to a single server.
+    /// </summary>
+    public string? ScopedProfileId { get; set; }
+
     public async Task<ChatToolResult> DispatchAsync(
         ChatToolCall call,
         Func<ChatToolDefinition, ChatToolCall, Task<bool>>? requestApproval,
@@ -66,26 +74,38 @@ public class ChatToolRegistry
                 Description = "List the saved SSH connection profiles available to other tools, by id and name.",
                 ParametersSchema = ObjectSchema(),
                 RiskLevel = ChatToolRiskLevel.Auto,
-                Execute = (_, _) => Task.FromResult(ChatToolResult.Ok(
-                    _savedConnections.Count == 0
-                        ? "No saved connections."
-                        : string.Join('\n', _savedConnections.Select(p => $"{p.Id}: {p.Name} ({p.Host})"))))
+                Execute = (_, _) =>
+                {
+                    var scope = ScopedProfileId == null
+                        ? _savedConnections
+                        : _savedConnections.Where(p => p.Id == ScopedProfileId);
+                    var list = scope.ToList();
+                    return Task.FromResult(ChatToolResult.Ok(
+                        list.Count == 0
+                            ? "No saved connections."
+                            : string.Join('\n', list.Select(p => $"{p.Id}: {p.Name} ({p.Host})"))));
+                }
             },
             new()
             {
                 Name = "ssh_run_command",
                 Description = "Run a single non-interactive shell command on a saved SSH connection and return its output. " +
-                    "The connection must already have a verified host key (connected once in a Terminal/SFTP tab).",
+                    "The connection must already have a verified host key (connected once in a Terminal/SFTP tab). " +
+                    "Set 'sudo' to true to run the command with elevated (root) privileges via sudo — only do this " +
+                    "when the task genuinely needs it, and never for anything the user hasn't effectively asked for.",
                 ParametersSchema = ObjectSchema(
-                    ProfileIdProperty(),
-                    ("command", StringProperty("The shell command to run."))),
+                    optionalNames: new[] { "sudo" },
+                    properties: WithProfileId(
+                        ("command", StringProperty("The shell command to run.")),
+                        ("sudo", BooleanProperty("Run this command with elevated (root) privileges via sudo. Defaults to false.")))),
                 RiskLevel = ChatToolRiskLevel.RequiresApproval,
                 Execute = async (args, ct) =>
                 {
                     var json = ParseArgs(args);
-                    var profile = ResolveProfile(json, "profileId");
+                    var profile = ResolveProfile(json);
                     var command = RequireString(json, "command");
-                    var output = await _sshCommandTool.RunCommandAsync(profile, command, ct).ConfigureAwait(false);
+                    var sudo = OptionalBool(json, "sudo");
+                    var output = await _sshCommandTool.RunCommandAsync(profile, command, sudo, ct).ConfigureAwait(false);
                     return ChatToolResult.Ok(output);
                 }
             },
@@ -94,13 +114,12 @@ public class ChatToolRegistry
                 Name = "sftp_list_directory",
                 Description = "List files and directories at a remote path over SFTP on a saved connection.",
                 ParametersSchema = ObjectSchema(
-                    ProfileIdProperty(),
-                    ("remotePath", StringProperty("Absolute remote directory path, e.g. /var/log."))),
+                    WithProfileId(("remotePath", StringProperty("Absolute remote directory path, e.g. /var/log.")))),
                 RiskLevel = ChatToolRiskLevel.Auto,
                 Execute = async (args, ct) =>
                 {
                     var json = ParseArgs(args);
-                    var profile = ResolveProfile(json, "profileId");
+                    var profile = ResolveProfile(json);
                     var remotePath = RequireString(json, "remotePath");
                     var listing = await _sftpTool.ListDirectoryAsync(profile, remotePath, ct).ConfigureAwait(false);
                     return ChatToolResult.Ok(listing);
@@ -111,13 +130,12 @@ public class ChatToolRegistry
                 Name = "sftp_read_text_file",
                 Description = "Read a remote text file's contents over SFTP (limited to small files).",
                 ParametersSchema = ObjectSchema(
-                    ProfileIdProperty(),
-                    ("remotePath", StringProperty("Absolute remote file path."))),
+                    WithProfileId(("remotePath", StringProperty("Absolute remote file path.")))),
                 RiskLevel = ChatToolRiskLevel.Auto,
                 Execute = async (args, ct) =>
                 {
                     var json = ParseArgs(args);
-                    var profile = ResolveProfile(json, "profileId");
+                    var profile = ResolveProfile(json);
                     var remotePath = RequireString(json, "remotePath");
                     var content = await _sftpTool.ReadTextFileAsync(profile, remotePath, ct).ConfigureAwait(false);
                     return ChatToolResult.Ok(content);
@@ -128,14 +146,14 @@ public class ChatToolRegistry
                 Name = "sftp_upload_file",
                 Description = "Upload a local file to a remote path over SFTP.",
                 ParametersSchema = ObjectSchema(
-                    ProfileIdProperty(),
-                    ("localPath", StringProperty("Local file path to upload.")),
-                    ("remotePath", StringProperty("Destination remote file path."))),
+                    WithProfileId(
+                        ("localPath", StringProperty("Local file path to upload.")),
+                        ("remotePath", StringProperty("Destination remote file path.")))),
                 RiskLevel = ChatToolRiskLevel.RequiresApproval,
                 Execute = async (args, ct) =>
                 {
                     var json = ParseArgs(args);
-                    var profile = ResolveProfile(json, "profileId");
+                    var profile = ResolveProfile(json);
                     var localPath = RequireString(json, "localPath");
                     var remotePath = RequireString(json, "remotePath");
                     var message = await _sftpTool.UploadFileAsync(profile, localPath, remotePath, ct).ConfigureAwait(false);
@@ -147,14 +165,14 @@ public class ChatToolRegistry
                 Name = "sftp_download_file",
                 Description = "Download a remote file to a local destination folder over SFTP.",
                 ParametersSchema = ObjectSchema(
-                    ProfileIdProperty(),
-                    ("remotePath", StringProperty("Remote file path to download.")),
-                    ("localDestinationFolder", StringProperty("Local folder to download into."))),
+                    WithProfileId(
+                        ("remotePath", StringProperty("Remote file path to download.")),
+                        ("localDestinationFolder", StringProperty("Local folder to download into.")))),
                 RiskLevel = ChatToolRiskLevel.RequiresApproval,
                 Execute = async (args, ct) =>
                 {
                     var json = ParseArgs(args);
-                    var profile = ResolveProfile(json, "profileId");
+                    var profile = ResolveProfile(json);
                     var remotePath = RequireString(json, "remotePath");
                     var localFolder = RequireString(json, "localDestinationFolder");
                     var message = await _sftpTool.DownloadFileAsync(profile, remotePath, localFolder, ct).ConfigureAwait(false);
@@ -166,14 +184,14 @@ public class ChatToolRegistry
                 Name = "sftp_rename",
                 Description = "Rename or move a remote file/directory over SFTP.",
                 ParametersSchema = ObjectSchema(
-                    ProfileIdProperty(),
-                    ("remotePath", StringProperty("Current remote path.")),
-                    ("newRemotePath", StringProperty("New remote path."))),
+                    WithProfileId(
+                        ("remotePath", StringProperty("Current remote path.")),
+                        ("newRemotePath", StringProperty("New remote path.")))),
                 RiskLevel = ChatToolRiskLevel.RequiresApproval,
                 Execute = async (args, ct) =>
                 {
                     var json = ParseArgs(args);
-                    var profile = ResolveProfile(json, "profileId");
+                    var profile = ResolveProfile(json);
                     var remotePath = RequireString(json, "remotePath");
                     var newRemotePath = RequireString(json, "newRemotePath");
                     var message = await _sftpTool.RenameAsync(profile, remotePath, newRemotePath, ct).ConfigureAwait(false);
@@ -185,14 +203,14 @@ public class ChatToolRegistry
                 Name = "sftp_chmod",
                 Description = "Change Unix permissions (octal mode, e.g. 644) on a remote file over SFTP.",
                 ParametersSchema = ObjectSchema(
-                    ProfileIdProperty(),
-                    ("remotePath", StringProperty("Remote path.")),
-                    ("octalMode", StringProperty("Permission mode as an octal string, e.g. '644' or '755'."))),
+                    WithProfileId(
+                        ("remotePath", StringProperty("Remote path.")),
+                        ("octalMode", StringProperty("Permission mode as an octal string, e.g. '644' or '755'.")))),
                 RiskLevel = ChatToolRiskLevel.RequiresApproval,
                 Execute = async (args, ct) =>
                 {
                     var json = ParseArgs(args);
-                    var profile = ResolveProfile(json, "profileId");
+                    var profile = ResolveProfile(json);
                     var remotePath = RequireString(json, "remotePath");
                     var octalMode = RequireString(json, "octalMode");
                     var mode = Convert.ToInt16(octalMode, 8);
@@ -205,13 +223,12 @@ public class ChatToolRegistry
                 Name = "sftp_delete",
                 Description = "Permanently delete a remote file or directory over SFTP. This cannot be undone.",
                 ParametersSchema = ObjectSchema(
-                    ProfileIdProperty(),
-                    ("remotePath", StringProperty("Remote path to delete."))),
+                    WithProfileId(("remotePath", StringProperty("Remote path to delete.")))),
                 RiskLevel = ChatToolRiskLevel.Destructive,
                 Execute = async (args, ct) =>
                 {
                     var json = ParseArgs(args);
-                    var profile = ResolveProfile(json, "profileId");
+                    var profile = ResolveProfile(json);
                     var remotePath = RequireString(json, "remotePath");
                     var message = await _sftpTool.DeleteAsync(profile, remotePath, ct).ConfigureAwait(false);
                     return ChatToolResult.Ok(message);
@@ -324,9 +341,27 @@ public class ChatToolRegistry
         };
     }
 
-    private SshConnectionProfile ResolveProfile(JsonElement json, string propertyName)
+    /// <summary>
+    /// Prepends the "profileId" parameter to a tool's schema, unless the chat is scoped
+    /// to a single server — in which case the model never needs (or is given) a choice.
+    /// </summary>
+    private (string Name, JsonObject Schema)[] WithProfileId(params (string Name, JsonObject Schema)[] extra)
     {
-        var profileId = RequireString(json, propertyName);
+        if (ScopedProfileId != null) return extra;
+        return new[] { ProfileIdProperty() }.Concat(extra).ToArray();
+    }
+
+    private SshConnectionProfile ResolveProfile(JsonElement json)
+    {
+        if (ScopedProfileId != null)
+        {
+            var scoped = _savedConnections.FirstOrDefault(p => p.Id == ScopedProfileId);
+            if (scoped == null)
+                throw new InvalidOperationException("The server this chat is scoped to is no longer saved.");
+            return scoped;
+        }
+
+        var profileId = RequireString(json, "profileId");
         var profile = _savedConnections.FirstOrDefault(p => p.Id == profileId);
         if (profile == null)
             throw new InvalidOperationException($"Unknown connection profile id '{profileId}'. Use list_connections to see available profiles.");
@@ -375,14 +410,36 @@ public class ChatToolRegistry
         ["description"] = description
     };
 
-    private static string ObjectSchema(params (string Name, JsonObject Schema)[] properties)
+    private static JsonObject BooleanProperty(string description) => new()
+    {
+        ["type"] = "boolean",
+        ["description"] = description
+    };
+
+    private static bool OptionalBool(JsonElement json, string propertyName)
+    {
+        if (!json.TryGetProperty(propertyName, out var value)) return false;
+        return value.ValueKind switch
+        {
+            JsonValueKind.True => true,
+            JsonValueKind.False => false,
+            JsonValueKind.String => bool.TryParse(value.GetString(), out var parsed) && parsed,
+            _ => false
+        };
+    }
+
+    private static string ObjectSchema(params (string Name, JsonObject Schema)[] properties) =>
+        ObjectSchema(optionalNames: null, properties);
+
+    private static string ObjectSchema(IReadOnlyCollection<string>? optionalNames, params (string Name, JsonObject Schema)[] properties)
     {
         var propertiesNode = new JsonObject();
         var required = new JsonArray();
         foreach (var (name, schema) in properties)
         {
             propertiesNode[name] = schema;
-            required.Add(name);
+            if (optionalNames == null || !optionalNames.Contains(name))
+                required.Add(name);
         }
 
         var root = new JsonObject

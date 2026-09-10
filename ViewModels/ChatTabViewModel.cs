@@ -21,6 +21,8 @@ public class ChatTabViewModel : INotifyPropertyChanged, ITabViewModel
     private readonly OpenAiChatClient _client = new();
     private readonly Action<ChatTabViewModel> _onClose;
 
+    public ObservableCollection<SshConnectionProfile> SavedConnections { get; }
+
     private CancellationTokenSource? _streamCts;
     private TaskCompletionSource<bool>? _pendingApprovalTcs;
     private string? _currentSessionId;
@@ -141,6 +143,25 @@ public class ChatTabViewModel : INotifyPropertyChanged, ITabViewModel
     /// </summary>
     public bool IsModelUnrecognized => !string.IsNullOrWhiteSpace(_settings.Model) && !ChatModelCatalog.IsKnownModel(_settings.Model);
 
+    // When set, every SSH/SFTP tool call in this chat is locked to this one saved
+    // connection (see ChatToolRegistry.ScopedProfileId) — the model is never given a
+    // choice of server, and the chat header shows which one it's talking to.
+    private SshConnectionProfile? _selectedServerProfile;
+    public SshConnectionProfile? SelectedServerProfile
+    {
+        get => _selectedServerProfile;
+        set
+        {
+            if (ReferenceEquals(_selectedServerProfile, value)) return;
+            _selectedServerProfile = value;
+            _toolRegistry.ScopedProfileId = value?.Id;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(IsServerScoped));
+        }
+    }
+
+    public bool IsServerScoped => SelectedServerProfile != null;
+
     private ChatToolCall? _pendingApprovalCall;
     public ChatToolCall? PendingApprovalCall { get => _pendingApprovalCall; set { _pendingApprovalCall = value; OnPropertyChanged(); OnPropertyChanged(nameof(HasPendingApproval)); } }
 
@@ -166,6 +187,7 @@ public class ChatTabViewModel : INotifyPropertyChanged, ITabViewModel
     public ICommand NewChatCommand { get; }
     public ICommand LoadSessionCommand { get; }
     public ICommand DeleteSessionCommand { get; }
+    public ICommand ClearServerScopeCommand { get; }
 
     public ChatTabViewModel(
         Action<ChatTabViewModel> onClose,
@@ -177,6 +199,7 @@ public class ChatTabViewModel : INotifyPropertyChanged, ITabViewModel
         _settingsService = settingsService;
         _historyService = historyService;
         _settings = _settingsService.Load();
+        SavedConnections = savedConnections;
         _toolRegistry = new ChatToolRegistry(savedConnections);
 
         var knownModel = ChatModelCatalog.Find(_settings.Model);
@@ -219,6 +242,7 @@ public class ChatTabViewModel : INotifyPropertyChanged, ITabViewModel
         NewChatCommand = new RelayCommand(StartNewChat);
         LoadSessionCommand = new RelayCommand<ChatSessionSummary>(LoadSession);
         DeleteSessionCommand = new RelayCommand<ChatSessionSummary>(DeleteSession);
+        ClearServerScopeCommand = new RelayCommand(() => SelectedServerProfile = null);
     }
 
     private void RefreshHistoryList()
@@ -410,16 +434,31 @@ public class ChatTabViewModel : INotifyPropertyChanged, ITabViewModel
     // and behavioral guidance instead of inferring everything from tool names alone.
     // Sent fresh with each request like the rest of the history (the Chat Completions
     // protocol is stateless; there's no server-side session to configure this once).
-    private const string SystemPrompt =
-        "You are Helm, the built-in AI copilot inside Termox, a cross-platform SSH/SFTP desktop client. " +
-        "You can inspect and operate on the user's saved SSH connections using the tools provided. " +
-        "Prefer read-only tools (list, read, lookup, scan, ping, hash) when they're enough to answer. " +
-        "Tools that run commands or write/rename/upload files require the user's explicit approval before " +
-        "they execute — expect a short pause while they approve or deny, and don't repeat the call while " +
-        "waiting. Tools that delete files/keys or export secret keys are irreversible — be explicit about " +
-        "exactly what will happen before calling them. Every SSH/SFTP tool needs a profileId; call " +
-        "list_connections first if you don't already know it, and never guess one. Keep responses concise " +
-        "and use markdown (tables, code spans, bullet/numbered lists) where it improves readability.";
+    // Built per-request (not a const) because the scoped-server paragraph depends on
+    // SelectedServerProfile, which can change mid-conversation.
+    private string BuildSystemPrompt()
+    {
+        var prompt =
+            "You are Helm, the built-in AI copilot inside Termox, a cross-platform SSH/SFTP desktop client. " +
+            "You can inspect and operate on the user's saved SSH connections using the tools provided. " +
+            "Prefer read-only tools (list, read, lookup, scan, ping, hash) when they're enough to answer. " +
+            "Tools that run commands or write/rename/upload files require the user's explicit approval before " +
+            "they execute — expect a short pause while they approve or deny, and don't repeat the call while " +
+            "waiting. Tools that delete files/keys or export secret keys are irreversible — be explicit about " +
+            "exactly what will happen before calling them. Running a command with sudo is an elevated-privilege " +
+            "action — only set sudo when the task genuinely requires root, and say so plainly before doing it. " +
+            "Keep responses concise and use markdown (tables, code spans, bullet/numbered lists) where it " +
+            "improves readability.";
+
+        prompt += SelectedServerProfile != null
+            ? $" This chat is scoped to a single server: '{SelectedServerProfile.Name}' ({SelectedServerProfile.Host}). " +
+              "Every SSH/SFTP tool call automatically targets that server — you don't need and won't be given a " +
+              "profileId parameter. Do not ask the user which server to use; there is only this one."
+            : " Every SSH/SFTP tool needs a profileId; call list_connections first if you don't already know " +
+              "it, and never guess one.";
+
+        return prompt;
+    }
 
     private async Task RunConversationLoopAsync(CancellationToken cancellationToken)
     {
@@ -427,14 +466,19 @@ public class ChatTabViewModel : INotifyPropertyChanged, ITabViewModel
         // a misbehaving endpoint.
         const int maxRounds = 8;
 
+        // Carries context into the NEXT round's "waiting" bubble so it reads as "reviewing
+        // the ssh_run_command result…" instead of a bare "thinking…" that looks identical
+        // whether the model just started or has been stuck for a minute.
+        var nextStatus = "Thinking…";
+
         for (var round = 0; round < maxRounds; round++)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
             var tools = _toolRegistry.BuildToolDefinitions();
             var history = TrimHistory(Messages.ToList());
-            history.Insert(0, new ChatMessage { Role = ChatRole.System, Content = SystemPrompt });
-            var assistantMessage = new ChatMessage { Role = ChatRole.Assistant };
+            history.Insert(0, new ChatMessage { Role = ChatRole.System, Content = BuildSystemPrompt() });
+            var assistantMessage = new ChatMessage { Role = ChatRole.Assistant, StatusText = nextStatus };
             var accumulator = new ChatToolCallAccumulator();
             string? finishReason = null;
 
@@ -471,15 +515,27 @@ public class ChatTabViewModel : INotifyPropertyChanged, ITabViewModel
 
             if (finishReason != "tool_calls" || !accumulator.HasAny)
             {
+                // Some models occasionally finish with no tool call AND no content (often
+                // right after a tool result round). Left as-is, Content stays "" forever,
+                // which IsWaitingForContent reads as "still streaming" — the thinking dots
+                // spin indefinitely with no way to tell it actually stopped. Surface it as
+                // an error instead of a silently stuck bubble.
+                if (string.IsNullOrEmpty(assistantMessage.Content))
+                {
+                    assistantMessage.IsError = true;
+                    assistantMessage.Content = "The model finished without returning a reply. Try asking again.";
+                }
                 PersistMessage(assistantMessage); // Final content now that streaming is done.
                 return; // Plain assistant reply — conversation round complete.
             }
 
             var calls = accumulator.Build();
             assistantMessage.ToolCalls = calls;
+            var toolNames = string.Join(", ", calls.Select(c => c.FunctionName));
             if (string.IsNullOrEmpty(assistantMessage.Content))
-                assistantMessage.Content = "Calling " + string.Join(", ", calls.Select(c => c.FunctionName)) + "…";
+                assistantMessage.Content = string.Join('\n', calls.Select(FormatToolCallLine));
             PersistMessage(assistantMessage);
+            nextStatus = $"Reviewing the {toolNames} result…";
 
             foreach (var call in calls)
             {
@@ -502,7 +558,9 @@ public class ChatTabViewModel : INotifyPropertyChanged, ITabViewModel
         _pendingApprovalTcs = tcs;
 
         var verb = definition.RiskLevel == ChatToolRiskLevel.Destructive ? "PERMANENTLY" : "";
-        var description = $"Allow the assistant to {verb} run '{definition.Name}' with arguments: {call.ArgumentsJson}".Replace("  ", " ");
+        var prefix = IsSudoCall(call) ? "⚠ WITH ROOT PRIVILEGES (sudo)," : "";
+        var description = $"{prefix} Allow the assistant to {verb} run '{definition.Name}' with arguments: {call.ArgumentsJson}"
+            .Replace("  ", " ").Trim();
 
         Dispatcher.UIThread.Post(() =>
         {
@@ -511,6 +569,52 @@ public class ChatTabViewModel : INotifyPropertyChanged, ITabViewModel
         });
 
         return tcs.Task;
+    }
+
+    /// <summary>
+    /// Renders a tool call the way the Claude Code CLI/extension narrates its own tool
+    /// use — "● toolName(arg: value, ...)" — instead of a generic "Calling X…" placeholder,
+    /// so the transcript shows exactly what's being invoked and with what.
+    /// </summary>
+    private static string FormatToolCallLine(ChatToolCall call) =>
+        $"● {call.FunctionName}({SummarizeArgs(call.ArgumentsJson)})";
+
+    private static string SummarizeArgs(string argumentsJson)
+    {
+        if (string.IsNullOrWhiteSpace(argumentsJson)) return "";
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(argumentsJson);
+            var parts = doc.RootElement.EnumerateObject().Select(p => $"{p.Name}: {FormatArgValue(p.Value)}");
+            return string.Join(", ", parts);
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return argumentsJson;
+        }
+    }
+
+    private static string FormatArgValue(System.Text.Json.JsonElement value) => value.ValueKind switch
+    {
+        System.Text.Json.JsonValueKind.String => $"\"{Truncate(value.GetString() ?? "", 60)}\"",
+        _ => value.ToString()
+    };
+
+    private static string Truncate(string text, int max) => text.Length <= max ? text : text[..max] + "…";
+
+    private static bool IsSudoCall(ChatToolCall call)
+    {
+        if (call.FunctionName != "ssh_run_command" || string.IsNullOrWhiteSpace(call.ArgumentsJson)) return false;
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(call.ArgumentsJson);
+            return doc.RootElement.TryGetProperty("sudo", out var sudo) &&
+                sudo.ValueKind == System.Text.Json.JsonValueKind.True;
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return false;
+        }
     }
 
     /// <summary>Tokens reserved out of the context window for the system prompt, tool schemas, and the model's own reply.</summary>

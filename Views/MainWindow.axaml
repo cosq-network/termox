@@ -396,24 +396,11 @@
 
                 <!-- Terminal Area with Tab -->
                 <Grid Grid.Column="2" Background="#1e1e1e">
-                    <Border Background="#1e1e1e">
-                        <TabControl ItemsSource="{Binding Tabs}" SelectedItem="{Binding SelectedTab}">
-                        <TabControl.ItemTemplate>
-                            <DataTemplate>
-                                <StackPanel Orientation="Horizontal" Spacing="10">
-                                    <TextBlock Text="{Binding Title}" VerticalAlignment="Center"
-                                        FontFamily="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
-                                        FontSize="13" />
-                                    <Button Content="✕"
-                                        Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).RequestCloseTabCommand}"
-                                        CommandParameter="{Binding}" Classes="closeTabBtn"
-                                        Foreground="#888" Background="Transparent"
-                                        BorderThickness="0" Padding="2" FontSize="10"
-                                        VerticalAlignment="Center" />
-                                </StackPanel>
-                            </DataTemplate>
-                        </TabControl.ItemTemplate>
-                        <TabControl.DataTemplates>
+                    <!-- Shared with the split-view pane below: Control.DataTemplates resolves up the
+                         visual tree, so hoisting it here (instead of on the primary TabControl) lets
+                         both the main tab strip and the split pane's plain ContentControl render any
+                         tab type from the same template set, with zero duplication. -->
+                    <Grid.DataTemplates>
                             <DataTemplate DataType="vm:TerminalTabViewModel">
                                 <Border Background="#0c0c0c" Padding="5">
                                     <Grid RowDefinitions="Auto,*">
@@ -2280,30 +2267,59 @@
                             <DataTemplate DataType="vm:ChatTabViewModel">
                                 <Grid Background="#1e1e1e" RowDefinitions="Auto,Auto,*,Auto,Auto" Margin="8">
                                     <!-- Header -->
-                                    <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto,Auto,Auto,Auto" Margin="2,0,2,8">
-                                        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8"
-                                            VerticalAlignment="Center">
-                                            <TextBlock Text="Helm" FontWeight="SemiBold"
-                                                Foreground="#e0e0e0" FontSize="14" />
-                                            <TextBlock Text="your SSH &amp; SFTP copilot" Foreground="#777777"
-                                                FontSize="12" VerticalAlignment="Center" />
-                                        </StackPanel>
-                                        <Button Grid.Column="1" Content="Stop"
-                                            Command="{Binding CancelStreamingCommand}"
-                                            IsVisible="{Binding IsStreaming}"
-                                            Classes="toolButton" Padding="8,4" FontSize="11" Margin="0,0,6,0" />
-                                        <Button Grid.Column="2" Content="+ New Chat"
-                                            Command="{Binding NewChatCommand}"
-                                            Classes="toolButton" Padding="8,4" FontSize="11" Margin="0,0,6,0" />
-                                        <Button Grid.Column="3" Content="🕘 History"
-                                            Command="{Binding OpenHistoryCommand}"
-                                            Classes="toolButton" Padding="8,4" FontSize="11" Margin="0,0,6,0" />
-                                        <Button Grid.Column="4" Content="Clear"
-                                            Command="{Binding ClearTranscriptCommand}"
-                                            Classes="toolButton" Padding="8,4" FontSize="11" Margin="0,0,6,0" />
-                                        <Button Grid.Column="5" Content="⚙ Settings"
-                                            Command="{Binding OpenSettingsCommand}"
-                                            Classes="toolButton" Padding="8,4" FontSize="11" Margin="0" />
+                                    <Grid Grid.Row="0" RowDefinitions="Auto,Auto" Margin="2,0,2,8">
+                                        <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto,Auto,Auto,Auto">
+                                            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8"
+                                                VerticalAlignment="Center">
+                                                <TextBlock Text="Helm" FontWeight="SemiBold"
+                                                    Foreground="#e0e0e0" FontSize="14" />
+                                                <TextBlock Text="your SSH &amp; SFTP copilot" Foreground="#777777"
+                                                    FontSize="12" VerticalAlignment="Center" />
+                                            </StackPanel>
+                                            <Button Grid.Column="1" Content="Stop"
+                                                Command="{Binding CancelStreamingCommand}"
+                                                IsVisible="{Binding IsStreaming}"
+                                                Classes="toolButton" Padding="7,4" FontSize="10.5" Margin="0,0,4,0" />
+                                            <Button Grid.Column="2" Content="+"
+                                                Command="{Binding NewChatCommand}"
+                                                Classes="toolButton" Padding="8,4" FontSize="12" Margin="0,0,4,0"
+                                                ToolTip.Tip="New chat" />
+                                            <Button Grid.Column="3" Content="🕘"
+                                                Command="{Binding OpenHistoryCommand}"
+                                                Classes="toolButton" Padding="7,4" FontSize="11" Margin="0,0,4,0"
+                                                ToolTip.Tip="Chat history" />
+                                            <Button Grid.Column="4" Content="⌫"
+                                                Command="{Binding ClearTranscriptCommand}"
+                                                Classes="toolButton" Padding="7,4" FontSize="11" Margin="0,0,4,0"
+                                                ToolTip.Tip="Clear transcript" />
+                                            <Button Grid.Column="5" Content="⚙"
+                                                Command="{Binding OpenSettingsCommand}"
+                                                Classes="toolButton" Padding="7,4" FontSize="12" Margin="0"
+                                                ToolTip.Tip="Settings" />
+                                        </Grid>
+
+                                        <!-- Server scope: which saved connection this chat's SSH/SFTP tools target -->
+                                        <Grid Grid.Row="1" ColumnDefinitions="Auto,Auto,*,Auto" Margin="0,8,0,0">
+                                            <Ellipse Grid.Column="0" Width="8" Height="8" VerticalAlignment="Center"
+                                                Margin="2,0,8,0"
+                                                Fill="{Binding SelectedServerProfile.IsConnected, FallbackValue=#555555, TargetNullValue=#555555, Converter={x:Static services:ConnectedDotConverter.Instance}}" />
+                                            <TextBlock Grid.Column="1" Text="Server:" Foreground="#999999"
+                                                FontSize="11.5" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                            <ComboBox Grid.Column="2" ItemsSource="{Binding SavedConnections}"
+                                                SelectedItem="{Binding SelectedServerProfile}"
+                                                PlaceholderText="All saved connections (pick one to limit this chat)"
+                                                HorizontalAlignment="Stretch" FontSize="11.5" Padding="8,4">
+                                                <ComboBox.ItemTemplate>
+                                                    <DataTemplate DataType="models:SshConnectionProfile">
+                                                        <TextBlock Text="{Binding Name}" />
+                                                    </DataTemplate>
+                                                </ComboBox.ItemTemplate>
+                                            </ComboBox>
+                                            <Button Grid.Column="3" Content="✕" Command="{Binding ClearServerScopeCommand}"
+                                                IsVisible="{Binding IsServerScoped}"
+                                                Classes="toolButton" Padding="7,4" FontSize="11" Margin="6,0,0,0"
+                                                ToolTip.Tip="Stop limiting this chat to one server" />
+                                        </Grid>
                                     </Grid>
 
                                     <!-- Settings drawer -->
@@ -2413,91 +2429,106 @@
                                         </Grid>
                                     </Border>
 
-                                    <!-- Transcript -->
+                                    <!-- Transcript: styled after the Claude Code VS Code extension — a flat,
+                                         linear log rather than chat bubbles. User turns get a subtle bordered
+                                         box; everything else (assistant prose, tool calls, tool results) flows
+                                         inline, separated by hairlines, with tool activity rendered the way
+                                         Claude Code's own CLI narrates it: "● tool(args)" then "⎿ result". -->
                                     <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto"
                                         HorizontalScrollBarVisibility="Disabled"
                                         Loaded="ChatTranscript_Loaded" Unloaded="ChatTranscript_Unloaded">
                                         <ItemsControl ItemsSource="{Binding Messages}">
                                             <ItemsControl.ItemTemplate>
                                                 <DataTemplate DataType="models:ChatMessage">
-                                                    <Border Background="#252525" CornerRadius="6" Padding="0"
-                                                        Margin="0,5" BorderThickness="1" BorderBrush="#333333"
-                                                        Classes.msgUser="{Binding IsUser}"
-                                                        Classes.msgError="{Binding IsError}">
-                                                        <Border.Styles>
-                                                            <Style Selector="Border.msgUser">
-                                                                <Setter Property="Background" Value="#1d2b22" />
-                                                                <Setter Property="BorderBrush" Value="#2a4033" />
-                                                            </Style>
-                                                            <Style Selector="Border.msgError">
-                                                                <Setter Property="Background" Value="#331d1d" />
-                                                                <Setter Property="BorderBrush" Value="#5c2b2b" />
-                                                            </Style>
-                                                        </Border.Styles>
-                                                        <Grid ColumnDefinitions="4,*">
-                                                            <Rectangle Grid.Column="0" Fill="#4caf50"
-                                                                IsVisible="{Binding IsUser}" />
-                                                            <Rectangle Grid.Column="0" Fill="#5bc0de"
-                                                                IsVisible="{Binding IsAssistant}" />
-                                                            <Rectangle Grid.Column="0" Fill="#f39c12"
-                                                                IsVisible="{Binding IsTool}" />
-                                                            <Rectangle Grid.Column="0" Fill="#f44336"
-                                                                IsVisible="{Binding IsError}" />
-                                                            <StackPanel Grid.Column="1" Spacing="6" Margin="12,10">
-                                                                <StackPanel Orientation="Horizontal" Spacing="6">
-                                                                    <TextBlock Text="You" FontWeight="Bold"
-                                                                        Foreground="#4caf50" FontSize="11"
-                                                                        IsVisible="{Binding IsUser}" />
-                                                                    <TextBlock Text="Helm" FontWeight="Bold"
-                                                                        Foreground="#5bc0de" FontSize="11"
-                                                                        IsVisible="{Binding IsAssistant}" />
-                                                                    <TextBlock Text="Tool result" FontWeight="Bold"
-                                                                        Foreground="#f39c12" FontSize="11"
-                                                                        IsVisible="{Binding IsTool}" />
-                                                                    <TextBlock Text="⚠ Error" FontWeight="Bold"
-                                                                        Foreground="#f44336" FontSize="11"
-                                                                        IsVisible="{Binding IsError}" />
-                                                                </StackPanel>
-                                                                <StackPanel Orientation="Horizontal" Spacing="8"
-                                                                    IsVisible="{Binding IsWaitingForContent}">
-                                                                    <StackPanel.Styles>
-                                                                        <Style Selector="Ellipse.thinkingDot">
-                                                                            <Setter Property="Width" Value="6" />
-                                                                            <Setter Property="Height" Value="6" />
-                                                                            <Setter Property="Fill" Value="#5bc0de" />
-                                                                            <Style.Animations>
-                                                                                <Animation Duration="0:0:1"
-                                                                                    IterationCount="INFINITE">
-                                                                                    <KeyFrame Cue="0%">
-                                                                                        <Setter Property="Opacity" Value="0.25" />
-                                                                                    </KeyFrame>
-                                                                                    <KeyFrame Cue="50%">
-                                                                                        <Setter Property="Opacity" Value="1.0" />
-                                                                                    </KeyFrame>
-                                                                                    <KeyFrame Cue="100%">
-                                                                                        <Setter Property="Opacity" Value="0.25" />
-                                                                                    </KeyFrame>
-                                                                                </Animation>
-                                                                            </Style.Animations>
-                                                                        </Style>
-                                                                    </StackPanel.Styles>
-                                                                    <Ellipse Classes="thinkingDot" />
-                                                                    <Ellipse Classes="thinkingDot" />
-                                                                    <Ellipse Classes="thinkingDot" />
-                                                                    <TextBlock Text="thinking…" Foreground="#777777"
-                                                                        FontSize="12" VerticalAlignment="Center" />
-                                                                </StackPanel>
-                                                                <ContentControl
-                                                                    Content="{Binding Content, Converter={x:Static services:MarkdownContentConverter.Instance}}"
-                                                                    IsVisible="{Binding IsAssistantWithContent}"
-                                                                    HorizontalContentAlignment="Stretch" />
+                                                    <StackPanel Margin="0,3">
+                                                        <!-- User turn -->
+                                                        <Border IsVisible="{Binding IsUser}" Background="#252526"
+                                                            BorderBrush="#3c3c3c" BorderThickness="1" CornerRadius="4"
+                                                            Padding="10,7" Margin="0,7,0,3">
+                                                            <StackPanel Spacing="2">
+                                                                <TextBlock Text="You" FontWeight="SemiBold"
+                                                                    Foreground="#8a8a8a" FontSize="10" />
                                                                 <TextBlock Text="{Binding Content}" TextWrapping="Wrap"
-                                                                    Foreground="#e0e0e0" FontSize="13"
-                                                                    IsVisible="{Binding !IsAssistant}"
-                                                                    FontFamily="Consolas, Fira Code, monospace" />
+                                                                    Foreground="#d4d4d4" FontSize="13" />
                                                             </StackPanel>
-                                                        </Grid>
-                                                    </Border>
+                                                        </Border>
+
+                                                        <!-- Assistant / tool / error turn -->
+                                                        <StackPanel IsVisible="{Binding !IsUser}" Spacing="3"
+                                                            Margin="0,5,0,5">
+                                                            <!-- Role/status line: same helm glyph always sits in the same
+                                                                 spot — no rotation/motion at all (it was overflowing its
+                                                                 box and getting clipped by the transcript's disabled
+                                                                 horizontal scrollbar), just a plain opacity pulse. -->
+                                                            <StackPanel Orientation="Horizontal" Spacing="6"
+                                                                IsVisible="{Binding IsAssistant}">
+                                                                <StackPanel.Styles>
+                                                                    <Style Selector="TextBlock.helmPulse">
+                                                                        <Style.Animations>
+                                                                            <Animation Duration="0:0:1"
+                                                                                IterationCount="INFINITE">
+                                                                                <KeyFrame Cue="0%">
+                                                                                    <Setter Property="Opacity" Value="0.35" />
+                                                                                </KeyFrame>
+                                                                                <KeyFrame Cue="50%">
+                                                                                    <Setter Property="Opacity" Value="1.0" />
+                                                                                </KeyFrame>
+                                                                                <KeyFrame Cue="100%">
+                                                                                    <Setter Property="Opacity" Value="0.35" />
+                                                                                </KeyFrame>
+                                                                            </Animation>
+                                                                        </Style.Animations>
+                                                                    </Style>
+                                                                </StackPanel.Styles>
+                                                                <TextBlock Text="⎈" FontSize="11"
+                                                                    Foreground="#5bc0de" VerticalAlignment="Center"
+                                                                    Classes.helmPulse="{Binding IsWaitingForContent}" />
+                                                                <TextBlock Text="Helm" FontWeight="SemiBold"
+                                                                    Foreground="#5bc0de" FontSize="10"
+                                                                    VerticalAlignment="Center" />
+                                                                <TextBlock Text="{Binding StatusText}" Foreground="#777777"
+                                                                    FontSize="10.5" VerticalAlignment="Center"
+                                                                    IsVisible="{Binding IsWaitingForContent}" />
+                                                            </StackPanel>
+                                                            <TextBlock Text="⚠ Error" FontWeight="SemiBold"
+                                                                Foreground="#f44336" FontSize="10"
+                                                                IsVisible="{Binding IsError}" />
+
+                                                            <!-- Tool call announcement: "● tool(args)" -->
+                                                            <TextBlock Text="{Binding Content}" TextWrapping="Wrap"
+                                                                Foreground="#5bc0de" FontSize="12.5"
+                                                                FontFamily="Consolas, Fira Code, monospace"
+                                                                Margin="15,0,0,0"
+                                                                IsVisible="{Binding HasToolCalls}" />
+
+                                                            <!-- Tool result: "⎿ ..." -->
+                                                            <Grid ColumnDefinitions="Auto,*" IsVisible="{Binding IsTool}"
+                                                                Margin="15,0,0,0">
+                                                                <TextBlock Grid.Column="0" Text="⎿"
+                                                                    Foreground="#6a6a6a" FontSize="12.5"
+                                                                    FontFamily="Consolas, Fira Code, monospace"
+                                                                    Margin="0,0,6,0" />
+                                                                <TextBlock Grid.Column="1" Text="{Binding Content}"
+                                                                    TextWrapping="Wrap" Foreground="#8a8a8a"
+                                                                    FontSize="12" FontFamily="Consolas, Fira Code, monospace" />
+                                                            </Grid>
+
+                                                            <!-- Plain prose reply -->
+                                                            <ContentControl Margin="15,0,0,0"
+                                                                Content="{Binding Content, Converter={x:Static services:MarkdownContentConverter.Instance}}"
+                                                                IsVisible="{Binding IsPlainAssistantReply}"
+                                                                HorizontalContentAlignment="Stretch" />
+
+                                                            <!-- Error text -->
+                                                            <TextBlock Text="{Binding Content}" TextWrapping="Wrap"
+                                                                Foreground="#f2a0a0" FontSize="12.5"
+                                                                Margin="15,0,0,0"
+                                                                IsVisible="{Binding IsError}" />
+                                                        </StackPanel>
+
+                                                        <Rectangle Height="1" Fill="#262626" Margin="0,4,0,0"
+                                                            IsVisible="{Binding IsPlainAssistantReply}" />
+                                                    </StackPanel>
                                                 </DataTemplate>
                                             </ItemsControl.ItemTemplate>
                                         </ItemsControl>
@@ -2505,37 +2536,125 @@
 
                                     <!-- Tool-call approval banner -->
                                     <Border Grid.Row="3" IsVisible="{Binding HasPendingApproval}"
-                                        Background="#3a2a12" BorderBrush="#f39c12" BorderThickness="1"
-                                        CornerRadius="4" Padding="10" Margin="0,8,0,0">
-                                        <StackPanel Spacing="8">
-                                            <TextBlock Text="{Binding PendingApprovalDescription}"
-                                                Foreground="#f4d9a8" FontSize="12" TextWrapping="Wrap" />
-                                            <StackPanel Orientation="Horizontal" Spacing="8">
-                                                <Button Content="Approve" Command="{Binding ApproveToolCallCommand}"
-                                                    Classes="primaryButton" Padding="12,6" CornerRadius="4"
-                                                    FontSize="12" />
-                                                <Button Content="Deny" Command="{Binding DenyToolCallCommand}"
-                                                    Classes="toolButton" Padding="12,6" FontSize="12" Margin="0" />
-                                            </StackPanel>
-                                        </StackPanel>
+                                        BorderBrush="#f39c12" BorderThickness="0,0,0,0" Margin="0,8,0,0">
+                                        <Grid ColumnDefinitions="Auto,*,Auto,Auto" Background="#1f1a14">
+                                            <Border Grid.Column="0" Width="3" Background="#f39c12" />
+                                            <TextBlock Grid.Column="1" Text="{Binding PendingApprovalDescription}"
+                                                Foreground="#e0b673" FontSize="12" TextWrapping="Wrap"
+                                                VerticalAlignment="Center" Margin="10,8" />
+                                            <Button Grid.Column="2" Content="Approve"
+                                                Command="{Binding ApproveToolCallCommand}"
+                                                Classes="primaryButton" Padding="10,5" CornerRadius="4"
+                                                FontSize="11.5" Margin="0,0,6,0" VerticalAlignment="Center" />
+                                            <Button Grid.Column="3" Content="Deny"
+                                                Command="{Binding DenyToolCallCommand}"
+                                                Classes="toolButton" Padding="10,5" FontSize="11.5" Margin="0,0,8,0"
+                                                VerticalAlignment="Center" />
+                                        </Grid>
                                     </Border>
 
                                     <!-- Input row -->
-                                    <Grid Grid.Row="4" ColumnDefinitions="*,Auto" Margin="0,8,0,0">
-                                        <TextBox Grid.Column="0" Text="{Binding DraftInput}"
-                                            PlaceholderText="Ask about your servers…" AcceptsReturn="False"
-                                            IsEnabled="{Binding !IsStreaming}"
-                                            KeyDown="ChatDraftInput_KeyDown" />
-                                        <Button Grid.Column="1" Content="Send"
-                                            Command="{Binding SendMessageCommand}"
-                                            Classes="primaryButton" Padding="14,7" CornerRadius="4"
-                                            FontSize="12" Margin="8,0,0,0" />
-                                    </Grid>
+                                    <StackPanel Grid.Row="4" Margin="0,8,0,0" Spacing="3">
+                                        <Grid ColumnDefinitions="*,Auto">
+                                            <TextBox Grid.Column="0" Text="{Binding DraftInput}"
+                                                PlaceholderText="Ask about your servers…" AcceptsReturn="False"
+                                                IsEnabled="{Binding !IsStreaming}"
+                                                KeyDown="ChatDraftInput_KeyDown" />
+                                            <Button Grid.Column="1" Content="Send"
+                                                Command="{Binding SendMessageCommand}"
+                                                IsVisible="{Binding !IsStreaming}"
+                                                Classes="primaryButton" Padding="14,7" CornerRadius="4"
+                                                FontSize="12" Margin="8,0,0,0" />
+                                            <Button Grid.Column="1" Content="Stop"
+                                                Command="{Binding CancelStreamingCommand}"
+                                                IsVisible="{Binding IsStreaming}"
+                                                Classes="dangerButton" Padding="14,7" CornerRadius="4"
+                                                FontSize="12" Margin="8,0,0,0" />
+                                        </Grid>
+                                        <TextBlock Text="{Binding SelectedModel.Label}" Foreground="#5a5a5a"
+                                            FontSize="10.5" Margin="2,0,0,0" />
+                                    </StackPanel>
                                 </Grid>
                             </DataTemplate>
-                        </TabControl.DataTemplates>
-                        </TabControl>
-                    </Border>
+                    </Grid.DataTemplates>
+
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition
+                                Width="{Binding IsSplitViewActive, Converter={x:Static services:BoolToGridLengthConverter.Instance}, ConverterParameter=6}" />
+                            <ColumnDefinition
+                                Width="{Binding IsSplitViewActive, Converter={x:Static services:BoolToGridLengthConverter.Instance}, ConverterParameter=*}" />
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Background="#1e1e1e">
+                            <TabControl ItemsSource="{Binding Tabs}" SelectedItem="{Binding SelectedTab}">
+                                <TabControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Orientation="Horizontal" Spacing="10">
+                                            <StackPanel.ContextMenu>
+                                                <ContextMenu>
+                                                    <MenuItem Header="Close"
+                                                        Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).RequestCloseTabCommand}"
+                                                        CommandParameter="{Binding}" />
+                                                    <MenuItem Header="Close Others"
+                                                        Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).RequestCloseOtherTabsCommand}"
+                                                        CommandParameter="{Binding}" />
+                                                    <Separator />
+                                                    <MenuItem Header="Close Tabs to the Left"
+                                                        Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).RequestCloseTabsToLeftCommand}"
+                                                        CommandParameter="{Binding}" />
+                                                    <MenuItem Header="Close Tabs to the Right"
+                                                        Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).RequestCloseTabsToRightCommand}"
+                                                        CommandParameter="{Binding}" />
+                                                    <Separator />
+                                                    <MenuItem Header="Close All"
+                                                        Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).RequestCloseAllTabsCommand}" />
+                                                    <Separator />
+                                                    <MenuItem Header="Open in Split View"
+                                                        Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).OpenInSplitViewCommand}"
+                                                        CommandParameter="{Binding}" />
+                                                </ContextMenu>
+                                            </StackPanel.ContextMenu>
+                                            <TextBlock Text="{Binding Title}" VerticalAlignment="Center"
+                                                FontFamily="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+                                                FontSize="13" />
+                                            <Button Content="✕"
+                                                Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).RequestCloseTabCommand}"
+                                                CommandParameter="{Binding}" Classes="closeTabBtn"
+                                                Foreground="#888" Background="Transparent"
+                                                BorderThickness="0" Padding="2" FontSize="10"
+                                                VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </TabControl.ItemTemplate>
+                            </TabControl>
+                        </Border>
+
+                        <!-- Split view: a second pane pinned to one tab (e.g. Chat next to SFTP),
+                             independent of the main tab strip's selection. -->
+                        <GridSplitter Grid.Column="1" Width="6" Background="#333333"
+                            IsVisible="{Binding IsSplitViewActive}"
+                            HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                            ResizeDirection="Columns" />
+                        <Grid Grid.Column="2" IsVisible="{Binding IsSplitViewActive}"
+                            RowDefinitions="Auto,*" Background="#1e1e1e">
+                            <Border Grid.Row="0" Background="#252526" BorderBrush="#333333"
+                                BorderThickness="0,0,0,1">
+                                <Grid ColumnDefinitions="*,Auto">
+                                    <TextBlock Grid.Column="0" Text="{Binding SecondaryTab.Title}"
+                                        Foreground="#e0e0e0" FontSize="13" VerticalAlignment="Center"
+                                        Margin="10,8" TextTrimming="CharacterEllipsis" />
+                                    <Button Grid.Column="1" Content="✕" Command="{Binding CloseSplitViewCommand}"
+                                        Classes="closeTabBtn" Foreground="#888" Background="Transparent"
+                                        BorderThickness="0" Padding="6" FontSize="11"
+                                        VerticalAlignment="Center" Margin="0,0,8,0"
+                                        ToolTip.Tip="Close split view" />
+                                </Grid>
+                            </Border>
+                            <ContentControl Grid.Row="1" Content="{Binding SecondaryTab}" />
+                        </Grid>
+                    </Grid>
+
                     <Border IsVisible="{Binding !HasTabs}" Background="#1e1e1e">
                         <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"
                             Spacing="12" Width="360">
@@ -2815,6 +2934,27 @@
                         <Button Content="Cancel" Command="{Binding CancelCloseTabCommand}"
                             Classes="neutralButton" Padding="15,8" CornerRadius="4" />
                         <Button Content="Close Session" Command="{Binding ConfirmCloseTabCommand}"
+                            Classes="dangerButton" Padding="15,8" CornerRadius="4" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </Border>
+
+        <!-- Bulk Close Tabs Confirmation Modal (Close All / Others / Left / Right, from the tab context menu) -->
+        <Border Background="#99000000" IsVisible="{Binding IsBulkCloseConfirmModalVisible}" ZIndex="102">
+            <Border Background="#2d2d30" BorderBrush="#444" BorderThickness="1" CornerRadius="8"
+                HorizontalAlignment="Center" VerticalAlignment="Center"
+                Width="350" Padding="25" BoxShadow="0 10 30 0 #55000000">
+                <StackPanel Spacing="20">
+                    <TextBlock Text="{Binding BulkCloseTitle}" FontWeight="Bold" FontSize="18"
+                        Foreground="#e0e0e0" />
+                    <TextBlock Text="{Binding BulkCloseMessage}" Foreground="#aaaaaa" FontSize="14"
+                        TextWrapping="Wrap" />
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10"
+                        Margin="0,10,0,0">
+                        <Button Content="Cancel" Command="{Binding CancelBulkCloseCommand}"
+                            Classes="neutralButton" Padding="15,8" CornerRadius="4" />
+                        <Button Content="Close" Command="{Binding ConfirmBulkCloseCommand}"
                             Classes="dangerButton" Padding="15,8" CornerRadius="4" />
                     </StackPanel>
                 </StackPanel>
