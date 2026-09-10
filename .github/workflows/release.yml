@@ -244,7 +244,7 @@ jobs:
           $fragment = Join-Path $workDir 'TermoxFiles.wxs'
           & heat.exe dir $publish -dr INSTALLFOLDER -cg TermoxFiles -var var.SourceDir -srd -sreg -ag -nologo -out $fragment
           $outDir = "$($workDir.FullName.Replace('/', '\\'))\\"
-          & candle.exe -arch x64 -out $outDir "-dMyAppVersion=$env:VERSION" "-dTermoxRoot=$env:GITHUB_WORKSPACE" @(
+          & candle.exe -arch x64 -out $outDir "-dMyAppVersion=$env:VERSION" "-dTermoxRoot=$env:GITHUB_WORKSPACE" "-dSourceDir=$publish" @(
             'packaging/windows/termox.wxs',
             $fragment
           )
