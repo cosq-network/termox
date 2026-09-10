@@ -1,8 +1,10 @@
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Interactivity;
+using Avalonia.LogicalTree;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using System;
 using System.Collections.Specialized;
 using System.IO;
@@ -53,14 +55,86 @@ public partial class MainWindow : Window
         if (sender is not ScrollViewer scrollViewer) return;
         if (scrollViewer.DataContext is not ChatTabViewModel vm) return;
 
-        void Handler(object? s, NotifyCollectionChangedEventArgs args)
+        void CollectionHandler(object? s, NotifyCollectionChangedEventArgs args)
         {
             if (args.Action != NotifyCollectionChangedAction.Add) return;
             Dispatcher.UIThread.Post(() => scrollViewer.ScrollToEnd(), DispatcherPriority.Background);
         }
+        vm.Messages.CollectionChanged += CollectionHandler;
 
-        vm.Messages.CollectionChanged += Handler;
-        scrollViewer.Tag = (Action)(() => vm.Messages.CollectionChanged -= Handler);
+        // Each "You" bubble sits right above its own reply — once scrolled past one,
+        // swap in a same-styled pinned copy of THAT specific question (not just whichever
+        // one was sent most recently) so it stays visible while reading a long reply
+        // beneath it, the way a sticky list header tracks whichever section you're
+        // actually inside. Hidden again once scrolled back above every question.
+        var pane = scrollViewer.Parent as Grid;
+        var pinnedBar = pane?.Children.OfType<Border>().FirstOrDefault(b => b.Name == "PinnedQuestionBar");
+        var pinnedText = pinnedBar?.GetLogicalDescendants().OfType<TextBlock>()
+            .FirstOrDefault(t => t.Name == "PinnedQuestionText");
+        var pinnedChevron = pinnedBar?.GetLogicalDescendants().OfType<TextBlock>()
+            .FirstOrDefault(t => t.Name == "PinnedQuestionChevron");
+        var itemsControl = scrollViewer.Content as ItemsControl;
+
+        // Click toggles the pinned bar between a single ellipsis-trimmed line and full
+        // wrapped text, for a question too long to read at a glance. Resets to collapsed
+        // whenever a different question becomes the pinned one, so an old expanded state
+        // doesn't linger over unrelated content.
+        var isExpanded = false;
+        ChatMessage? pinnedMessage = null;
+
+        void SetExpanded(bool expanded)
+        {
+            if (pinnedText == null || pinnedChevron == null) return;
+            isExpanded = expanded;
+            pinnedText.TextWrapping = expanded ? TextWrapping.Wrap : TextWrapping.NoWrap;
+            pinnedText.TextTrimming = expanded ? TextTrimming.None : TextTrimming.CharacterEllipsis;
+            pinnedText.MaxLines = expanded ? 0 : 1;
+            pinnedChevron.Text = expanded ? "⌃" : "⌄";
+        }
+
+        void PinnedBar_PointerPressed(object? s, PointerPressedEventArgs args) => SetExpanded(!isExpanded);
+        if (pinnedBar != null) pinnedBar.PointerPressed += PinnedBar_PointerPressed;
+
+        void ScrollHandler(object? s, ScrollChangedEventArgs args)
+        {
+            if (pinnedBar == null || pinnedText == null || itemsControl == null) return;
+
+            ChatMessage? current = null;
+            for (var i = 0; i < vm.Messages.Count; i++)
+            {
+                if (vm.Messages[i].Role != ChatRole.User) continue;
+                if (itemsControl.ContainerFromIndex(i) is not Control container) continue;
+
+                // Bounds is relative to the ItemsControl's own panel, which for a plain
+                // vertical layout equals cumulative offset within the scrollable content —
+                // subtracting the current scroll offset turns that into a viewport-relative
+                // position without needing a visual-tree point transform. Using Bottom (not
+                // Top) here on purpose: the pinned copy should only take over once the real
+                // "You" bubble has fully scrolled out of view, not the instant its top edge
+                // crosses zero — otherwise the pinned bar and the still-partially-visible
+                // real bubble render on top of each other for a stretch of scroll.
+                var bottom = container.Bounds.Bottom - scrollViewer.Offset.Y;
+                if (bottom <= 0) current = vm.Messages[i];
+                else break; // messages render in order, so the first not-yet-scrolled-past one ends the search
+            }
+
+            pinnedBar.IsVisible = current != null;
+            if (current != null && !ReferenceEquals(current, pinnedMessage))
+            {
+                pinnedMessage = current;
+                pinnedText.Text = current.Content;
+                SetExpanded(false);
+            }
+        }
+
+        if (pinnedBar != null) scrollViewer.ScrollChanged += ScrollHandler;
+
+        scrollViewer.Tag = (Action)(() =>
+        {
+            vm.Messages.CollectionChanged -= CollectionHandler;
+            scrollViewer.ScrollChanged -= ScrollHandler;
+            if (pinnedBar != null) pinnedBar.PointerPressed -= PinnedBar_PointerPressed;
+        });
         scrollViewer.ScrollToEnd();
     }
 
@@ -69,9 +143,24 @@ public partial class MainWindow : Window
         if (sender is ScrollViewer { Tag: Action unsubscribe }) unsubscribe();
     }
 
+    private async void CopyMessage_Click(object? sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (sender is not Button { Tag: ChatMessage message }) return;
+            var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
+            if (clipboard != null && !string.IsNullOrEmpty(message.Content))
+                await clipboard.SetTextAsync(message.Content);
+        }
+        catch (Exception ex) { Console.WriteLine($"Chat message copy failed: {ex.Message}"); }
+    }
+
     private void ChatDraftInput_KeyDown(object? sender, KeyEventArgs e)
     {
         if (e.Key != Key.Enter) return;
+        // Shift+Enter inserts a newline (the TextBox's own AcceptsReturn behavior) —
+        // only plain Enter sends.
+        if ((e.KeyModifiers & KeyModifiers.Shift) != 0) return;
         if (sender is not Control control || control.DataContext is not ChatTabViewModel vm) return;
 
         e.Handled = true;

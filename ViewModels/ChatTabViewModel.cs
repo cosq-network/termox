@@ -162,6 +162,14 @@ public class ChatTabViewModel : INotifyPropertyChanged, ITabViewModel
 
     public bool IsServerScoped => SelectedServerProfile != null;
 
+    // Inline picker panel state — deliberately NOT an Avalonia Flyout/Popup: those anchor
+    // and size relative to their trigger control, which made it fight to sit flush and
+    // full-width against the composer. A plain sibling panel toggled by this bool sits in
+    // the same layout as the input box, so it's guaranteed to match its width with no
+    // positioning math at all.
+    private bool _isServerPickerOpen;
+    public bool IsServerPickerOpen { get => _isServerPickerOpen; set { _isServerPickerOpen = value; OnPropertyChanged(); } }
+
     private ChatToolCall? _pendingApprovalCall;
     public ChatToolCall? PendingApprovalCall { get => _pendingApprovalCall; set { _pendingApprovalCall = value; OnPropertyChanged(); OnPropertyChanged(nameof(HasPendingApproval)); } }
 
@@ -188,6 +196,8 @@ public class ChatTabViewModel : INotifyPropertyChanged, ITabViewModel
     public ICommand LoadSessionCommand { get; }
     public ICommand DeleteSessionCommand { get; }
     public ICommand ClearServerScopeCommand { get; }
+    public ICommand SelectServerCommand { get; }
+    public ICommand ToggleServerPickerCommand { get; }
 
     public ChatTabViewModel(
         Action<ChatTabViewModel> onClose,
@@ -242,7 +252,9 @@ public class ChatTabViewModel : INotifyPropertyChanged, ITabViewModel
         NewChatCommand = new RelayCommand(StartNewChat);
         LoadSessionCommand = new RelayCommand<ChatSessionSummary>(LoadSession);
         DeleteSessionCommand = new RelayCommand<ChatSessionSummary>(DeleteSession);
-        ClearServerScopeCommand = new RelayCommand(() => SelectedServerProfile = null);
+        ClearServerScopeCommand = new RelayCommand(() => { SelectedServerProfile = null; IsServerPickerOpen = false; });
+        SelectServerCommand = new RelayCommand<SshConnectionProfile>(p => { SelectedServerProfile = p; IsServerPickerOpen = false; });
+        ToggleServerPickerCommand = new RelayCommand(() => IsServerPickerOpen = !IsServerPickerOpen);
     }
 
     private void RefreshHistoryList()

@@ -163,6 +163,10 @@ public static class MarkdownRenderer
         return new ScrollViewer
         {
             HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+            // Left-aligned so the table (and its scroll viewport) is only as wide as its
+            // columns actually need — without this it stretches to fill the whole message
+            // width, leaving a big empty strip to the right of any narrow table.
+            HorizontalAlignment = HorizontalAlignment.Left,
             Content = new Border
             {
                 BorderBrush = BorderBrush,
@@ -173,8 +177,16 @@ public static class MarkdownRenderer
         };
     }
 
+    // Capped so a single long unwrapped value (a GUID, a full path) can't force its whole
+    // column — and the table around it — to blow out past the chat panel's width. A Grid
+    // column sized Auto measures its child at infinite width; giving the child itself a
+    // MaxWidth is what actually makes TextWrapping kick in instead of just reporting a
+    // huge desired size.
+    private const double MaxTableCellWidth = 220;
+
     private static Border WrapTableCell(Control content, bool isHeader)
     {
+        content.MaxWidth = MaxTableCellWidth;
         return new Border
         {
             Background = isHeader ? new SolidColorBrush(Color.Parse("#2a2a2a")) : Brushes.Transparent,
