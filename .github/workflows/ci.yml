@@ -70,7 +70,7 @@ jobs:
       # Upload coverage once (Ubuntu only) to avoid duplicate Codecov reports.
       - name: Upload coverage
         if: matrix.os == 'ubuntu-latest'
-        uses: codecov/codecov-action@ad3126e916f78f00edff4f0e242ad5729e55eff9 # v5.4.3
+        uses: codecov/codecov-action@v5.4.3
         with:
           files: coverage/**/coverage.cobertura.xml
           fail_ci_if_error: false
