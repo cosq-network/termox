@@ -248,7 +248,7 @@ jobs:
             'packaging/windows/termox.wxs',
             $fragment
           )
-          & light.exe -sval -out "artifacts/release/Termox-$env:VERSION-windows-x64.msi" -b $publish @(
+          & light.exe -out "artifacts/release/Termox-$env:VERSION-windows-x64.msi" -b $publish @(
             (Join-Path $workDir 'termox.wixobj'),
             (Join-Path $workDir 'TermoxFiles.wixobj')
           )
@@ -450,6 +450,10 @@ jobs:
           set -euo pipefail
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" >/dev/null 2>&1; then
+            echo "Tag v$VERSION already exists on remote — aborting to prevent duplicate release." >&2
+            exit 1
+          fi
           git tag -a "v$VERSION" -m "Release v$VERSION ($BUMP bump)"
           git push origin "v$VERSION"
 
