@@ -523,6 +523,7 @@ public class MainViewModel : INotifyPropertyChanged
         TestConnectionCommand = new RelayCommand(TestConnection);
         ConfirmHostKeyCommand = new RelayCommand(ConfirmHostKey);
         RejectHostKeyCommand = new RelayCommand(() => IsHostKeyConfirmModalVisible = false);
+        SelectSidebarSectionCommand = new RelayCommand<string>(SelectSidebarSection);
         AddBookmarkCommand = new RelayCommand<string>(AddBookmark);
         RemoveBookmarkCommand = new RelayCommand<BookmarkModel>(RequestRemoveBookmark);
         ConfirmRemoveBookmarkCommand = new RelayCommand(ConfirmRemoveBookmark);
@@ -545,6 +546,7 @@ public class MainViewModel : INotifyPropertyChanged
         OpenServerStatsTabCommand = new RelayCommand(OpenServerStatsTab);
         OpenChatTabCommand = new RelayCommand(OpenChatTab);
         ShowAboutDialogCommand = new RelayCommand(() => IsAboutDialogVisible = true);
+        ShowUserManualDialogCommand = new RelayCommand(() => IsUserManualDialogVisible = true);
 
         LoadConnections();
         RefreshRecentlyUsedSessions();
@@ -901,12 +903,58 @@ public class MainViewModel : INotifyPropertyChanged
     }
 
     public ICommand ShowAboutDialogCommand { get; }
+    public ICommand ShowUserManualDialogCommand { get; }
 
     private bool _isAboutDialogVisible;
     public bool IsAboutDialogVisible
     {
         get => _isAboutDialogVisible;
         set { _isAboutDialogVisible = value; OnPropertyChanged(); }
+    }
+
+    private bool _isUserManualDialogVisible;
+    public bool IsUserManualDialogVisible
+    {
+        get => _isUserManualDialogVisible;
+        set { _isUserManualDialogVisible = value; OnPropertyChanged(); }
+    }
+
+    public ICommand SelectSidebarSectionCommand { get; }
+
+    private bool _isSessionsSectionActive = true;
+    public bool IsSessionsSectionActive
+    {
+        get => _isSessionsSectionActive;
+        set { _isSessionsSectionActive = value; OnPropertyChanged(); }
+    }
+
+    private bool _isBookmarksSectionActive;
+    public bool IsBookmarksSectionActive
+    {
+        get => _isBookmarksSectionActive;
+        set { _isBookmarksSectionActive = value; OnPropertyChanged(); }
+    }
+
+    private bool _isToolsSectionActive;
+    public bool IsToolsSectionActive
+    {
+        get => _isToolsSectionActive;
+        set { _isToolsSectionActive = value; OnPropertyChanged(); }
+    }
+
+    private bool _isChatSectionActive;
+    public bool IsChatSectionActive
+    {
+        get => _isChatSectionActive;
+        set { _isChatSectionActive = value; OnPropertyChanged(); }
+    }
+
+    private void SelectSidebarSection(string? section)
+    {
+        IsSessionsSectionActive = section == "Sessions";
+        IsBookmarksSectionActive = section == "Bookmarks";
+        IsToolsSectionActive = section == "Tools";
+        IsChatSectionActive = section == "Chat";
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;

@@ -148,8 +148,8 @@ public class ChatHistoryService
             {
                 Id = reader.GetString(0),
                 Title = reader.GetString(1),
-                CreatedAt = ParseDate(reader.GetString(2)),
-                UpdatedAt = ParseDate(reader.GetString(3))
+                CreatedAt = ParseDate(reader.GetString(2)).ToLocalTime(),
+                UpdatedAt = ParseDate(reader.GetString(3)).ToLocalTime()
             });
         }
 

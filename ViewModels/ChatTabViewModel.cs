@@ -36,6 +36,9 @@ public class ChatTabViewModel : INotifyPropertyChanged, ITabViewModel
 
     public ObservableCollection<ChatMessage> Messages { get; } = new();
 
+    /// <summary>Drives the empty-state welcome panel — shown until the first message lands.</summary>
+    public bool HasMessages => Messages.Count > 0;
+
     private string _draftInput = "";
     public string DraftInput
     {
@@ -188,6 +191,7 @@ public class ChatTabViewModel : INotifyPropertyChanged, ITabViewModel
     public ICommand CloseSettingsCommand { get; }
     public ICommand SaveSettingsCommand { get; }
     public ICommand ClearTranscriptCommand { get; }
+    public ICommand UseSuggestedPromptCommand { get; }
     public ICommand ApproveToolCallCommand { get; }
     public ICommand DenyToolCallCommand { get; }
     public ICommand OpenHistoryCommand { get; }
@@ -211,6 +215,7 @@ public class ChatTabViewModel : INotifyPropertyChanged, ITabViewModel
         _settings = _settingsService.Load();
         SavedConnections = savedConnections;
         _toolRegistry = new ChatToolRegistry(savedConnections);
+        Messages.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasMessages));
 
         var knownModel = ChatModelCatalog.Find(_settings.Model);
         if (knownModel != null)
@@ -240,6 +245,7 @@ public class ChatTabViewModel : INotifyPropertyChanged, ITabViewModel
             IsSettingsPanelOpen = false;
         });
         ClearTranscriptCommand = new RelayCommand(() => Messages.Clear());
+        UseSuggestedPromptCommand = new RelayCommand<string>(text => DraftInput = text ?? "");
         ApproveToolCallCommand = new RelayCommand(() => ResolveApproval(true));
         DenyToolCallCommand = new RelayCommand(() => ResolveApproval(false));
         OpenHistoryCommand = new RelayCommand(() =>

@@ -28,13 +28,16 @@
         <DockPanel>
 
             <!-- Termox application menu -->
-            <Menu DockPanel.Dock="Top" Background="#202124" Foreground="#e8eaed">
+            <Menu DockPanel.Dock="Top" Background="{StaticResource TermoxPanelBrush}"
+                Foreground="{StaticResource TermoxTextPrimaryBrush}">
                 <MenuItem>
                     <MenuItem.Header>
                         <primitives:AccessText Text="_Termox" Foreground="#f4f7fb" />
                     </MenuItem.Header>
                     <MenuItem Header="About Termox"
                         Command="{Binding ShowAboutDialogCommand}" />
+                    <MenuItem Header="User Manual"
+                        Command="{Binding ShowUserManualDialogCommand}" />
                     <Separator />
                     <MenuItem Header="Exit Termox" Click="ExitTermox_Click" />
                 </MenuItem>
@@ -51,6 +54,8 @@
                     <MenuItem.Header>
                         <primitives:AccessText Text="_Help" Foreground="#f4f7fb" />
                     </MenuItem.Header>
+                    <MenuItem Header="User Manual"
+                        Command="{Binding ShowUserManualDialogCommand}" />
                     <MenuItem Header="About Termox"
                         Command="{Binding ShowAboutDialogCommand}" />
                 </MenuItem>
@@ -58,7 +63,7 @@
 
 
             <!-- Status Bar at the bottom -->
-            <Border DockPanel.Dock="Bottom" Background="#18527a" Padding="10,3">
+            <Border DockPanel.Dock="Bottom" Background="#007acc" Padding="10,3">
                 <DockPanel>
                     <StackPanel Orientation="Horizontal" Spacing="7" DockPanel.Dock="Left">
                         <TextBlock Text="●" Foreground="#6ee7a8" FontSize="11" VerticalAlignment="Center" />
@@ -70,30 +75,43 @@
             </Border>
 
             <!-- Main Content Area -->
-            <Grid ColumnDefinitions="280, 5, *">
-                <!-- Sidebar (Sessions/Tools) -->
-                <Border Grid.Column="0" Background="#252526" BorderBrush="#1e1e1e"
+            <Grid ColumnDefinitions="52, 280, 5, *">
+                <!-- Icon-first nav rail (Sessions/Bookmarks/Tools/Chat) -->
+                <Border Grid.Column="0" Background="{StaticResource TermoxPanelBrush}">
+                    <StackPanel>
+                        <Button Classes="sidebarRailButton" Classes.active="{Binding IsSessionsSectionActive}"
+                            Command="{Binding SelectSidebarSectionCommand}" CommandParameter="Sessions"
+                            Content="🖥" ToolTip.Tip="Sessions" />
+                        <Button Classes="sidebarRailButton" Classes.active="{Binding IsBookmarksSectionActive}"
+                            Command="{Binding SelectSidebarSectionCommand}" CommandParameter="Bookmarks"
+                            Content="⭐" ToolTip.Tip="Bookmarks" />
+                        <Button Classes="sidebarRailButton" Classes.active="{Binding IsToolsSectionActive}"
+                            Command="{Binding SelectSidebarSectionCommand}" CommandParameter="Tools"
+                            Content="🛠" ToolTip.Tip="Tools" />
+                        <Button Classes="sidebarRailButton" Classes.active="{Binding IsChatSectionActive}"
+                            Command="{Binding SelectSidebarSectionCommand}" CommandParameter="Chat"
+                            Content="⎈" ToolTip.Tip="Helm (AI Assistant)" />
+                    </StackPanel>
+                </Border>
+
+                <!-- Sidebar panel (Sessions/Tools) -->
+                <Border Grid.Column="1" Background="{StaticResource TermoxSurfaceBrush}"
+                    BorderBrush="{StaticResource TermoxPanelBrush}"
                     BorderThickness="0,0,1,0">
-                    <TabControl Background="Transparent" Padding="0">
-                        <TabControl.Styles>
-                            <Style Selector="TabItem">
-                                <Setter Property="FontSize" Value="13" />
-                                <Setter Property="MinHeight" Value="35" />
-                            </Style>
+                    <Grid>
+                        <Grid.Styles>
                             <Style Selector="ListBoxItem:pointerover /template/ Border#PART_ContentPresenter">
-                                <Setter Property="Background" Value="#30343b" />
+                                <Setter Property="Background" Value="{StaticResource TermoxSurfaceHoverBrush}" />
                             </Style>
                             <Style Selector="ListBoxItem:selected /template/ Border#PART_ContentPresenter">
-                                <Setter Property="Background" Value="#264f78" />
+                                <Setter Property="Background" Value="{StaticResource TermoxSelectionBrush}" />
                             </Style>
-                        </TabControl.Styles>
+                        </Grid.Styles>
 
-                        <TabItem>
-                            <TabItem.Header>
-                                <TextBlock Text="Sessions" Foreground="#f4f7fb" />
-                            </TabItem.Header>
-                            <ScrollViewer>
+                        <ScrollViewer IsVisible="{Binding IsSessionsSectionActive}">
                                 <StackPanel Margin="15" Spacing="10">
+                                    <TextBlock Text="SESSIONS" FontSize="10" FontWeight="Bold"
+                                        Foreground="#6ea9d4" LetterSpacing="1.2" />
                                     <StackPanel Orientation="Horizontal" Spacing="6">
                                         <Button Command="{Binding ShowConnectionModalCommand}"
                                             Classes="newConnectionButton" Padding="12,6"
@@ -107,9 +125,9 @@
                                         FontSize="13" Foreground="#888" Margin="0,10,0,0"
                                         IsVisible="{Binding HasRecentlyUsedSessions}" />
 
+                                    <Border Classes="cardPanel" IsVisible="{Binding HasRecentlyUsedSessions}">
                                     <ListBox ItemsSource="{Binding RecentlyUsedSessions}"
-                                        Background="Transparent" BorderThickness="0" Padding="0"
-                                        IsVisible="{Binding HasRecentlyUsedSessions}">
+                                        Background="Transparent" BorderThickness="0" Padding="0">
                                         <ListBox.ItemTemplate>
                                             <DataTemplate>
                                                 <Grid ColumnDefinitions="Auto, *" Margin="0,4"
@@ -143,10 +161,12 @@
                                             </DataTemplate>
                                         </ListBox.ItemTemplate>
                                     </ListBox>
+                                    </Border>
 
                                     <TextBlock Text="Saved Sessions" FontWeight="SemiBold"
                                         FontSize="13" Foreground="#888" Margin="0,10,0,0" />
 
+                                    <Border Classes="cardPanel">
                                     <ListBox ItemsSource="{Binding SavedConnections}"
                                         Background="Transparent" BorderThickness="0" Padding="0">
                                         <ListBox.ItemTemplate>
@@ -188,6 +208,7 @@
                                             </DataTemplate>
                                         </ListBox.ItemTemplate>
                                     </ListBox>
+                                    </Border>
                                     <StackPanel IsVisible="{Binding !HasSavedConnections}" Spacing="4"
                                         Margin="4,12,4,0">
                                         <TextBlock Text="No saved sessions yet" Foreground="#c9d1db"
@@ -198,21 +219,18 @@
 
                                 </StackPanel>
                             </ScrollViewer>
-                        </TabItem>
-                        <TabItem>
-                            <TabItem.Header>
-                                <TextBlock Text="Bookmarks" Foreground="#f4f7fb" />
-                            </TabItem.Header>
-                            <ScrollViewer>
+                        <ScrollViewer IsVisible="{Binding IsBookmarksSectionActive}">
                                 <StackPanel Margin="15" Spacing="10">
+                                    <TextBlock Text="BOOKMARKS" FontSize="10" FontWeight="Bold"
+                                        Foreground="#6ea9d4" LetterSpacing="1.2" />
 
                                     <!-- Pinned / favorite bookmarks -->
                                     <TextBlock Text="⭐ Favorites" FontWeight="SemiBold"
                                         FontSize="13" Foreground="#888"
                                         IsVisible="{Binding HasFavoritedBookmarks}" />
+                                    <Border Classes="cardPanel" IsVisible="{Binding HasFavoritedBookmarks}">
                                     <ListBox ItemsSource="{Binding FavoritedBookmarks}"
-                                        Background="Transparent" BorderThickness="0" Padding="0"
-                                        IsVisible="{Binding HasFavoritedBookmarks}">
+                                        Background="Transparent" BorderThickness="0" Padding="0">
                                         <ListBox.ItemTemplate>
                                             <DataTemplate>
                                                 <Grid ColumnDefinitions="Auto, Auto, *, Auto" Margin="0,4"
@@ -266,9 +284,11 @@
                                             </DataTemplate>
                                         </ListBox.ItemTemplate>
                                     </ListBox>
+                                    </Border>
 
                                     <TextBlock Text="Saved Bookmarks" FontWeight="SemiBold"
                                         FontSize="13" Foreground="#888" />
+                                    <Border Classes="cardPanel">
                                     <ListBox ItemsSource="{Binding Bookmarks}"
                                         Background="Transparent" BorderThickness="0" Padding="0">
                                         <ListBox.ItemTemplate>
@@ -324,6 +344,7 @@
                                             </DataTemplate>
                                         </ListBox.ItemTemplate>
                                     </ListBox>
+                                    </Border>
                                     <StackPanel IsVisible="{Binding !HasBookmarks}" Spacing="4"
                                         Margin="4,12,4,0">
                                         <TextBlock Text="No bookmarks yet" Foreground="#c9d1db"
@@ -333,15 +354,15 @@
                                     </StackPanel>
                                 </StackPanel>
                             </ScrollViewer>
-                        </TabItem>
-                        <TabItem>
-                            <TabItem.Header>
-                                <TextBlock Text="Tools" Foreground="#f4f7fb" />
-                            </TabItem.Header>
-                            <ScrollViewer VerticalScrollBarVisibility="Auto"
-                                HorizontalScrollBarVisibility="Disabled">
-                                <WrapPanel Margin="15" Orientation="Horizontal"
-                                    HorizontalAlignment="Left">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto"
+                            HorizontalScrollBarVisibility="Disabled"
+                            IsVisible="{Binding IsToolsSectionActive}">
+                                <StackPanel Margin="15" Spacing="10">
+                                    <TextBlock Text="TOOLS" FontSize="10" FontWeight="Bold"
+                                        Foreground="#6ea9d4" LetterSpacing="1.2" />
+                                    <Border Classes="cardPanel">
+                                    <WrapPanel Orientation="Horizontal"
+                                        HorizontalAlignment="Left">
                                     <Button Content="Port Scanner" Classes="toolButton"
                                         Command="{Binding OpenPortScannerTabCommand}"
                                         ToolTip.Tip="Open the dedicated port scanner tab" />
@@ -369,33 +390,36 @@
                                     <Button Content="Server Stats" Classes="toolButton"
                                         Command="{Binding OpenServerStatsTabCommand}"
                                         ToolTip.Tip="View CPU, memory, process, and disk stats over SSH" />
-                                </WrapPanel>
-                            </ScrollViewer>
-                        </TabItem>
-                        <TabItem>
-                            <TabItem.Header>
-                                <TextBlock Text="Chat" Foreground="#f4f7fb" />
-                            </TabItem.Header>
-                            <ScrollViewer VerticalScrollBarVisibility="Auto"
-                                HorizontalScrollBarVisibility="Disabled">
-                                <StackPanel Margin="15" Spacing="10">
-                                    <TextBlock Text="Helm can inspect and operate on your saved connections for you."
-                                        Foreground="#aaaaaa" FontSize="12" TextWrapping="Wrap" />
-                                    <Button Content="Open Chat" Classes="toolButton"
-                                        Command="{Binding OpenChatTabCommand}"
-                                        ToolTip.Tip="Open the chat assistant tab" />
+                                    </WrapPanel>
+                                    </Border>
                                 </StackPanel>
                             </ScrollViewer>
-                        </TabItem>
-                    </TabControl>
+                        <ScrollViewer VerticalScrollBarVisibility="Auto"
+                            HorizontalScrollBarVisibility="Disabled"
+                            IsVisible="{Binding IsChatSectionActive}">
+                                <StackPanel Margin="15" Spacing="10">
+                                    <TextBlock Text="HELM" FontSize="10" FontWeight="Bold"
+                                        Foreground="#6ea9d4" LetterSpacing="1.2" />
+                                    <Border Classes="cardPanel">
+                                        <StackPanel Spacing="10">
+                                            <TextBlock Text="Helm can inspect and operate on your saved connections for you."
+                                                Foreground="#aaaaaa" FontSize="12" TextWrapping="Wrap" />
+                                            <Button Content="Open Chat" Classes="toolButton"
+                                                Command="{Binding OpenChatTabCommand}"
+                                                ToolTip.Tip="Open the chat assistant tab" />
+                                        </StackPanel>
+                                    </Border>
+                                </StackPanel>
+                            </ScrollViewer>
+                    </Grid>
                 </Border>
 
                 <!-- Splitter -->
-                <GridSplitter Grid.Column="1" Background="#333" Width="5"
+                <GridSplitter Grid.Column="2" Background="#333" Width="5"
                     HorizontalAlignment="Center" VerticalAlignment="Stretch" />
 
                 <!-- Terminal Area with Tab -->
-                <Grid Grid.Column="2" Background="#1e1e1e">
+                <Grid Grid.Column="3" Background="#1e1e1e">
                     <!-- Shared with the split-view pane below: Control.DataTemplates resolves up the
                          visual tree, so hoisting it here (instead of on the primary TabControl) lets
                          both the main tab strip and the split pane's plain ContentControl render any
@@ -629,7 +653,7 @@
                                                         <TextBlock Grid.Column="4"
                                                             Text="{Binding Permissions}"
                                                             Foreground="#666"
-                                                            FontFamily="Consolas, Fira Code, monospace"
+                                                            FontFamily="{StaticResource TermoxMonoFontFamily}"
                                                             FontSize="12" VerticalAlignment="Center" />
                                                     </Grid>
                                                 </DataTemplate>
@@ -637,40 +661,37 @@
                                         </ListBox>
 
                                     </Grid>
-                                    <Border Background="#CC000000" IsVisible="{Binding IsDeleteConfirmationVisible}"
-                                        ZIndex="20" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
-                                        <Border Background="#2d2d30" BorderBrush="#555" BorderThickness="1"
-                                            CornerRadius="8" Width="420" Padding="22"
-                                            HorizontalAlignment="Center" VerticalAlignment="Center">
+                                    <!-- Local ZIndex 20/21 — only needs to beat siblings within this SFTP tab's Panel, not the global 100s modal band -->
+                                    <Border Classes="modalScrim" IsVisible="{Binding IsDeleteConfirmationVisible}"
+                                        ZIndex="20">
+                                        <Border Classes="modalCard" Width="420" Padding="22">
                                             <StackPanel Spacing="14">
-                                                <TextBlock Text="Confirm Remote Delete" FontSize="17"
+                                                <TextBlock Text="Confirm Remote Delete" FontSize="{StaticResource TermoxTitleFontSize}"
                                                     FontWeight="SemiBold" Foreground="#e0e0e0" />
                                                 <TextBlock Text="{Binding DeleteConfirmationMessage}" TextWrapping="Wrap"
                                                     Foreground="#ccc" />
                                                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10">
                                                     <Button Content="Cancel" Command="{Binding CancelDeleteCommand}"
-                                                        Classes="neutralButton" Padding="14,7" />
+                                                        Classes="neutralButton" />
                                                     <Button Content="Delete" Command="{Binding ConfirmDeleteCommand}"
-                                                        Classes="dangerButton" Padding="14,7" />
+                                                        Classes="dangerButton" />
                                                 </StackPanel>
                                             </StackPanel>
                                         </Border>
                                     </Border>
-                                    <Border Background="#CC000000" IsVisible="{Binding IsFileSizeWarningVisible}"
-                                        ZIndex="21" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
-                                        <Border Background="#2d2d30" BorderBrush="#555" BorderThickness="1"
-                                            CornerRadius="8" Width="440" Padding="22"
-                                            HorizontalAlignment="Center" VerticalAlignment="Center">
+                                    <Border Classes="modalScrim" IsVisible="{Binding IsFileSizeWarningVisible}"
+                                        ZIndex="21">
+                                        <Border Classes="modalCard" Width="440" Padding="22">
                                             <StackPanel Spacing="14">
-                                                <TextBlock Text="Large Download Warning" FontSize="17"
+                                                <TextBlock Text="Large Download Warning" FontSize="{StaticResource TermoxTitleFontSize}"
                                                     FontWeight="SemiBold" Foreground="#f39c12" />
                                                 <TextBlock Text="{Binding FileSizeWarningMessage}" TextWrapping="Wrap"
                                                     Foreground="#ccc" />
                                                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10">
                                                     <Button Content="Cancel" Command="{Binding CancelFileSizeWarningCommand}"
-                                                        Classes="neutralButton" Padding="14,7" />
+                                                        Classes="neutralButton" />
                                                     <Button Content="Download Anyway" Command="{Binding ConfirmFileSizeWarningCommand}"
-                                                        Classes="warningButton" Padding="14,7" />
+                                                        Classes="warningButton" />
                                                 </StackPanel>
                                             </StackPanel>
                                         </Border>
@@ -714,7 +735,7 @@
                                             <Grid Grid.Row="1">
                                                 <edit:TextEditor x:Name="Editor"
                                                     Document="{Binding Document}"
-                                                    FontFamily="Consolas, Fira Code, Cascadia Code, Courier New, monospace"
+                                                    FontFamily="{StaticResource TermoxMonoFontFamily}"
                                                     FontSize="14"
                                                     ShowLineNumbers="True"
                                                     Background="#1e1e1e"
@@ -727,13 +748,12 @@
                                                     IsVisible="{Binding IsLoading}" />
                                             </Grid>
                                         </Grid>
-                                        <Border Background="#CC000000" IsVisible="{Binding IsSaveConfirmVisible}"
-                                            ZIndex="30" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
-                                            <Border Background="#2d2d30" BorderBrush="#555" BorderThickness="1"
-                                                CornerRadius="8" Width="420" Padding="22"
-                                                HorizontalAlignment="Center" VerticalAlignment="Center">
+                                        <!-- Local ZIndex 30 — only needs to beat siblings within this FileEditor tab's Panel -->
+                                        <Border Classes="modalScrim" IsVisible="{Binding IsSaveConfirmVisible}"
+                                            ZIndex="30">
+                                            <Border Classes="modalCard" Width="420" Padding="22">
                                                 <StackPanel Spacing="14">
-                                                    <TextBlock Text="Unsaved Changes" FontSize="17"
+                                                    <TextBlock Text="Unsaved Changes" FontSize="{StaticResource TermoxTitleFontSize}"
                                                         FontWeight="SemiBold" Foreground="#f39c12" />
                                                     <TextBlock Text="This file has unsaved changes. Close without saving?"
                                                         TextWrapping="Wrap" Foreground="#ccc" />
@@ -741,12 +761,10 @@
                                                         HorizontalAlignment="Right" Spacing="10">
                                                         <Button Content="Cancel"
                                                             Command="{Binding CancelDiscardCommand}"
-                                                            Classes="neutralButton"
-                                                            Padding="14,7" />
+                                                            Classes="neutralButton" />
                                                         <Button Content="Discard Changes"
                                                             Command="{Binding ConfirmDiscardCommand}"
-                                                            Classes="dangerButton"
-                                                            Padding="14,7" />
+                                                            Classes="dangerButton" />
                                                     </StackPanel>
                                                 </StackPanel>
                                             </Border>
@@ -756,15 +774,16 @@
                             </DataTemplate>
 
                             <DataTemplate DataType="vm:PortScannerTabViewModel">
-                                <Grid Background="#1e1e1e" RowDefinitions="Auto,Auto,*">
+                                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                <Grid Background="#1e1e1e" RowDefinitions="Auto,Auto,Auto">
                                     <Border Grid.Row="0" Background="#252526" Padding="28,24"
                                         BorderBrush="#333" BorderThickness="0,0,0,1">
                                         <Grid ColumnDefinitions="*,Auto">
                                             <StackPanel Spacing="6">
-                                                <TextBlock Text="Port Scanner" FontSize="24"
-                                                    FontWeight="SemiBold" Foreground="#f1f1f1" />
+                                                <TextBlock Text="Port Scanner" FontSize="{StaticResource TermoxPageTitleFontSize}"
+                                                    FontWeight="SemiBold" Foreground="{StaticResource TermoxPageTitleBrush}" />
                                                 <TextBlock Text="Inspect TCP reachability across a host with clear, focused results."
-                                                    Foreground="#999" FontSize="13" />
+                                                    Foreground="{StaticResource TermoxPageSubtitleBrush}" FontSize="13" />
                                             </StackPanel>
                                             <Border Grid.Column="1" Background="#173c4a" CornerRadius="18"
                                                 Padding="14,8" VerticalAlignment="Center">
@@ -881,6 +900,7 @@
                                         </Grid>
                                     </Border>
                                 </Grid>
+                                </ScrollViewer>
                             </DataTemplate>
 
                             <DataTemplate DataType="vm:PingTestTabViewModel">
@@ -888,10 +908,10 @@
                                     <Border Background="#1e1e1e" Padding="28">
                                         <StackPanel Spacing="16" MaxWidth="760">
                                             <StackPanel Spacing="4">
-                                                <TextBlock Text="Ping Test" FontSize="24"
-                                                    FontWeight="SemiBold" Foreground="#f1f1f1" />
+                                                <TextBlock Text="Ping Test" FontSize="{StaticResource TermoxPageTitleFontSize}"
+                                                    FontWeight="SemiBold" Foreground="{StaticResource TermoxPageTitleBrush}" />
                                                 <TextBlock Text="Measure network reachability and round-trip response time for a host."
-                                                    Foreground="#999" FontSize="13" />
+                                                    Foreground="{StaticResource TermoxPageSubtitleBrush}" FontSize="13" />
                                             </StackPanel>
                                             <Border Background="#252526" BorderBrush="#3a3a3a"
                                                 BorderThickness="1" CornerRadius="7" Padding="20">
@@ -944,10 +964,10 @@
                                     <Border Background="#1e1e1e" Padding="28">
                                         <StackPanel Spacing="16" MaxWidth="860">
                                             <StackPanel Spacing="4">
-                                                <TextBlock Text="SSH Key Generator" FontSize="24"
-                                                    FontWeight="SemiBold" Foreground="#f1f1f1" />
+                                                <TextBlock Text="SSH Key Generator" FontSize="{StaticResource TermoxPageTitleFontSize}"
+                                                    FontWeight="SemiBold" Foreground="{StaticResource TermoxPageTitleBrush}" />
                                                 <TextBlock Text="Create an OpenSSH key pair for secure remote access."
-                                                    Foreground="#999" FontSize="13" />
+                                                    Foreground="{StaticResource TermoxPageSubtitleBrush}" FontSize="13" />
                                             </StackPanel>
                                             <Border Background="#252526" BorderBrush="#3a3a3a"
                                                 BorderThickness="1" CornerRadius="7" Padding="20">
@@ -987,7 +1007,7 @@
                                                     <TextBox Text="{Binding GeneratedPublicKey}" Background="#1a1a1a"
                                                         Foreground="#e0e0e0" BorderBrush="#333" Padding="10"
                                                         Height="150" IsReadOnly="True" TextWrapping="Wrap"
-                                                        FontFamily="Consolas, Fira Code, monospace" FontSize="12" />
+                                                        FontFamily="{StaticResource TermoxMonoFontFamily}" FontSize="12" />
                                                     <Button Content="Copy Public Key" Command="{Binding CopyPublicKeyCommand}"
                                                         Classes="neutralButton" Padding="10,6"
                                                         CornerRadius="4" HorizontalAlignment="Left" />
@@ -998,7 +1018,7 @@
                                                     <TextBox Text="{Binding GeneratedPrivateKey}" Background="#1a1a1a"
                                                         Foreground="#e0e0e0" BorderBrush="#333" Padding="10"
                                                         Height="150" IsReadOnly="True" TextWrapping="Wrap"
-                                                        FontFamily="Consolas, Fira Code, monospace" FontSize="12" />
+                                                        FontFamily="{StaticResource TermoxMonoFontFamily}" FontSize="12" />
                                                     <Button Content="Copy Private Key" Command="{Binding CopyPrivateKeyCommand}"
                                                         Classes="neutralButton" Padding="10,6"
                                                         CornerRadius="4" HorizontalAlignment="Left" />
@@ -1014,10 +1034,10 @@
                                     <Border Background="#1e1e1e" Padding="28">
                                         <StackPanel Spacing="16">
                                             <StackPanel Spacing="4">
-                                                <TextBlock Text="Connection Tester" FontSize="24"
-                                                    FontWeight="SemiBold" Foreground="#f1f1f1" />
+                                                <TextBlock Text="Connection Tester" FontSize="{StaticResource TermoxPageTitleFontSize}"
+                                                    FontWeight="SemiBold" Foreground="{StaticResource TermoxPageTitleBrush}" />
                                                 <TextBlock Text="Verify connectivity for every saved SSH connection from one focused view."
-                                                    Foreground="#999" FontSize="13" />
+                                                    Foreground="{StaticResource TermoxPageSubtitleBrush}" FontSize="13" />
                                             </StackPanel>
                                             <Border Background="#252526" BorderBrush="#3a3a3a"
                                                 BorderThickness="1" CornerRadius="7" Padding="20">
@@ -1074,10 +1094,10 @@
                                     <Border Background="#1e1e1e" Padding="28">
                                         <StackPanel Spacing="16" MaxWidth="860">
                                             <StackPanel Spacing="4">
-                                                <TextBlock Text="SSH Endpoint Test" FontSize="24"
-                                                    FontWeight="SemiBold" Foreground="#f1f1f1" />
+                                                <TextBlock Text="SSH Endpoint Test" FontSize="{StaticResource TermoxPageTitleFontSize}"
+                                                    FontWeight="SemiBold" Foreground="{StaticResource TermoxPageTitleBrush}" />
                                                 <TextBlock Text="Measure the responsiveness of an SSH endpoint over an authenticated SFTP session."
-                                                    Foreground="#999" FontSize="13" />
+                                                    Foreground="{StaticResource TermoxPageSubtitleBrush}" FontSize="13" />
                                             </StackPanel>
                                             <Border Background="#252526" BorderBrush="#3a3a3a"
                                                 BorderThickness="1" CornerRadius="7" Padding="20">
@@ -1100,7 +1120,7 @@
                                             <Border Background="#1a1a1a" BorderBrush="#333"
                                                 BorderThickness="1" CornerRadius="4" Padding="16" MinHeight="180">
                                                 <TextBlock Text="{Binding SpeedTestResult}" Foreground="#ccc"
-                                                    TextWrapping="Wrap" FontFamily="Consolas, Fira Code, monospace"
+                                                    TextWrapping="Wrap" FontFamily="{StaticResource TermoxMonoFontFamily}"
                                                     FontSize="12" />
                                             </Border>
                                         </StackPanel>
@@ -1109,35 +1129,40 @@
                             </DataTemplate>
 
                             <DataTemplate DataType="vm:GpgTabViewModel">
+                                <!-- Panel root so the Import/Export modals below float over the whole
+                                     tab (ZIndex-ordered siblings) instead of being laid out in-flow
+                                     inside the scrollable StackPanel, which pushed them to the bottom
+                                     of the page as an in-line black band rather than a floating overlay. -->
+                                <Panel>
                                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                                     <Border Background="#1e1e1e" Padding="28">
                                         <StackPanel Spacing="16" MaxWidth="900">
                                             <StackPanel Spacing="4">
-                                                <TextBlock Text="GPG Key Manager" FontSize="24"
-                                                    FontWeight="SemiBold" Foreground="#f1f1f1" />
+                                                <TextBlock Text="GPG Key Manager" FontSize="{StaticResource TermoxPageTitleFontSize}"
+                                                    FontWeight="SemiBold" Foreground="{StaticResource TermoxPageTitleBrush}" />
                                                 <TextBlock Text="Manage your GPG keys, view details, export, and import keys."
-                                                    Foreground="#999" FontSize="13" />
+                                                    Foreground="{StaticResource TermoxPageSubtitleBrush}" FontSize="13" />
                                             </StackPanel>
                                             <Border Background="#252526" BorderBrush="#3a3a3a"
                                                 BorderThickness="1" CornerRadius="7" Padding="16">
                                                 <Grid RowDefinitions="Auto,Auto" ColumnSpacing="12">
-                                                    <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="10">
-                                                        <Button Content="Refresh Keys" 
+                                                    <Grid Grid.Row="0" ColumnDefinitions="Auto,Auto,*" ColumnSpacing="10">
+                                                        <Button Grid.Column="0" Content="Refresh Keys"
                                                             Command="{Binding RefreshKeysCommand}"
                                                             Classes="primaryButton"
                                                             Padding="14,8" CornerRadius="4"
                                                             IsEnabled="{Binding !IsLoading}" />
-                                                        <Button Content="Import Key"
+                                                        <Button Grid.Column="1" Content="Import Key"
                                                             Command="{Binding ShowImportModalCommand}"
                                                             Classes="successButton"
                                                             Padding="14,8" CornerRadius="4"
                                                             IsEnabled="{Binding !IsLoading}" />
-                                                        <TextBlock Text="{Binding Status}"
+                                                        <TextBlock Grid.Column="2" Text="{Binding Status}"
                                                             Foreground="{Binding StatusColor}"
                                                             VerticalAlignment="Center"
-                                                            TextTrimming="CharacterEllipsis"
+                                                            TextWrapping="Wrap"
                                                             Margin="20,0,0,0" />
-                                                    </StackPanel>
+                                                    </Grid>
                                                 </Grid>
                                             </Border>
                                             <StackPanel Spacing="10">
@@ -1213,60 +1238,58 @@
                                                     Padding="12,6" CornerRadius="4"
                                                     IsEnabled="{Binding CanExportSecretKey}" />
                                             </StackPanel>
-                                            <!-- Import Modal -->
-                                            <Border Background="#CC000000" IsVisible="{Binding IsImportModalVisible}"
-                                                ZIndex="100" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
-                                                <Border Background="#2d2d30" BorderBrush="#555" BorderThickness="1"
-                                                    CornerRadius="8" Width="600" Padding="22"
-                                                    HorizontalAlignment="Center" VerticalAlignment="Center">
-                                                    <StackPanel Spacing="14">
-                                                        <TextBlock Text="Import GPG Key" FontSize="17"
-                                                            FontWeight="SemiBold" Foreground="#e0e0e0" />
-                                                        <TextBlock Text="Paste the ASCII-armored key data below:"
-                                                            Foreground="#ccc" FontSize="12" />
-                                                        <TextBox Text="{Binding ImportKeyData}"
-                                                            Padding="10" MinHeight="200" TextWrapping="Wrap"
-                                                            AcceptsReturn="True" />
-                                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10">
-                                                            <Button Content="Cancel" 
-                                                                Command="{Binding CloseImportModalCommand}"
-                                                                Classes="neutralButton" Padding="14,7" />
-                                                            <Button Content="Import" 
-                                                                Command="{Binding ImportKeyCommand}"
-                                                                Classes="successButton" Padding="14,7"
-                                                                IsEnabled="{Binding !IsLoading}" />
-                                                        </StackPanel>
-                                                    </StackPanel>
-                                                </Border>
-                                            </Border>
-                                            <!-- Export Modal -->
-                                            <Border Background="#CC000000" IsVisible="{Binding IsExportModalVisible}"
-                                                ZIndex="100" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
-                                                <Border Background="#2d2d30" BorderBrush="#555" BorderThickness="1"
-                                                    CornerRadius="8" Width="700" Padding="22"
-                                                    HorizontalAlignment="Center" VerticalAlignment="Center">
-                                                    <StackPanel Spacing="14">
-                                                        <TextBlock Text="Exported Key" FontSize="17"
-                                                            FontWeight="SemiBold" Foreground="#e0e0e0" />
-                                                        <TextBox Text="{Binding ExportedKeyData}"
-                                                            Background="#1e1e1e" Foreground="#e0e0e0"
-                                                            BorderBrush="#555" Padding="10"
-                                                            MinHeight="250" TextWrapping="Wrap"
-                                                            AcceptsReturn="True" IsReadOnly="True" />
-                                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10">
-                                                            <Button Content="Copy to Clipboard"
-                                                                Command="{Binding CopyExportedKeyCommand}"
-                                                                Classes="infoButton" Padding="14,7" />
-                                                            <Button Content="Close"
-                                                                Command="{Binding CloseExportModalCommand}"
-                                                                Classes="neutralButton" Padding="14,7" />
-                                                        </StackPanel>
-                                                    </StackPanel>
-                                                </Border>
-                                            </Border>
                                         </StackPanel>
                                     </Border>
                                 </ScrollViewer>
+
+                                <!-- Import Modal -->
+                                <Border Classes="modalScrim" IsVisible="{Binding IsImportModalVisible}"
+                                    ZIndex="112">
+                                    <Border Classes="modalCard" Width="600" Padding="22">
+                                        <StackPanel Spacing="14">
+                                            <TextBlock Text="Import GPG Key" FontSize="{StaticResource TermoxTitleFontSize}"
+                                                FontWeight="SemiBold" Foreground="#e0e0e0" />
+                                            <TextBlock Text="Paste the ASCII-armored key data below:"
+                                                Foreground="#ccc" FontSize="12" />
+                                            <TextBox Text="{Binding ImportKeyData}"
+                                                Padding="10" MinHeight="200" TextWrapping="Wrap"
+                                                AcceptsReturn="True" />
+                                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10">
+                                                <Button Content="Cancel"
+                                                    Command="{Binding CloseImportModalCommand}"
+                                                    Classes="neutralButton" />
+                                                <Button Content="Import"
+                                                    Command="{Binding ImportKeyCommand}"
+                                                    Classes="successButton"
+                                                    IsEnabled="{Binding !IsLoading}" />
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Border>
+                                </Border>
+                                <!-- Export Modal -->
+                                <Border Classes="modalScrim" IsVisible="{Binding IsExportModalVisible}"
+                                    ZIndex="113">
+                                    <Border Classes="modalCard" Width="700" Padding="22">
+                                        <StackPanel Spacing="14">
+                                            <TextBlock Text="Exported Key" FontSize="{StaticResource TermoxTitleFontSize}"
+                                                FontWeight="SemiBold" Foreground="#e0e0e0" />
+                                            <TextBox Text="{Binding ExportedKeyData}"
+                                                Background="#1e1e1e" Foreground="#e0e0e0"
+                                                BorderBrush="#555" Padding="10"
+                                                MinHeight="250" TextWrapping="Wrap"
+                                                AcceptsReturn="True" IsReadOnly="True" />
+                                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10">
+                                                <Button Content="Copy to Clipboard"
+                                                    Command="{Binding CopyExportedKeyCommand}"
+                                                    Classes="infoButton" />
+                                                <Button Content="Close"
+                                                    Command="{Binding CloseExportModalCommand}"
+                                                    Classes="neutralButton" />
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Border>
+                                </Border>
+                                </Panel>
                             </DataTemplate>
 
                             <DataTemplate DataType="vm:FingerprintTabViewModel">
@@ -1274,10 +1297,10 @@
                                     <Border Background="#1e1e1e" Padding="28">
                                         <StackPanel Spacing="16" MaxWidth="900">
                                             <StackPanel Spacing="4">
-                                                <TextBlock Text="Fingerprint Utilities" FontSize="24"
-                                                    FontWeight="SemiBold" Foreground="#f1f1f1" />
+                                                <TextBlock Text="Fingerprint Utilities" FontSize="{StaticResource TermoxPageTitleFontSize}"
+                                                    FontWeight="SemiBold" Foreground="{StaticResource TermoxPageTitleBrush}" />
                                                 <TextBlock Text="Calculate and compare file or text fingerprints using various hash algorithms."
-                                                    Foreground="#999" FontSize="13" />
+                                                    Foreground="{StaticResource TermoxPageSubtitleBrush}" FontSize="13" />
                                             </StackPanel>
                                             <Border Background="#252526" BorderBrush="#3a3a3a"
                                                 BorderThickness="1" CornerRadius="7" Padding="16">
@@ -1398,10 +1421,10 @@
                                     <Border Background="#1e1e1e" Padding="28">
                                         <StackPanel Spacing="16" MaxWidth="900">
                                             <StackPanel Spacing="4">
-                                                <TextBlock Text="DNS Record Inspector" FontSize="24"
-                                                    FontWeight="SemiBold" Foreground="#f1f1f1" />
+                                                <TextBlock Text="DNS Record Inspector" FontSize="{StaticResource TermoxPageTitleFontSize}"
+                                                    FontWeight="SemiBold" Foreground="{StaticResource TermoxPageTitleBrush}" />
                                                 <TextBlock Text="Query and inspect DNS records (A, AAAA, CNAME, MX, TXT, NS, SOA, SRV, PTR, CAA) for any domain."
-                                                    Foreground="#999" FontSize="13" />
+                                                    Foreground="{StaticResource TermoxPageSubtitleBrush}" FontSize="13" />
                                             </StackPanel>
                                             <Border Background="#252526" BorderBrush="#3a3a3a"
                                                 BorderThickness="1" CornerRadius="7" Padding="16">
@@ -1478,7 +1501,7 @@
                                             BorderBrush="#333" Padding="10"
                                             MinHeight="180" TextWrapping="Wrap"
                                             AcceptsReturn="True" IsReadOnly="True"
-                                            FontFamily="Consolas, Fira Code, monospace"
+                                            FontFamily="{StaticResource TermoxMonoFontFamily}"
                                             FontSize="11" />
                                         <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8"
                                             HorizontalAlignment="Right" Margin="0,8,0,0">
@@ -1504,10 +1527,10 @@
                                     <Border Background="#1e1e1e" Padding="28">
                                         <StackPanel Spacing="16" MaxWidth="1100">
                                             <StackPanel Spacing="4">
-                                                <TextBlock Text="Server Stats" FontSize="24"
-                                                    FontWeight="SemiBold" Foreground="#f1f1f1" />
+                                                <TextBlock Text="Server Stats" FontSize="{StaticResource TermoxPageTitleFontSize}"
+                                                    FontWeight="SemiBold" Foreground="{StaticResource TermoxPageTitleBrush}" />
                                                 <TextBlock Text="CPU, memory, top processes, and disk usage collected over SSH from a saved session."
-                                                    Foreground="#999" FontSize="13" />
+                                                    Foreground="{StaticResource TermoxPageSubtitleBrush}" FontSize="13" />
                                             </StackPanel>
 
                                             <!-- Host selection -->
@@ -1965,14 +1988,14 @@
                             </DataTemplate>
 
                             <DataTemplate DataType="vm:ToolsTabViewModel">
-                                <TabControl Background="#1e1e1e" Padding="0">
+                                <TabControl Background="{StaticResource TermoxPanelBrush}" Padding="0">
                                     <TabControl.Styles>
                                         <Style Selector="TabItem">
                                             <Setter Property="FontSize" Value="13" />
                                             <Setter Property="FontWeight" Value="SemiBold" />
                                             <Setter Property="MinHeight" Value="39" />
                                             <Setter Property="Padding" Value="5,5,5,7" />
-                                            <Setter Property="Foreground" Value="#888888" />
+                                            <Setter Property="Foreground" Value="{StaticResource TermoxMutedBrush}" />
                                             <Setter Property="BorderThickness" Value="0" />
                                             <Setter Property="BorderBrush" Value="Transparent" />
                                             <Setter Property="Template">
@@ -1993,7 +2016,7 @@
                                             </Setter>
                                         </Style>
                                         <Style Selector="TabItem:selected">
-                                            <Setter Property="Foreground" Value="#e0e0e0" />
+                                            <Setter Property="Foreground" Value="{StaticResource TermoxTextPrimaryBrush}" />
                                             <Setter Property="BorderThickness" Value="0,0,0,2" />
                                             <Setter Property="BorderBrush" Value="#007acc" />
                                         </Style>
@@ -2145,7 +2168,7 @@
                                                         BorderThickness="1" BorderBrush="#333"
                                                         Padding="8" CornerRadius="4" Height="60"
                                                         IsReadOnly="True" TextWrapping="Wrap"
-                                                        FontFamily="Consolas, Fira Code, monospace"
+                                                        FontFamily="{StaticResource TermoxMonoFontFamily}"
                                                         FontSize="12" />
                                                     <Button Content="Copy Public Key"
                                                         Command="{Binding CopyPublicKeyCommand}"
@@ -2162,7 +2185,7 @@
                                                         BorderThickness="1" BorderBrush="#333"
                                                         Padding="8" CornerRadius="4" Height="120"
                                                         IsReadOnly="True" TextWrapping="Wrap"
-                                                        FontFamily="Consolas, Fira Code, monospace"
+                                                        FontFamily="{StaticResource TermoxMonoFontFamily}"
                                                         FontSize="12" />
                                                     <Button Content="Copy Private Key"
                                                         Command="{Binding CopyPrivateKeyCommand}"
@@ -2255,7 +2278,7 @@
                                                         Padding="10">
                                                         <TextBlock Text="{Binding SpeedTestResult}"
                                                             Foreground="#ccc" TextWrapping="Wrap"
-                                                            FontFamily="Consolas, Fira Code, monospace"
+                                                            FontFamily="{StaticResource TermoxMonoFontFamily}"
                                                             FontSize="11" />
                                                     </Border>
                                                 </StackPanel>
@@ -2473,7 +2496,7 @@
                                                             <!-- Tool call announcement: "● tool(args)" -->
                                                             <TextBlock Text="{Binding Content}" TextWrapping="Wrap"
                                                                 Foreground="#5bc0de" FontSize="12.5"
-                                                                FontFamily="Consolas, Fira Code, monospace"
+                                                                FontFamily="{StaticResource TermoxMonoFontFamily}"
                                                                 Margin="15,0,0,0"
                                                                 IsVisible="{Binding HasToolCalls}" />
 
@@ -2482,11 +2505,11 @@
                                                                 Margin="15,0,0,0">
                                                                 <TextBlock Grid.Column="0" Text="⎿"
                                                                     Foreground="#6a6a6a" FontSize="12.5"
-                                                                    FontFamily="Consolas, Fira Code, monospace"
+                                                                    FontFamily="{StaticResource TermoxMonoFontFamily}"
                                                                     Margin="0,0,6,0" />
                                                                 <TextBlock Grid.Column="1" Text="{Binding Content}"
                                                                     TextWrapping="Wrap" Foreground="#8a8a8a"
-                                                                    FontSize="12" FontFamily="Consolas, Fira Code, monospace" />
+                                                                    FontSize="12" FontFamily="{StaticResource TermoxMonoFontFamily}" />
                                                             </Grid>
 
                                                             <!-- Plain prose reply, with a copy icon to its right.
@@ -2542,24 +2565,51 @@
                                                     FontSize="13" TextTrimming="CharacterEllipsis" MaxLines="1" />
                                             </StackPanel>
                                         </Border>
+
+                                        <!-- Empty state: shown until the first message, so a fresh chat reads
+                                             as "ready and here's what I can do" instead of a blank void. -->
+                                        <StackPanel IsVisible="{Binding !HasMessages}"
+                                            HorizontalAlignment="Center" VerticalAlignment="Center"
+                                            Spacing="6" MaxWidth="360">
+                                            <TextBlock Text="⎈" FontSize="30" Foreground="#5bc0de"
+                                                HorizontalAlignment="Center" Margin="0,0,0,6" />
+                                            <TextBlock Text="Hi, I'm Helm" FontWeight="SemiBold" FontSize="16"
+                                                Foreground="#e0e0e0" HorizontalAlignment="Center" />
+                                            <TextBlock
+                                                Text="I can inspect and operate on your saved SSH &amp; SFTP connections — run commands, browse files, check DNS, and more."
+                                                Foreground="#8a8a8a" FontSize="12.5" TextWrapping="Wrap"
+                                                TextAlignment="Center" HorizontalAlignment="Center" Margin="0,0,0,8" />
+                                            <Button Classes="toolButton" HorizontalAlignment="Stretch"
+                                                HorizontalContentAlignment="Center" Margin="0,0,0,0"
+                                                Content="List my saved connections" FontSize="12.5"
+                                                Command="{Binding UseSuggestedPromptCommand}"
+                                                CommandParameter="List my saved connections." />
+                                            <Button Classes="toolButton" HorizontalAlignment="Stretch"
+                                                HorizontalContentAlignment="Center" Margin="0,0,0,0"
+                                                Content="Check disk usage and memory on my server" FontSize="12.5"
+                                                Command="{Binding UseSuggestedPromptCommand}"
+                                                CommandParameter="Check disk usage and memory on my server." />
+                                        </StackPanel>
                                     </Grid>
 
                                     <!-- Tool-call approval banner -->
                                     <Border Grid.Row="3" IsVisible="{Binding HasPendingApproval}"
                                         BorderBrush="#f39c12" BorderThickness="0,0,0,0" Margin="0,8,0,0">
-                                        <Grid ColumnDefinitions="Auto,*,Auto,Auto" Background="#1f1a14">
+                                        <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="10"
+                                            Background="#1f1a14">
                                             <Border Grid.Column="0" Width="3" Background="#f39c12" />
                                             <TextBlock Grid.Column="1" Text="{Binding PendingApprovalDescription}"
                                                 Foreground="#e0b673" FontSize="12" TextWrapping="Wrap"
+                                                FontFamily="{StaticResource TermoxMonoFontFamily}"
                                                 VerticalAlignment="Center" Margin="10,8" />
                                             <Button Grid.Column="2" Content="Approve"
                                                 Command="{Binding ApproveToolCallCommand}"
                                                 Classes="primaryButton" Padding="10,5" CornerRadius="4"
-                                                FontSize="11.5" Margin="0,0,6,0" VerticalAlignment="Center" />
+                                                FontSize="11.5" Margin="0" VerticalAlignment="Center" />
                                             <Button Grid.Column="3" Content="Deny"
                                                 Command="{Binding DenyToolCallCommand}"
-                                                Classes="toolButton" Padding="10,5" FontSize="11.5" Margin="0,0,8,0"
-                                                VerticalAlignment="Center" />
+                                                Classes="neutralButton" Padding="10,5" CornerRadius="4"
+                                                FontSize="11.5" Margin="0,0,8,0" VerticalAlignment="Center" />
                                         </Grid>
                                     </Border>
 
@@ -2709,7 +2759,7 @@
                                                     MaxHeight="160" VerticalContentAlignment="Top"
                                                     ScrollViewer.VerticalScrollBarVisibility="Auto"
                                                     IsEnabled="{Binding !IsStreaming}"
-                                                    KeyDown="ChatDraftInput_KeyDown"
+                                                    Loaded="ChatDraftInput_Loaded"
                                                     FocusAdorner="{x:Null}"
                                                     Padding="2,0" FontSize="13.5" />
                                                 <Grid ColumnDefinitions="Auto,Auto,*,Auto">
@@ -2747,8 +2797,46 @@
                             <ColumnDefinition
                                 Width="{Binding IsSplitViewActive, Converter={x:Static services:BoolToGridLengthConverter.Instance}, ConverterParameter=*}" />
                         </Grid.ColumnDefinitions>
-                        <Border Grid.Column="0" Background="#1e1e1e">
+                        <Border Grid.Column="0" Background="{StaticResource TermoxPanelBrush}">
                             <TabControl ItemsSource="{Binding Tabs}" SelectedItem="{Binding SelectedTab}">
+                                <TabControl.Styles>
+                                    <!-- Flat active-tab accent, matching the nav rail's #007acc indicator and ToolsTab's own sub-tab treatment -->
+                                    <Style Selector="TabItem">
+                                        <Setter Property="FontSize" Value="13" />
+                                        <Setter Property="MinHeight" Value="36" />
+                                        <Setter Property="Padding" Value="14,0" />
+                                        <Setter Property="Foreground" Value="{StaticResource TermoxMutedBrush}" />
+                                        <Setter Property="Background" Value="Transparent" />
+                                        <Setter Property="BorderThickness" Value="0,0,0,2" />
+                                        <Setter Property="BorderBrush" Value="Transparent" />
+                                        <Setter Property="Template">
+                                            <Setter.Value>
+                                                <ControlTemplate TargetType="TabItem">
+                                                    <Border Background="{TemplateBinding Background}"
+                                                        Padding="{TemplateBinding Padding}"
+                                                        BorderThickness="{TemplateBinding BorderThickness}"
+                                                        BorderBrush="{TemplateBinding BorderBrush}">
+                                                        <ContentPresenter Name="PART_Content"
+                                                            Content="{TemplateBinding Header}"
+                                                            ContentTemplate="{TemplateBinding HeaderTemplate}"
+                                                            RecognizesAccessKey="True"
+                                                            HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                            VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
+                                                    </Border>
+                                                </ControlTemplate>
+                                            </Setter.Value>
+                                        </Setter>
+                                    </Style>
+                                    <Style Selector="TabItem:pointerover">
+                                        <Setter Property="Background" Value="{StaticResource TermoxSurfaceHoverBrush}" />
+                                        <Setter Property="Foreground" Value="{StaticResource TermoxTextPrimaryBrush}" />
+                                    </Style>
+                                    <Style Selector="TabItem:selected">
+                                        <Setter Property="Background" Value="{StaticResource TermoxSurfaceBrush}" />
+                                        <Setter Property="Foreground" Value="{StaticResource TermoxTextPrimaryBrush}" />
+                                        <Setter Property="BorderBrush" Value="#007acc" />
+                                    </Style>
+                                </TabControl.Styles>
                                 <TabControl.ItemTemplate>
                                     <DataTemplate>
                                         <StackPanel Orientation="Horizontal" Spacing="10">
@@ -2777,7 +2865,6 @@
                                                 </ContextMenu>
                                             </StackPanel.ContextMenu>
                                             <TextBlock Text="{Binding Title}" VerticalAlignment="Center"
-                                                FontFamily="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
                                                 FontSize="13" />
                                             <Button Content="✕"
                                                 Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).RequestCloseTabCommand}"
@@ -2857,19 +2944,24 @@
             </Grid>
         </Border>
 
+        <!--
+            Modal ZIndex convention: 100-111 = the 12 top-level modals below, sequential in the
+            order they appear in this file. 112-113 = the GPG-nested Import/Export modals (only
+            need to beat siblings within the GPG tab's own Panel, but numbered in this band so
+            the convention reads as one system). 20/21/30 = the 3 tab-local nested modals
+            (SFTP delete/size-warning, FileEditor save-confirm) — local stacking only, not
+            compared against this band.
+        -->
         <!-- Connection Modal Overlay -->
-        <Border Background="#99000000" IsVisible="{Binding IsConnectionModalVisible}" ZIndex="100">
-            <Border Background="#2d2d30" BorderBrush="#444" BorderThickness="1" CornerRadius="8"
-                HorizontalAlignment="Center" VerticalAlignment="Center"
-                Width="640" MaxWidth="760" MaxHeight="640" Padding="0"
-                BoxShadow="0 10 30 0 #55000000">
+        <Border Classes="modalScrim" IsVisible="{Binding IsConnectionModalVisible}" ZIndex="100">
+            <Border Classes="modalCard" Width="640" MaxWidth="760" MaxHeight="640" Padding="0">
                 <Grid RowDefinitions="Auto,*,Auto">
                     <Border Grid.Row="0" Background="#252932" Padding="22,16"
                         BorderBrush="#3c4350" BorderThickness="0,0,0,1">
                         <Grid ColumnDefinitions="*,Auto">
                             <StackPanel Spacing="3">
                                 <TextBlock Text="New Connection Profile" FontWeight="SemiBold"
-                                    FontSize="18" Foreground="#f3f5f7" />
+                                    FontSize="{StaticResource TermoxTitleFontSize}" Foreground="#f3f5f7" />
                                 <TextBlock Text="Server, authentication, and connection behavior"
                                     Foreground="#9aa4b2" FontSize="12" />
                             </StackPanel>
@@ -3025,13 +3117,11 @@
         </Border>
 
         <!-- Delete Confirmation Modal -->
-        <Border Background="#99000000" IsVisible="{Binding IsDeleteConfirmModalVisible}"
+        <Border Classes="modalScrim" IsVisible="{Binding IsDeleteConfirmModalVisible}"
             ZIndex="101">
-            <Border Background="#2d2d30" BorderBrush="#444" BorderThickness="1" CornerRadius="8"
-                HorizontalAlignment="Center" VerticalAlignment="Center"
-                Width="350" Padding="25" BoxShadow="0 10 30 0 #55000000">
+            <Border Classes="modalCard" Width="350" Padding="25">
                 <StackPanel Spacing="20">
-                    <TextBlock Text="Delete Connection?" FontWeight="Bold" FontSize="18"
+                    <TextBlock Text="Delete Connection?" FontWeight="Bold" FontSize="{StaticResource TermoxTitleFontSize}"
                         Foreground="#e0e0e0" />
                     <TextBlock Foreground="#aaaaaa" FontSize="14" TextWrapping="Wrap">
                         <Run Text="Are you sure you want to delete '" />
@@ -3051,13 +3141,11 @@
         </Border>
 
         <!-- Bookmark Delete Confirmation Modal -->
-        <Border Background="#99000000" IsVisible="{Binding IsBookmarkDeleteConfirmModalVisible}"
-            ZIndex="111">
-            <Border Background="#2d2d30" BorderBrush="#444" BorderThickness="1" CornerRadius="8"
-                HorizontalAlignment="Center" VerticalAlignment="Center"
-                Width="380" Padding="25" BoxShadow="0 10 30 0 #55000000">
+        <Border Classes="modalScrim" IsVisible="{Binding IsBookmarkDeleteConfirmModalVisible}"
+            ZIndex="102">
+            <Border Classes="modalCard" Width="380" Padding="25">
                 <StackPanel Spacing="20">
-                    <TextBlock Text="Delete Bookmark?" FontWeight="Bold" FontSize="18"
+                    <TextBlock Text="Delete Bookmark?" FontWeight="Bold" FontSize="{StaticResource TermoxTitleFontSize}"
                         Foreground="#e0e0e0" />
                     <TextBlock Foreground="#aaaaaa" FontSize="14" TextWrapping="Wrap">
                         <Run Text="Are you sure you want to delete the bookmark for '" />
@@ -3077,12 +3165,10 @@
         </Border>
 
         <!-- Close Tab Confirmation Modal -->
-        <Border Background="#99000000" IsVisible="{Binding IsCloseConfirmModalVisible}" ZIndex="102">
-            <Border Background="#2d2d30" BorderBrush="#444" BorderThickness="1" CornerRadius="8"
-                HorizontalAlignment="Center" VerticalAlignment="Center"
-                Width="350" Padding="25" BoxShadow="0 10 30 0 #55000000">
+        <Border Classes="modalScrim" IsVisible="{Binding IsCloseConfirmModalVisible}" ZIndex="103">
+            <Border Classes="modalCard" Width="350" Padding="25">
                 <StackPanel Spacing="20">
-                    <TextBlock Text="Close Tab?" FontWeight="Bold" FontSize="18"
+                    <TextBlock Text="Close Tab?" FontWeight="Bold" FontSize="{StaticResource TermoxTitleFontSize}"
                         Foreground="#e0e0e0" />
                     <TextBlock Foreground="#aaaaaa" FontSize="14" TextWrapping="Wrap">
                         <Run Text="Are you sure you want to close '" />
@@ -3102,12 +3188,10 @@
         </Border>
 
         <!-- Bulk Close Tabs Confirmation Modal (Close All / Others / Left / Right, from the tab context menu) -->
-        <Border Background="#99000000" IsVisible="{Binding IsBulkCloseConfirmModalVisible}" ZIndex="102">
-            <Border Background="#2d2d30" BorderBrush="#444" BorderThickness="1" CornerRadius="8"
-                HorizontalAlignment="Center" VerticalAlignment="Center"
-                Width="350" Padding="25" BoxShadow="0 10 30 0 #55000000">
+        <Border Classes="modalScrim" IsVisible="{Binding IsBulkCloseConfirmModalVisible}" ZIndex="104">
+            <Border Classes="modalCard" Width="350" Padding="25">
                 <StackPanel Spacing="20">
-                    <TextBlock Text="{Binding BulkCloseTitle}" FontWeight="Bold" FontSize="18"
+                    <TextBlock Text="{Binding BulkCloseTitle}" FontWeight="Bold" FontSize="{StaticResource TermoxTitleFontSize}"
                         Foreground="#e0e0e0" />
                     <TextBlock Text="{Binding BulkCloseMessage}" Foreground="#aaaaaa" FontSize="14"
                         TextWrapping="Wrap" />
@@ -3123,12 +3207,10 @@
         </Border>
 
         <!-- Rename File Modal -->
-        <Border Background="#99000000" IsVisible="{Binding IsRenameModalVisible}" ZIndex="103">
-            <Border Background="#2d2d30" BorderBrush="#444" BorderThickness="1" CornerRadius="8"
-                HorizontalAlignment="Center" VerticalAlignment="Center"
-                Width="400" Padding="25" BoxShadow="0 10 30 0 #55000000">
+        <Border Classes="modalScrim" IsVisible="{Binding IsRenameModalVisible}" ZIndex="105">
+            <Border Classes="modalCard" Width="400" Padding="25">
                 <StackPanel Spacing="15">
-                    <TextBlock Text="Rename File" FontWeight="Bold" FontSize="18"
+                    <TextBlock Text="Rename File" FontWeight="Bold" FontSize="{StaticResource TermoxTitleFontSize}"
                         Foreground="#e0e0e0" />
 
                     <Rectangle Height="1" Fill="#444" Margin="0,5,0,10" />
@@ -3147,14 +3229,12 @@
         </Border>
 
         <!-- File Properties Modal -->
-        <Border Background="#99000000" IsVisible="{Binding IsFilePropertiesModalVisible}"
-            ZIndex="104">
-            <Border Background="#2d2d30" BorderBrush="#444" BorderThickness="1" CornerRadius="8"
-                HorizontalAlignment="Center" VerticalAlignment="Center"
-                Width="450" Padding="25" BoxShadow="0 10 30 0 #55000000">
+        <Border Classes="modalScrim" IsVisible="{Binding IsFilePropertiesModalVisible}"
+            ZIndex="106">
+            <Border Classes="modalCard" Width="450" Padding="25">
                 <StackPanel Spacing="15">
                     <Grid>
-                        <TextBlock Text="File Properties" FontWeight="Bold" FontSize="18"
+                        <TextBlock Text="File Properties" FontWeight="Bold" FontSize="{StaticResource TermoxTitleFontSize}"
                             Foreground="#e0e0e0" VerticalAlignment="Center" />
                         <Button Content="✕" Click="ClosePropertiesModal_Click"
                             Background="Transparent" Foreground="#888" HorizontalAlignment="Right"
@@ -3200,7 +3280,7 @@
                                 FontWeight="SemiBold" />
                             <TextBlock Grid.Column="1"
                                 Text="{Binding SelectedFileProperties.Permissions}"
-                                Foreground="#e0e0e0" FontFamily="Consolas, Fira Code, monospace"
+                                Foreground="#e0e0e0" FontFamily="{StaticResource TermoxMonoFontFamily}"
                                 FontSize="12" />
                         </Grid>
 
@@ -3222,8 +3302,9 @@
             </Border>
         </Border>
 
-        <!-- File Preview Modal -->
-        <Border Background="#B8000000" IsVisible="{Binding IsFilePreviewModalVisible}" ZIndex="105">
+        <!-- File Preview Modal (intentionally heavier scrim/shadow and a distinct card style — larger surface, kept out of the standard modalCard class) -->
+        <Border Classes="modalScrim" Background="{StaticResource TermoxHeavyScrimBrush}"
+            IsVisible="{Binding IsFilePreviewModalVisible}" ZIndex="107">
             <Border Background="#202124" BorderBrush="#4f5b6b" BorderThickness="1" CornerRadius="10"
                 HorizontalAlignment="Center" VerticalAlignment="Center"
                 Width="900" Height="650" BoxShadow="0 18 45 0 #88000000">
@@ -3239,7 +3320,7 @@
                             <StackPanel Grid.Column="1" Spacing="3" VerticalAlignment="Center">
                                 <TextBlock Text="FILE PREVIEW" Foreground="#91bff0" FontSize="10"
                                     FontWeight="SemiBold" />
-                                <TextBlock Text="{Binding FilePreviewName}" FontWeight="SemiBold" FontSize="18"
+                                <TextBlock Text="{Binding FilePreviewName}" FontWeight="SemiBold" FontSize="{StaticResource TermoxTitleFontSize}"
                                     Foreground="#f3f5f7" TextTrimming="CharacterEllipsis"
                                     ToolTip.Tip="{Binding FilePreviewName}" />
                                 <TextBlock Text="{Binding FilePreviewDetails}" Foreground="#9aa4b2"
@@ -3256,7 +3337,7 @@
                         BorderThickness="1" CornerRadius="6" ClipToBounds="True">
                         <edit:TextEditor Document="{Binding FilePreviewDocument}"
                             IsReadOnly="True" ShowLineNumbers="True"
-                            FontFamily="Consolas, Fira Code, Cascadia Code, Courier New, monospace"
+                            FontFamily="{StaticResource TermoxMonoFontFamily}"
                             FontSize="13" Background="#17191d" Foreground="#d8dee9"
                             Padding="10,8" KeyDown="PreviewEditor_KeyDown">
                             <edit:TextEditor.ContextMenu>
@@ -3287,13 +3368,12 @@
             </Border>
         </Border>
 
-        <!-- Host Key Confirmation Modal -->
-        <Border Background="#99000000" IsVisible="{Binding IsHostKeyConfirmModalVisible}" ZIndex="107">
-            <Border Background="#2d2d30" BorderBrush="#f39c12" BorderThickness="1" CornerRadius="8"
-                HorizontalAlignment="Center" VerticalAlignment="Center"
-                Width="520" Padding="25" BoxShadow="0 10 30 0 #55000000">
+        <!-- Host Key Confirmation Modal (warning-colored border is deliberate, kept as an override) -->
+        <Border Classes="modalScrim" IsVisible="{Binding IsHostKeyConfirmModalVisible}" ZIndex="108">
+            <Border Classes="modalCard" BorderBrush="{StaticResource TermoxWarningBrush}"
+                Width="520" Padding="25">
                 <StackPanel Spacing="15">
-                    <TextBlock Text="Verify Host Key" FontWeight="Bold" FontSize="18"
+                    <TextBlock Text="Verify Host Key" FontWeight="Bold" FontSize="{StaticResource TermoxTitleFontSize}"
                         Foreground="#f39c12" />
                     <Rectangle Height="1" Fill="#444" Margin="0,5,0,5" />
                     <TextBlock Text="{Binding HostKeyConfirmMessage}" Foreground="#d0d0d0"
@@ -3312,13 +3392,11 @@
         </Border>
 
         <!-- File Permissions Editor Modal -->
-        <Border Background="#99000000" IsVisible="{Binding IsPermissionsModalVisible}" ZIndex="106">
-            <Border Background="#2d2d30" BorderBrush="#444" BorderThickness="1" CornerRadius="8"
-                HorizontalAlignment="Center" VerticalAlignment="Center"
-                Width="500" Padding="25" BoxShadow="0 10 30 0 #55000000">
+        <Border Classes="modalScrim" IsVisible="{Binding IsPermissionsModalVisible}" ZIndex="109">
+            <Border Classes="modalCard" Width="500" Padding="25">
                 <StackPanel Spacing="15">
                     <Grid>
-                        <TextBlock Text="Edit File Permissions" FontWeight="Bold" FontSize="18"
+                        <TextBlock Text="Edit File Permissions" FontWeight="Bold" FontSize="{StaticResource TermoxTitleFontSize}"
                             Foreground="#e0e0e0" VerticalAlignment="Center" />
                         <Button Content="✕" Click="ClosePermissionsModal_Click"
                             Background="Transparent" Foreground="#888" HorizontalAlignment="Right"
@@ -3334,7 +3412,7 @@
                     <TextBlock Text="Current Permissions:" Foreground="#aaaaaa" FontSize="13"
                         FontWeight="SemiBold" Margin="0,10,0,0" />
                     <TextBlock Text="{Binding SelectedFileForPermissions.Permissions}"
-                        Foreground="#e0e0e0" FontFamily="Consolas, Fira Code, monospace"
+                        Foreground="#e0e0e0" FontFamily="{StaticResource TermoxMonoFontFamily}"
                         FontSize="14" />
 
                     <StackPanel Spacing="10" Margin="0,15,0,0">
@@ -3374,18 +3452,20 @@
         </Border>
 
         <!-- About Dialog Modal -->
-        <Border Background="#99000000" IsVisible="{Binding IsAboutDialogVisible}" ZIndex="110">
-            <Border Background="#2d2d30" BorderBrush="#444" BorderThickness="1" CornerRadius="8"
-                HorizontalAlignment="Center" VerticalAlignment="Center"
-                Width="600" MaxHeight="700" Padding="30" BoxShadow="0 10 30 0 #55000000">
+        <Border Classes="modalScrim" IsVisible="{Binding IsAboutDialogVisible}" ZIndex="110">
+            <Border Classes="modalCard" Width="600" MaxHeight="700" Padding="30">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Spacing="15">
                         <Grid>
-                            <StackPanel VerticalAlignment="Center">
-                            <TextBlock Text="TERMOX" FontWeight="Bold" FontSize="24"
-                                Foreground="#e0e0e0" />
-                                <TextBlock Text="SSH &amp; SFTP workspace" FontSize="14"
-                                    Foreground="#aaa" Margin="0,5,0,0" />
+                            <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                                <Image Source="/Assets/Icons/company-logo.png" Width="64" Height="64"
+                                    Stretch="Uniform" VerticalAlignment="Center" />
+                                <StackPanel VerticalAlignment="Center">
+                                    <TextBlock Text="TERMOX" FontWeight="Bold" FontSize="{StaticResource TermoxTitleFontSize}"
+                                        Foreground="#e0e0e0" />
+                                    <TextBlock Text="SSH &amp; SFTP workspace" FontSize="14"
+                                        Foreground="#aaa" Margin="0,5,0,0" />
+                                </StackPanel>
                             </StackPanel>
                             <Button Content="✕" Click="CloseAboutDialog_Click"
                                 Background="Transparent" Foreground="#888"
@@ -3428,6 +3508,14 @@
                             </TextBlock>
                         </StackPanel>
 
+                        <!-- User Manual link -->
+                        <StackPanel Spacing="8" Margin="0,15,0,0">
+                            <TextBlock Text="Documentation" Foreground="#888" FontSize="12"
+                                FontWeight="SemiBold" />
+                            <TextBlock Text="Open User Manual →" Foreground="#5bc0de" FontSize="12"
+                                Cursor="Hand" PointerPressed="OpenUserManualFromAbout_Click" />
+                        </StackPanel>
+
                         <!-- License -->
                         <StackPanel Spacing="8" Margin="0,15,0,0">
                             <TextBlock Text="License" Foreground="#888" FontSize="12"
@@ -3437,12 +3525,65 @@
                                     Text="MIT License - © 2026 The Termox Project&#10;See LICENSE file for full terms." />
                             </TextBlock>
                         </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
+        </Border>
 
-                        <!-- Action Buttons -->
-                        <StackPanel Orientation="Horizontal" Spacing="10"
-                            HorizontalAlignment="Center" Margin="0,20,0,0">
-                            <Button Content="Close" Classes="neutralButton"
-                                Padding="15,8" CornerRadius="4" Click="CloseAboutDialog_Click" />
+        <!-- User Manual Dialog Modal -->
+        <Border Classes="modalScrim" IsVisible="{Binding IsUserManualDialogVisible}" ZIndex="111">
+            <Border Classes="modalCard" Width="640" MaxHeight="720" Padding="30">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Spacing="15">
+                        <Grid>
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Text="User Manual" FontWeight="Bold" FontSize="{StaticResource TermoxTitleFontSize}"
+                                    Foreground="#e0e0e0" />
+                                <TextBlock Text="How to use Termox" FontSize="13"
+                                    Foreground="#aaa" Margin="0,5,0,0" />
+                            </StackPanel>
+                            <Button Content="✕" Click="CloseUserManualDialog_Click"
+                                Background="Transparent" Foreground="#888"
+                                HorizontalAlignment="Right" FontSize="18" BorderThickness="0"
+                                Padding="10" />
+                        </Grid>
+
+                        <Rectangle Height="1" Fill="#444" Margin="0,10,0,0" />
+
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Sessions" Foreground="#5bc0de" FontSize="13" FontWeight="SemiBold" />
+                            <TextBlock Foreground="#ccc" FontSize="12" TextWrapping="Wrap"
+                                Text="Save SSH connection profiles (host, port, credentials, and host-key fingerprint) from the Sessions panel, then reconnect with one click. Each saved connection opens in its own tab." />
+                        </StackPanel>
+
+                        <StackPanel Spacing="8" Margin="0,10,0,0">
+                            <TextBlock Text="Bookmarks" Foreground="#5bc0de" FontSize="13" FontWeight="SemiBold" />
+                            <TextBlock Foreground="#ccc" FontSize="12" TextWrapping="Wrap"
+                                Text="Pin frequently used connections to Bookmarks for quick access without scrolling through the full session list." />
+                        </StackPanel>
+
+                        <StackPanel Spacing="8" Margin="0,10,0,0">
+                            <TextBlock Text="Tools" Foreground="#5bc0de" FontSize="13" FontWeight="SemiBold" />
+                            <TextBlock Foreground="#ccc" FontSize="12" TextWrapping="Wrap"
+                                Text="Run DNS lookups, port scans, pings, GPG key management, and server-stats checks from the Tools panel, independent of any open terminal session." />
+                        </StackPanel>
+
+                        <StackPanel Spacing="8" Margin="0,10,0,0">
+                            <TextBlock Text="SFTP" Foreground="#5bc0de" FontSize="13" FontWeight="SemiBold" />
+                            <TextBlock Foreground="#ccc" FontSize="12" TextWrapping="Wrap"
+                                Text="Browse, upload, download, rename, and edit remote files against a saved connection profile from the SFTP tab." />
+                        </StackPanel>
+
+                        <StackPanel Spacing="8" Margin="0,10,0,0">
+                            <TextBlock Text="Helm (AI Assistant)" Foreground="#5bc0de" FontSize="13" FontWeight="SemiBold" />
+                            <TextBlock Foreground="#ccc" FontSize="12" TextWrapping="Wrap"
+                                Text="Open the Chat tab and point it at your own OpenAI-compatible endpoint (base URL, API key, model) in the settings drawer. Ask it to inspect or operate on your saved connections in plain language — it can run commands, browse files, check DNS, and more. Read-only actions run automatically; anything that changes state asks for your approval first. Past conversations are saved locally and encrypted at rest — reopen one from the History panel inside the Chat tab." />
+                        </StackPanel>
+
+                        <StackPanel Spacing="8" Margin="0,10,0,0">
+                            <TextBlock Text="Security" Foreground="#5bc0de" FontSize="13" FontWeight="SemiBold" />
+                            <TextBlock Foreground="#ccc" FontSize="12" TextWrapping="Wrap"
+                                Text="Host-key fingerprints are pinned per saved profile the first time you connect. A mismatch on a later connection is flagged rather than silently trusted, and Helm refuses to open a connection to any profile that hasn't been pinned yet." />
                         </StackPanel>
                     </StackPanel>
                 </ScrollViewer>

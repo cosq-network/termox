@@ -78,8 +78,12 @@ public partial class MainWindow : Window
         // Click toggles the pinned bar between a single ellipsis-trimmed line and full
         // wrapped text, for a question too long to read at a glance. Resets to collapsed
         // whenever a different question becomes the pinned one, so an old expanded state
-        // doesn't linger over unrelated content.
+        // doesn't linger over unrelated content. The chevron (and the click itself) only
+        // engage when the question actually needed trimming — a short question that
+        // already fits on one line has nothing to expand, so showing an affordance for it
+        // is just noise.
         var isExpanded = false;
+        var needsToggle = false;
         ChatMessage? pinnedMessage = null;
 
         void SetExpanded(bool expanded)
@@ -92,7 +96,10 @@ public partial class MainWindow : Window
             pinnedChevron.Text = expanded ? "⌃" : "⌄";
         }
 
-        void PinnedBar_PointerPressed(object? s, PointerPressedEventArgs args) => SetExpanded(!isExpanded);
+        void PinnedBar_PointerPressed(object? s, PointerPressedEventArgs args)
+        {
+            if (needsToggle) SetExpanded(!isExpanded);
+        }
         if (pinnedBar != null) pinnedBar.PointerPressed += PinnedBar_PointerPressed;
 
         void ScrollHandler(object? s, ScrollChangedEventArgs args)
@@ -124,6 +131,13 @@ public partial class MainWindow : Window
                 pinnedMessage = current;
                 pinnedText.Text = current.Content;
                 SetExpanded(false);
+
+                // Checked in the collapsed (single-line, ellipsis-trimmed) layout that
+                // SetExpanded(false) just produced — HasCollapsed is Avalonia's own signal
+                // that TextTrimming actually cut something, i.e. there's more to reveal.
+                var layout = pinnedText.TextLayout;
+                needsToggle = layout.TextLines.Count > 0 && layout.TextLines[0].HasCollapsed;
+                if (pinnedChevron != null) pinnedChevron.IsVisible = needsToggle;
             }
         }
 
@@ -155,17 +169,29 @@ public partial class MainWindow : Window
         catch (Exception ex) { Console.WriteLine($"Chat message copy failed: {ex.Message}"); }
     }
 
+    // Attached from ChatDraftInput_Loaded at Tunnel routing (not the XAML "KeyDown="
+    // attribute, which is Bubble-only) — with AcceptsReturn="True", the TextBox's own
+    // class handler inserts a newline and marks the event Handled during its own Bubble
+    // pass *before* a Bubble-subscribed external handler on the same control ever runs,
+    // so plain Enter silently only ever inserted a newline and never reached here. Running
+    // at Tunnel means we decide first: handle-and-send for plain Enter (which stops the
+    // TextBox's own newline logic from seeing an unhandled event), or do nothing for
+    // Shift+Enter so the event continues through to the TextBox's normal newline insertion.
     private void ChatDraftInput_KeyDown(object? sender, KeyEventArgs e)
     {
         if (e.Key != Key.Enter) return;
-        // Shift+Enter inserts a newline (the TextBox's own AcceptsReturn behavior) —
-        // only plain Enter sends.
         if ((e.KeyModifiers & KeyModifiers.Shift) != 0) return;
         if (sender is not Control control || control.DataContext is not ChatTabViewModel vm) return;
 
         e.Handled = true;
         if (vm.SendMessageCommand.CanExecute(null))
             vm.SendMessageCommand.Execute(null);
+    }
+
+    private void ChatDraftInput_Loaded(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not TextBox textBox) return;
+        textBox.AddHandler(InputElement.KeyDownEvent, ChatDraftInput_KeyDown, RoutingStrategies.Tunnel);
     }
 
     private void ExitTermox_Click(object? sender, RoutedEventArgs e)
@@ -820,6 +846,23 @@ public partial class MainWindow : Window
         if (DataContext is MainViewModel mainVm)
         {
             mainVm.IsAboutDialogVisible = false;
+        }
+    }
+
+    private void CloseUserManualDialog_Click(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is MainViewModel mainVm)
+        {
+            mainVm.IsUserManualDialogVisible = false;
+        }
+    }
+
+    private void OpenUserManualFromAbout_Click(object? sender, PointerPressedEventArgs e)
+    {
+        if (DataContext is MainViewModel mainVm)
+        {
+            mainVm.IsAboutDialogVisible = false;
+            mainVm.IsUserManualDialogVisible = true;
         }
     }
 

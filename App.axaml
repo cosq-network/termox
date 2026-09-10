@@ -2,6 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="Termox.App"
              xmlns:local="using:Termox"
+             xmlns:system="clr-namespace:System;assembly=System.Runtime"
              Name="termox"
              RequestedThemeVariant="Dark">
              <!-- The app uses a custom dark workspace, so keep Fluent controls in dark mode on every OS. -->
@@ -9,6 +10,59 @@
     <Application.DataTemplates>
         <local:ViewLocator />
     </Application.DataTemplates>
+
+    <Application.Resources>
+        <!--
+            Shared visual language for the workspace. Presentation-only, values below are
+            centralized from whatever hex literal already dominated MainWindow.axaml for that
+            role (not new color choices) so this pass doesn't recolor anything.
+            Must stay ABOVE Application.Styles — Avalonia resolves StaticResource by document
+            order, so a style declared before its resource fails at runtime (not at build time).
+        -->
+        <!-- Surfaces (distinct levels, darkest to lightest) -->
+        <SolidColorBrush x:Key="TermoxPanelBrush" Color="#1e1e1e" />
+        <SolidColorBrush x:Key="TermoxSurfaceBrush" Color="#252526" />
+        <SolidColorBrush x:Key="TermoxSurfaceRaisedBrush" Color="#2d2d30" />
+        <SolidColorBrush x:Key="TermoxSurfaceHoverBrush" Color="#30343b" />
+        <SolidColorBrush x:Key="TermoxBorderBrush" Color="#444444" />
+
+        <!-- Text -->
+        <SolidColorBrush x:Key="TermoxTextPrimaryBrush" Color="#e0e0e0" />
+        <SolidColorBrush x:Key="TermoxTextSecondaryBrush" Color="#aaaaaa" />
+        <SolidColorBrush x:Key="TermoxMutedBrush" Color="#888888" />
+
+        <!-- Accent / selection -->
+        <SolidColorBrush x:Key="TermoxAccentBrush" Color="#4f9dde" />
+        <SolidColorBrush x:Key="TermoxSelectionBrush" Color="#264f78" />
+
+        <!-- Semantic (mirrors the successButton/dangerButton/warningButton/infoButton classes below) -->
+        <SolidColorBrush x:Key="TermoxSuccessBrush" Color="#20a53a" />
+        <SolidColorBrush x:Key="TermoxDangerBrush" Color="#dc3545" />
+        <SolidColorBrush x:Key="TermoxWarningBrush" Color="#f39c12" />
+        <SolidColorBrush x:Key="TermoxInfoBrush" Color="#17a2b8" />
+
+        <!-- Modal scrim: standard weight for ordinary dialogs, heavy for the large File Preview modal -->
+        <SolidColorBrush x:Key="TermoxModalScrimBrush" Color="#CC000000" />
+        <SolidColorBrush x:Key="TermoxHeavyScrimBrush" Color="#B8000000" />
+
+        <!-- Fonts -->
+        <FontFamily x:Key="TermoxUiFontFamily">Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif</FontFamily>
+        <FontFamily x:Key="TermoxMonoFontFamily">Consolas, Fira Code, Cascadia Code, Courier New, monospace</FontFamily>
+
+        <!-- Modal title size (currently split 17/18/22/24px across dialogs for the same role) -->
+        <system:Double x:Key="TermoxTitleFontSize">18</system:Double>
+
+        <!-- Full-page tool tab header (Port Scanner, Ping Test, GPG Manager, etc.) -->
+        <SolidColorBrush x:Key="TermoxPageTitleBrush" Color="#f1f1f1" />
+        <SolidColorBrush x:Key="TermoxPageSubtitleBrush" Color="#999999" />
+        <system:Double x:Key="TermoxPageTitleFontSize">24</system:Double>
+
+        <FontFamily x:Key="MaterialIconFont">
+            avares://Termox/Assets/Fonts#Material Icons
+        </FontFamily>
+        <SolidColorBrush x:Key="SvcSystems.UI.TerminalColor4" Color="#4F9DDE" />
+        <SolidColorBrush x:Key="SvcSystems.UI.TerminalColor12" Color="#73B7FF" />
+    </Application.Resources>
 
     <Application.Styles>
         <FluentTheme />
@@ -21,7 +75,7 @@
             <Setter Property="CornerRadius" Value="6" />
             <Setter Property="FontSize" Value="11" />
         </Style>
-        <Style Selector="Button.toolButton:pointerover">
+        <Style Selector="Button.toolButton:pointerover">        
             <Setter Property="Background" Value="#414750" />
             <Setter Property="Foreground" Value="#ffffff" />
             <Setter Property="BorderBrush" Value="#6b7890" />
@@ -36,6 +90,8 @@
             <Setter Property="Foreground" Value="#ffffff" />
             <Setter Property="BorderBrush" Value="#3b9ee8" />
             <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Padding" Value="14,7" />
+            <Setter Property="MinHeight" Value="34" />
         </Style>
         <Style Selector="Button.primaryButton:pointerover">
             <Setter Property="Background" Value="#2185c5" />
@@ -57,6 +113,9 @@
             <Setter Property="Background" Value="#333337" />
             <Setter Property="Foreground" Value="#f4f7fb" />
             <Setter Property="BorderBrush" Value="#4a5563" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Padding" Value="14,7" />
+            <Setter Property="MinHeight" Value="34" />
         </Style>
         <Style Selector="Button.newConnectionButton:pointerover">
             <Setter Property="Background" Value="#1769aa" />
@@ -135,6 +194,9 @@
             <Setter Property="Background" Value="#3a3a3a" />
             <Setter Property="Foreground" Value="#f3f5f7" />
             <Setter Property="BorderBrush" Value="#555f6d" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Padding" Value="14,7" />
+            <Setter Property="MinHeight" Value="34" />
         </Style>
         <Style Selector="Button.neutralButton:pointerover">
             <Setter Property="Background" Value="#586474" />
@@ -153,9 +215,12 @@
             <Setter Property="Foreground" Value="#ffffff" />
         </Style>
         <Style Selector="Button.successButton">
-            <Setter Property="Background" Value="#20a53a" />
+            <Setter Property="Background" Value="{StaticResource TermoxSuccessBrush}" />
             <Setter Property="Foreground" Value="#ffffff" />
             <Setter Property="BorderBrush" Value="#4fc66a" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Padding" Value="14,7" />
+            <Setter Property="MinHeight" Value="34" />
         </Style>
         <Style Selector="Button.successButton:pointerover">
             <Setter Property="Background" Value="#2eb85c" />
@@ -174,9 +239,12 @@
             <Setter Property="Foreground" Value="#ffffff" />
         </Style>
         <Style Selector="Button.dangerButton">
-            <Setter Property="Background" Value="#dc3545" />
+            <Setter Property="Background" Value="{StaticResource TermoxDangerBrush}" />
             <Setter Property="Foreground" Value="#ffffff" />
             <Setter Property="BorderBrush" Value="#ef6672" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Padding" Value="14,7" />
+            <Setter Property="MinHeight" Value="34" />
         </Style>
         <Style Selector="Button.dangerButton:pointerover">
             <Setter Property="Background" Value="#e04545" />
@@ -195,9 +263,12 @@
             <Setter Property="Foreground" Value="#ffffff" />
         </Style>
         <Style Selector="Button.warningButton">
-            <Setter Property="Background" Value="#f39c12" />
+            <Setter Property="Background" Value="{StaticResource TermoxWarningBrush}" />
             <Setter Property="Foreground" Value="#111827" />
             <Setter Property="BorderBrush" Value="#f9bd4f" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Padding" Value="14,7" />
+            <Setter Property="MinHeight" Value="34" />
         </Style>
         <Style Selector="Button.warningButton:pointerover">
             <Setter Property="Background" Value="#f7a928" />
@@ -216,9 +287,12 @@
             <Setter Property="Foreground" Value="#111827" />
         </Style>
         <Style Selector="Button.infoButton">
-            <Setter Property="Background" Value="#17a2b8" />
+            <Setter Property="Background" Value="{StaticResource TermoxInfoBrush}" />
             <Setter Property="Foreground" Value="#ffffff" />
             <Setter Property="BorderBrush" Value="#55c7d8" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Padding" Value="14,7" />
+            <Setter Property="MinHeight" Value="34" />
         </Style>
         <Style Selector="Button.infoButton:pointerover">
             <Setter Property="Background" Value="#22abc2" />
@@ -267,6 +341,66 @@
             <Setter Property="BorderBrush" Value="#ef5350" />
         </Style>
 
+        <!-- Icon-first sidebar nav rail (Sessions/Bookmarks/Tools/Chat). Flat, VS Code-style. -->
+        <Style Selector="Button.sidebarRailButton">
+            <Setter Property="Width" Value="52" />
+            <Setter Property="Height" Value="48" />
+            <Setter Property="FontSize" Value="20" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Margin" Value="0" />
+            <Setter Property="CornerRadius" Value="0" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="{StaticResource TermoxMutedBrush}" />
+            <Setter Property="BorderThickness" Value="3,0,0,0" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Button.sidebarRailButton:pointerover">
+            <Setter Property="Background" Value="{StaticResource TermoxSurfaceHoverBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource TermoxTextPrimaryBrush}" />
+        </Style>
+        <Style Selector="Button.sidebarRailButton.active">
+            <Setter Property="Background" Value="{StaticResource TermoxSurfaceBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource TermoxTextPrimaryBrush}" />
+            <Setter Property="BorderBrush" Value="#007acc" />
+        </Style>
+        <Style Selector="Button.sidebarRailButton.active:pointerover">
+            <Setter Property="Background" Value="{StaticResource TermoxSurfaceBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource TermoxTextPrimaryBrush}" />
+            <Setter Property="BorderBrush" Value="#007acc" />
+        </Style>
+
+        <!-- Card grouping for sidebar content (list groups, button grids) — same border/radius
+             language already used by the full-page tool tabs, reused here rather than invented. -->
+        <Style Selector="Border.cardPanel">
+            <Setter Property="Background" Value="{StaticResource TermoxSurfaceBrush}" />
+            <Setter Property="BorderBrush" Value="#3a3a3a" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="7" />
+            <Setter Property="Padding" Value="10" />
+        </Style>
+
+        <!--
+            Shared modal shell: every dialog in the app is a full-screen scrim behind a raised
+            card. Centralizes the pattern that was previously hand-repeated at ~17 sites.
+            Per-modal Width/Padding/MaxHeight/MaxWidth stay as instance overrides.
+        -->
+        <Style Selector="Border.modalScrim">
+            <Setter Property="Background" Value="{StaticResource TermoxModalScrimBrush}" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="VerticalAlignment" Value="Stretch" />
+        </Style>
+        <Style Selector="Border.modalCard">
+            <Setter Property="Background" Value="{StaticResource TermoxSurfaceRaisedBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource TermoxBorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="BoxShadow" Value="0 10 30 0 #55000000" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+
         <!--
             Keep the terminal's ANSI palette readable on its near-black
             background.  Directory listings commonly use ANSI blue (color 4),
@@ -276,20 +410,4 @@
         <!-- AvaloniaEdit styles (required for the text editor control). -->
         <StyleInclude Source="avares://AvaloniaEdit/Themes/Fluent/AvaloniaEdit.xaml" />
     </Application.Styles>
-
-    <Application.Resources>
-        <!-- Shared visual language for the workspace. These resources are presentation-only. -->
-        <SolidColorBrush x:Key="TermoxSurfaceBrush" Color="#252526" />
-        <SolidColorBrush x:Key="TermoxSurfaceRaisedBrush" Color="#2d2d30" />
-        <SolidColorBrush x:Key="TermoxSurfaceHoverBrush" Color="#30343b" />
-        <SolidColorBrush x:Key="TermoxSelectionBrush" Color="#264f78" />
-        <SolidColorBrush x:Key="TermoxAccentBrush" Color="#4f9dde" />
-        <SolidColorBrush x:Key="TermoxMutedBrush" Color="#9299a3" />
-        <SolidColorBrush x:Key="TermoxSuccessBrush" Color="#4caf78" />
-        <FontFamily x:Key="MaterialIconFont">
-            avares://Termox/Assets/Fonts#Material Icons
-        </FontFamily>
-        <SolidColorBrush x:Key="SvcSystems.UI.TerminalColor4" Color="#4F9DDE" />
-        <SolidColorBrush x:Key="SvcSystems.UI.TerminalColor12" Color="#73B7FF" />
-    </Application.Resources>
 </Application>
