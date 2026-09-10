@@ -96,16 +96,16 @@ jobs:
           bump="none"
 
           while IFS= read -r line; do
-            if [[ "$line" =~ ^[a-zA-Z]+(\([^)]*\))?!: ]]; then
+            if echo "$line" | grep -qE '^[a-zA-Z]+(\([^)]*\))?!: '; then
               bump="major"; break
             fi
             if [[ "$line" == *"BREAKING CHANGE"* ]]; then
               bump="major"; break
             fi
-            if [[ "$line" =~ ^feat(\([^)]*\))?: ]]; then
+            if echo "$line" | grep -qE '^feat(\([^)]*\))?: '; then
               if [[ "$bump" != "major" ]]; then bump="minor"; fi
             fi
-            if [[ "$line" =~ ^(fix|chore|docs|style|refactor|perf|test|build|ci)(\([^)]*\))?: ]]; then
+            if echo "$line" | grep -qE '^(fix|chore|docs|style|refactor|perf|test|build|ci)(\([^)]*\))?: '; then
               if [[ "$bump" == "none" ]]; then bump="patch"; fi
             fi
           done <<< "$commits"
@@ -141,14 +141,14 @@ jobs:
           other_lines=""
 
           while IFS= read -r line; do
-            if [[ "$line" =~ ^[a-zA-Z]+(\([^)]*\))?!: ]] || \
+            if echo "$line" | grep -qE '^[a-zA-Z]+(\([^)]*\))?!: ' || \
                [[ "$line" == *"BREAKING CHANGE"* ]]; then
               breaking_lines="${breaking_lines}- ${line}"$'\n'
-            elif [[ "$line" =~ ^feat(\([^)]*\))?: ]]; then
+            elif echo "$line" | grep -qE '^feat(\([^)]*\))?: '; then
               feat_lines="${feat_lines}- ${line}"$'\n'
-            elif [[ "$line" =~ ^fix(\([^)]*\))?: ]]; then
+            elif echo "$line" | grep -qE '^fix(\([^)]*\))?: '; then
               fix_lines="${fix_lines}- ${line}"$'\n'
-            elif [[ "$line" =~ ^(chore|docs|style|refactor|perf|test|build|ci)(\([^)]*\))?: ]]; then
+            elif echo "$line" | grep -qE '^(chore|docs|style|refactor|perf|test|build|ci)(\([^)]*\))?: '; then
               other_lines="${other_lines}- ${line}"$'\n'
             fi
           done <<< "$commits"
