@@ -221,7 +221,8 @@ by SSH.NET. Automated tests are located in `tests/Termox.Tests`.
 
 ## CI/CD and releases
 
-GitHub Actions runs CI for pull requests and pushes to `main` or `master`. CI
+GitHub Actions runs CI on a GitFlow branch model: pushes to `main`, `dev`,
+`release/**`, and `hotfix/**`, plus pull requests targeting `main` or `dev`. CI
 restores dependencies, runs tests, builds the application, and uploads coverage
 when available.
 
