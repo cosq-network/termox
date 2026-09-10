@@ -242,8 +242,9 @@ jobs:
           $publish = (Resolve-Path 'artifacts/publish/win-x64').Path
           $workDir = New-Item -ItemType Directory -Force -Path artifacts/wix
           $fragment = Join-Path $workDir 'TermoxFiles.wxs'
-          & heat.exe dir $publish -dr INSTALLFOLDER -cg TermoxFiles -var var.SourceDir -srd -ag -nologo -out $fragment
-          & candle.exe -arch x64 -out $workDir "-dMyAppVersion=$env:VERSION" "-dTermoxRoot=$env:GITHUB_WORKSPACE" @(
+          & heat.exe dir $publish -dr INSTALLFOLDER -cg TermoxFiles -var var.SourceDir -srd -sreg -ag -nologo -out $fragment
+          $outDir = "$($workDir.FullName.Replace('/', '\\'))\\"
+          & candle.exe -arch x64 -out $outDir "-dMyAppVersion=$env:VERSION" "-dTermoxRoot=$env:GITHUB_WORKSPACE" @(
             'packaging/windows/termox.wxs',
             $fragment
           )
