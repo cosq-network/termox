@@ -51,10 +51,9 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
-      # Restore the full solution so Termox.csproj and the test project share
-      # the same restored package cache.
+      # Restore the test project explicitly so its assets file is generated.
       - name: Restore
-        run: dotnet restore
+        run: dotnet restore tests/Termox.Tests/Termox.Tests.csproj
 
       - name: Test
         run: >
