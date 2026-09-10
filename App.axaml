@@ -85,6 +85,31 @@
             <Setter Property="Foreground" Value="#ffffff" />
             <Setter Property="BorderBrush" Value="#4f9dde" />
         </Style>
+
+        <!-- Full-width list row for the sidebar Tools panel — same colors as toolButton,
+             stacked vertically instead of wrapped as chips, matching the Sessions/Bookmarks
+             list rows elsewhere in the sidebar. -->
+        <Style Selector="Button.toolListItem">
+            <Setter Property="Background" Value="#333337" />
+            <Setter Property="Foreground" Value="#e5e7eb" />
+            <Setter Property="Padding" Value="10,9" />
+            <Setter Property="Margin" Value="0,0,0,4" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="HorizontalContentAlignment" Value="Left" />
+        </Style>
+        <Style Selector="Button.toolListItem:pointerover">
+            <Setter Property="Background" Value="#414750" />
+            <Setter Property="Foreground" Value="#ffffff" />
+            <Setter Property="BorderBrush" Value="#6b7890" />
+        </Style>
+        <Style Selector="Button.toolListItem:pressed">
+            <Setter Property="Background" Value="#1769aa" />
+            <Setter Property="Foreground" Value="#ffffff" />
+            <Setter Property="BorderBrush" Value="#4f9dde" />
+        </Style>
+
         <Style Selector="Button.primaryButton">
             <Setter Property="Background" Value="#007acc" />
             <Setter Property="Foreground" Value="#ffffff" />
@@ -341,11 +366,37 @@
             <Setter Property="BorderBrush" Value="#ef5350" />
         </Style>
 
+        <!-- Custom title bar's minimize/maximize/close: flush, transparent until hovered,
+             fixed 46x40 so all three sit flat and even like a native caption-button row. -->
+        <Style Selector="Button.windowControlBtn">
+            <Setter Property="Width" Value="46" />
+            <Setter Property="Height" Value="40" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Margin" Value="0" />
+            <Setter Property="CornerRadius" Value="0" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Foreground" Value="{StaticResource TermoxTextSecondaryBrush}" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Button.windowControlBtn:pointerover">
+            <Setter Property="Background" Value="{StaticResource TermoxSurfaceHoverBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource TermoxTextPrimaryBrush}" />
+        </Style>
+        <!-- Two-class selector beats windowControlBtn's single-class :pointerover regardless
+             of declaration order, so the close button keeps its red hover instead of the
+             neutral one above. -->
+        <Style Selector="Button.windowControlBtn.closeTabBtn:pointerover">
+            <Setter Property="Background" Value="#d32f2f" />
+            <Setter Property="Foreground" Value="#ffffff" />
+        </Style>
+
         <!-- Icon-first sidebar nav rail (Sessions/Bookmarks/Tools/Chat). Flat, VS Code-style. -->
         <Style Selector="Button.sidebarRailButton">
-            <Setter Property="Width" Value="52" />
-            <Setter Property="Height" Value="48" />
-            <Setter Property="FontSize" Value="20" />
+            <Setter Property="Width" Value="56" />
+            <Setter Property="Height" Value="52" />
+            <Setter Property="FontSize" Value="24" />
             <Setter Property="Padding" Value="0" />
             <Setter Property="Margin" Value="0" />
             <Setter Property="CornerRadius" Value="0" />

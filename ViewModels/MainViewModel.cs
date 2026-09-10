@@ -109,11 +109,63 @@ public class MainViewModel : INotifyPropertyChanged
     public bool HasRecentlyUsedSessions => RecentlyUsedSessions.Count > 0;
     public bool HasFavoritedBookmarks => FavoritedBookmarks.Count > 0;
 
+    private readonly TabNavigationHistory _tabHistory = new();
+    private bool _isNavigatingTabHistory;
+
     private ITabViewModel? _selectedTab;
     public ITabViewModel? SelectedTab
     {
         get => _selectedTab;
-        set { _selectedTab = value; OnPropertyChanged(); }
+        set
+        {
+            _selectedTab = value;
+            OnPropertyChanged();
+            if (value != null && !_isNavigatingTabHistory) _tabHistory.Push(value);
+            RefreshTabHistoryState();
+        }
+    }
+
+    public ICommand GoBackCommand { get; }
+    public ICommand GoForwardCommand { get; }
+
+    private bool _canGoBackTabs;
+    public bool CanGoBackTabs
+    {
+        get => _canGoBackTabs;
+        private set { _canGoBackTabs = value; OnPropertyChanged(); }
+    }
+
+    private bool _canGoForwardTabs;
+    public bool CanGoForwardTabs
+    {
+        get => _canGoForwardTabs;
+        private set { _canGoForwardTabs = value; OnPropertyChanged(); }
+    }
+
+    private void RefreshTabHistoryState()
+    {
+        CanGoBackTabs = _tabHistory.CanGoBack;
+        CanGoForwardTabs = _tabHistory.CanGoForward;
+    }
+
+    private void GoBackTabs()
+    {
+        var target = _tabHistory.GoBack();
+        if (target == null) return;
+        _isNavigatingTabHistory = true;
+        SelectedTab = target;
+        _isNavigatingTabHistory = false;
+        RefreshTabHistoryState();
+    }
+
+    private void GoForwardTabs()
+    {
+        var target = _tabHistory.GoForward();
+        if (target == null) return;
+        _isNavigatingTabHistory = true;
+        SelectedTab = target;
+        _isNavigatingTabHistory = false;
+        RefreshTabHistoryState();
     }
 
     private string _connectionName = "New Connection";
@@ -475,6 +527,19 @@ public class MainViewModel : INotifyPropertyChanged
 
         ConnectCommand = new RelayCommand(() => Connect());
         DisconnectCommand = new RelayCommand(() => SelectedTab?.DisconnectCommand.Execute(null));
+        // No CanExecute predicate — RelayCommand never re-evaluates it on its own (no
+        // property-change wiring), so the button's IsEnabled is bound directly to
+        // CanGoBackTabs/CanGoForwardTabs in XAML instead; GoBackTabs/GoForwardTabs already
+        // no-op safely if there's nothing to navigate to.
+        GoBackCommand = new RelayCommand(GoBackTabs);
+        GoForwardCommand = new RelayCommand(GoForwardTabs);
+        Tabs.CollectionChanged += (_, e) =>
+        {
+            if (e.OldItems != null)
+                foreach (ITabViewModel removed in e.OldItems)
+                    _tabHistory.Remove(removed);
+            RefreshTabHistoryState();
+        };
         ShowConnectionModalCommand = new RelayCommand(() => { IsConnectionModalVisible = true; TestStatus = ""; TestStatusColor = "#5bc0de"; IsTestSuccessful = false; });
         HideConnectionModalCommand = new RelayCommand(() => IsConnectionModalVisible = false);
         SaveConnectionCommand = new RelayCommand(SaveConnection);

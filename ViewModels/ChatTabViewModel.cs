@@ -60,6 +60,14 @@ public class ChatTabViewModel : INotifyPropertyChanged, ITabViewModel
     public bool IsHistoryPanelOpen { get => _isHistoryPanelOpen; set { _isHistoryPanelOpen = value; OnPropertyChanged(); } }
 
     public ObservableCollection<ChatSessionSummary> HistorySessions { get; } = new();
+    private List<ChatSessionSummary> _allHistorySessions = new();
+
+    private string _historySearchQuery = "";
+    public string HistorySearchQuery
+    {
+        get => _historySearchQuery;
+        set { _historySearchQuery = value; OnPropertyChanged(); ApplyHistoryFilter(); }
+    }
 
     // ChatSettings is a plain POCO (no INotifyPropertyChanged) so it must never be bound
     // to directly from XAML — each field below is its own flat, individually-notifying
@@ -199,6 +207,8 @@ public class ChatTabViewModel : INotifyPropertyChanged, ITabViewModel
     public ICommand NewChatCommand { get; }
     public ICommand LoadSessionCommand { get; }
     public ICommand DeleteSessionCommand { get; }
+    public ICommand RenameSessionCommand { get; }
+    public ICommand ConfirmRenameSessionCommand { get; }
     public ICommand ClearServerScopeCommand { get; }
     public ICommand SelectServerCommand { get; }
     public ICommand ToggleServerPickerCommand { get; }
@@ -258,6 +268,8 @@ public class ChatTabViewModel : INotifyPropertyChanged, ITabViewModel
         NewChatCommand = new RelayCommand(StartNewChat);
         LoadSessionCommand = new RelayCommand<ChatSessionSummary>(LoadSession);
         DeleteSessionCommand = new RelayCommand<ChatSessionSummary>(DeleteSession);
+        RenameSessionCommand = new RelayCommand<ChatSessionSummary>(RenameSession);
+        ConfirmRenameSessionCommand = new RelayCommand<ChatSessionSummary>(ConfirmRenameSession);
         ClearServerScopeCommand = new RelayCommand(() => { SelectedServerProfile = null; IsServerPickerOpen = false; });
         SelectServerCommand = new RelayCommand<SshConnectionProfile>(p => { SelectedServerProfile = p; IsServerPickerOpen = false; });
         ToggleServerPickerCommand = new RelayCommand(() => IsServerPickerOpen = !IsServerPickerOpen);
@@ -265,10 +277,9 @@ public class ChatTabViewModel : INotifyPropertyChanged, ITabViewModel
 
     private void RefreshHistoryList()
     {
-        List<ChatSessionSummary> sessions;
         try
         {
-            sessions = _historyService.ListSessions();
+            _allHistorySessions = _historyService.ListSessions();
         }
         catch (Exception ex)
         {
@@ -276,9 +287,44 @@ public class ChatTabViewModel : INotifyPropertyChanged, ITabViewModel
             return;
         }
 
+        ApplyHistoryFilter();
+    }
+
+    private void ApplyHistoryFilter()
+    {
         HistorySessions.Clear();
-        foreach (var session in sessions)
-            HistorySessions.Add(session);
+        var query = _historySearchQuery.Trim();
+        foreach (var session in _allHistorySessions)
+        {
+            if (query.Length == 0 || session.Title.Contains(query, StringComparison.OrdinalIgnoreCase))
+                HistorySessions.Add(session);
+        }
+    }
+
+    private void RenameSession(ChatSessionSummary? summary)
+    {
+        if (summary == null) return;
+        foreach (var s in _allHistorySessions) s.IsEditing = false;
+        summary.IsEditing = true;
+    }
+
+    private void ConfirmRenameSession(ChatSessionSummary? summary)
+    {
+        if (summary == null) return;
+        summary.IsEditing = false;
+
+        var title = summary.Title.Trim();
+        if (title.Length == 0) title = "Untitled";
+        summary.Title = title;
+
+        try
+        {
+            _historyService.RenameSession(summary.Id, title);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to rename chat session '{summary.Id}': {ex.Message}");
+        }
     }
 
     private void StartNewChat()

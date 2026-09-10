@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Controls.Primitives;
 using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
 using Avalonia.Platform.Storage;
@@ -194,12 +195,95 @@ public partial class MainWindow : Window
         textBox.AddHandler(InputElement.KeyDownEvent, ChatDraftInput_KeyDown, RoutingStrategies.Tunnel);
     }
 
+    private void RenameTitleTextBox_Loaded(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not TextBox textBox) return;
+        textBox.Focus();
+        textBox.SelectAll();
+    }
+
+    private void RenameTitleTextBox_KeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter || sender is not Control control) return;
+        e.Handled = true;
+        ConfirmRenameFor(control);
+    }
+
+    private void RenameTitleTextBox_LostFocus(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Control control) return;
+        ConfirmRenameFor(control);
+    }
+
+    private static void ConfirmRenameFor(Control control)
+    {
+        if (control.DataContext is not ChatSessionSummary summary || !summary.IsEditing) return;
+        var itemsControl = control.FindAncestorOfType<ItemsControl>();
+        if (itemsControl?.DataContext is ChatTabViewModel vm)
+            vm.ConfirmRenameSessionCommand.Execute(summary);
+    }
+
+    private void ChatTabRoot_Loaded(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Control control) return;
+        control.AddHandler(InputElement.PointerPressedEvent, ChatTabRoot_PointerPressed, RoutingStrategies.Tunnel);
+    }
+
+    // Dismisses the inline server-picker panel on a click anywhere else in the chat tab.
+    // It's a plain sibling in the composer's StackPanel, not a Popup/Flyout (see the
+    // comment on ServerPickerPanel for why), so it gets none of a Popup's free
+    // click-outside-to-close behavior — this replicates just that one piece by hand.
+    private void ChatTabRoot_PointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (sender is not Control root || root.DataContext is not ChatTabViewModel vm) return;
+        if (!vm.IsServerPickerOpen) return;
+
+        for (var current = e.Source as Control; current != null; current = current.GetVisualParent() as Control)
+        {
+            if (current.Name == "ServerPickerPanel") return;
+            if (current is Button button && button.Classes.Contains("chatComposerChip")) return;
+        }
+
+        vm.IsServerPickerOpen = false;
+    }
+
     private void ExitTermox_Click(object? sender, RoutedEventArgs e)
     {
         if (Avalonia.Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             desktop.Shutdown();
         }
+    }
+
+    // Custom title bar (ExtendClientAreaToDecorationsHint + NoChrome draws nothing native,
+    // so window drag/minimize/maximize/close are all hand-rolled here).
+    private void TitleBar_PointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+            BeginMoveDrag(e);
+    }
+
+    private void TitleBar_DoubleTapped(object? sender, TappedEventArgs e)
+    {
+        ToggleMaximizeRestore();
+    }
+
+    private void Minimize_Click(object? sender, RoutedEventArgs e)
+    {
+        WindowState = WindowState.Minimized;
+    }
+
+    private void MaximizeRestore_Click(object? sender, RoutedEventArgs e)
+    {
+        ToggleMaximizeRestore();
+    }
+
+    private void ToggleMaximizeRestore()
+    {
+        WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+
+        if (this.FindControl<TextBlock>("MaximizeIcon") is { } icon)
+            icon.Text = char.ConvertFromUtf32(WindowState == WindowState.Maximized ? 0xE5D1 : 0xE5D0);
     }
 
     private void SavedSession_DoubleTapped(object? sender, TappedEventArgs e)

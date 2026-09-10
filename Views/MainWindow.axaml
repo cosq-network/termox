@@ -17,7 +17,11 @@
     Background="#2d2d30"
     KeyDown="MainWindow_KeyDown"
     FontFamily="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
-    WindowStartupLocation="CenterScreen">
+    WindowStartupLocation="CenterScreen"
+    WindowState="Normal"
+    ExtendClientAreaToDecorationsHint="True"
+    WindowDecorations="None"
+    ExtendClientAreaTitleBarHeightHint="40">
 
     <Design.DataContext>
         <vm:MainViewModel />
@@ -27,70 +31,108 @@
         <!-- Base Layout using DockPanel -->
         <DockPanel>
 
-            <!-- Termox application menu -->
-            <Menu DockPanel.Dock="Top" Background="{StaticResource TermoxPanelBrush}"
-                Foreground="{StaticResource TermoxTextPrimaryBrush}">
-                <MenuItem>
-                    <MenuItem.Header>
-                        <primitives:AccessText Text="_Termox" Foreground="#f4f7fb" />
-                    </MenuItem.Header>
-                    <MenuItem Header="About Termox"
-                        Command="{Binding ShowAboutDialogCommand}" />
-                    <MenuItem Header="User Manual"
-                        Command="{Binding ShowUserManualDialogCommand}" />
-                    <Separator />
-                    <MenuItem Header="Exit Termox" Click="ExitTermox_Click" />
-                </MenuItem>
-                <MenuItem>
-                    <MenuItem.Header>
-                        <primitives:AccessText Text="_Session" Foreground="#f4f7fb" />
-                    </MenuItem.Header>
-                    <MenuItem Header="New Connection"
-                        Command="{Binding ShowConnectionModalCommand}" />
-                    <MenuItem Header="Disconnect Current Tab"
-                        Command="{Binding DisconnectCommand}" />
-                </MenuItem>
-                <MenuItem>
-                    <MenuItem.Header>
-                        <primitives:AccessText Text="_Help" Foreground="#f4f7fb" />
-                    </MenuItem.Header>
-                    <MenuItem Header="User Manual"
-                        Command="{Binding ShowUserManualDialogCommand}" />
-                    <MenuItem Header="About Termox"
-                        Command="{Binding ShowAboutDialogCommand}" />
-                </MenuItem>
-            </Menu>
+            <!-- Custom title bar: icon, menu, back/forward + current-tab pill (draggable
+                 middle), then minimize/tab-switcher/close. Window uses
+                 ExtendClientAreaToDecorationsHint + NoChrome so nothing native is drawn —
+                 everything here (including window drag/minimize/close) is hand-rolled. -->
+            <Grid DockPanel.Dock="Top" Height="40" Background="{StaticResource TermoxPanelBrush}"
+                ColumnDefinitions="Auto,Auto,*,Auto">
+                <Image Grid.Column="0" Source="/Assets/Icons/termox-icon.png"
+                    Width="18" Height="18" Margin="10,0,8,0" VerticalAlignment="Center" />
 
+                <Menu Grid.Column="1" Background="Transparent"
+                    Foreground="{StaticResource TermoxTextPrimaryBrush}" VerticalAlignment="Center">
+                    <MenuItem>
+                        <MenuItem.Header>
+                            <primitives:AccessText Text="_Termox" Foreground="#f4f7fb" />
+                        </MenuItem.Header>
+                        <MenuItem Header="About Termox"
+                            Command="{Binding ShowAboutDialogCommand}" />
+                        <MenuItem Header="User Manual"
+                            Command="{Binding ShowUserManualDialogCommand}" />
+                        <Separator />
+                        <MenuItem Header="Exit Termox" Click="ExitTermox_Click" />
+                    </MenuItem>
+                    <MenuItem>
+                        <MenuItem.Header>
+                            <primitives:AccessText Text="_Session" Foreground="#f4f7fb" />
+                        </MenuItem.Header>
+                        <MenuItem Header="New Connection"
+                            Command="{Binding ShowConnectionModalCommand}" />
+                        <MenuItem Header="Disconnect Current Tab"
+                            Command="{Binding DisconnectCommand}" />
+                    </MenuItem>
+                    <MenuItem>
+                        <MenuItem.Header>
+                            <primitives:AccessText Text="_Help" Foreground="#f4f7fb" />
+                        </MenuItem.Header>
+                        <MenuItem Header="User Manual"
+                            Command="{Binding ShowUserManualDialogCommand}" />
+                        <MenuItem Header="About Termox"
+                            Command="{Binding ShowAboutDialogCommand}" />
+                    </MenuItem>
+                </Menu>
 
-            <!-- Status Bar at the bottom -->
-            <Border DockPanel.Dock="Bottom" Background="#007acc" Padding="10,3">
-                <DockPanel>
-                    <StackPanel Orientation="Horizontal" Spacing="7" DockPanel.Dock="Left">
-                        <TextBlock Text="●" Foreground="#6ee7a8" FontSize="11" VerticalAlignment="Center" />
-                        <TextBlock Text="Ready" Foreground="#f4f7fb" FontSize="12" VerticalAlignment="Center" />
+                <!-- Draggable middle region: empty space here moves the window; the
+                     back/forward/pill cluster sits left-aligned within it. -->
+                <Border Grid.Column="2" Background="Transparent"
+                    PointerPressed="TitleBar_PointerPressed" DoubleTapped="TitleBar_DoubleTapped">
+                    <StackPanel Orientation="Horizontal" Spacing="4" Margin="10,0,0,0"
+                        VerticalAlignment="Center">
+                        <Button Classes="toolButton" Margin="0" Padding="6,5"
+                            Command="{Binding GoBackCommand}" IsEnabled="{Binding CanGoBackTabs}"
+                            ToolTip.Tip="Back">
+                            <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="&#xE5CB;" FontSize="15" />
+                        </Button>
+                        <Button Classes="toolButton" Margin="0" Padding="6,5"
+                            Command="{Binding GoForwardCommand}" IsEnabled="{Binding CanGoForwardTabs}"
+                            ToolTip.Tip="Forward">
+                            <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="&#xE5CC;" FontSize="15" />
+                        </Button>
                     </StackPanel>
-                    <TextBlock Text="TERMOX  /  SSH WORKSPACE" Foreground="White" FontSize="12"
-                        DockPanel.Dock="Right" HorizontalAlignment="Right" />
-                </DockPanel>
-            </Border>
+                </Border>
+
+                <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="0" VerticalAlignment="Stretch">
+                    <Button Classes="windowControlBtn" VerticalAlignment="Stretch"
+                        Click="Minimize_Click" ToolTip.Tip="Minimize">
+                        <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="&#xE931;" FontSize="13" />
+                    </Button>
+                    <Button Classes="windowControlBtn" VerticalAlignment="Stretch"
+                        Click="MaximizeRestore_Click" ToolTip.Tip="Maximize / Restore">
+                        <TextBlock Name="MaximizeIcon" FontFamily="{StaticResource MaterialIconFont}" Text="&#xE5D0;" FontSize="12" />
+                    </Button>
+                    <Button Classes="windowControlBtn closeTabBtn" VerticalAlignment="Stretch"
+                        Click="ExitTermox_Click" ToolTip.Tip="Close">
+                        <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="&#xE5CD;" FontSize="13" />
+                    </Button>
+                </StackPanel>
+            </Grid>
 
             <!-- Main Content Area -->
-            <Grid ColumnDefinitions="52, 280, 5, *">
+            <Grid ColumnDefinitions="56, 280, 5, *">
                 <!-- Icon-first nav rail (Sessions/Bookmarks/Tools/Chat) -->
                 <Border Grid.Column="0" Background="{StaticResource TermoxPanelBrush}">
                     <StackPanel>
                         <Button Classes="sidebarRailButton" Classes.active="{Binding IsSessionsSectionActive}"
                             Command="{Binding SelectSidebarSectionCommand}" CommandParameter="Sessions"
-                            Content="🖥" ToolTip.Tip="Sessions" />
+                            ToolTip.Tip="Sessions">
+                            <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="&#xE30A;" FontSize="24" />
+                        </Button>
                         <Button Classes="sidebarRailButton" Classes.active="{Binding IsBookmarksSectionActive}"
                             Command="{Binding SelectSidebarSectionCommand}" CommandParameter="Bookmarks"
-                            Content="⭐" ToolTip.Tip="Bookmarks" />
+                            ToolTip.Tip="Bookmarks">
+                            <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="&#xE867;" FontSize="24" />
+                        </Button>
                         <Button Classes="sidebarRailButton" Classes.active="{Binding IsToolsSectionActive}"
                             Command="{Binding SelectSidebarSectionCommand}" CommandParameter="Tools"
-                            Content="🛠" ToolTip.Tip="Tools" />
+                            ToolTip.Tip="Tools">
+                            <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="&#xE869;" FontSize="24" />
+                        </Button>
                         <Button Classes="sidebarRailButton" Classes.active="{Binding IsChatSectionActive}"
                             Command="{Binding SelectSidebarSectionCommand}" CommandParameter="Chat"
-                            Content="⎈" ToolTip.Tip="Helm (AI Assistant)" />
+                            ToolTip.Tip="Helm (AI Assistant)">
+                            <TextBlock Text="⎈" FontSize="24" />
+                        </Button>
                     </StackPanel>
                 </Border>
 
@@ -360,38 +402,80 @@
                                 <StackPanel Margin="15" Spacing="10">
                                     <TextBlock Text="TOOLS" FontSize="10" FontWeight="Bold"
                                         Foreground="#6ea9d4" LetterSpacing="1.2" />
-                                    <Border Classes="cardPanel">
-                                    <WrapPanel Orientation="Horizontal"
-                                        HorizontalAlignment="Left">
-                                    <Button Content="Port Scanner" Classes="toolButton"
+                                    <WrapPanel Orientation="Horizontal" HorizontalAlignment="Left">
+                                    <Button Classes="toolButton"
                                         Command="{Binding OpenPortScannerTabCommand}"
-                                        ToolTip.Tip="Open the dedicated port scanner tab" />
-                                    <Button Content="Ping Test" Classes="toolButton"
+                                        ToolTip.Tip="Open the dedicated port scanner tab">
+                                        <StackPanel Orientation="Horizontal" Spacing="10">
+                                            <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="&#xE640;" FontSize="15" />
+                                            <TextBlock Text="Port Scanner" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </Button>
+                                    <Button Classes="toolButton"
                                         Command="{Binding OpenPingTestTabCommand}"
-                                        ToolTip.Tip="Open the dedicated ping test tab" />
-                                    <Button Content="SSH Key Generator" Classes="toolButton"
+                                        ToolTip.Tip="Open the dedicated ping test tab">
+                                        <StackPanel Orientation="Horizontal" Spacing="10">
+                                            <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="&#xE915;" FontSize="15" />
+                                            <TextBlock Text="Ping Test" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </Button>
+                                    <Button Classes="toolButton"
                                         Command="{Binding OpenSshKeyGeneratorTabCommand}"
-                                        ToolTip.Tip="Open the dedicated SSH key generator tab" />
-                                    <Button Content="Connection Tester" Classes="toolButton"
+                                        ToolTip.Tip="Open the dedicated SSH key generator tab">
+                                        <StackPanel Orientation="Horizontal" Spacing="10">
+                                            <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="&#xE0DA;" FontSize="15" />
+                                            <TextBlock Text="SSH Key Generator" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </Button>
+                                    <Button Classes="toolButton"
                                         Command="{Binding OpenConnectionTesterTabCommand}"
-                                        ToolTip.Tip="Test all saved connections" />
-                                    <Button Content="SSH Endpoint Test" Classes="toolButton"
+                                        ToolTip.Tip="Test all saved connections">
+                                        <StackPanel Orientation="Horizontal" Spacing="10">
+                                            <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="&#xE157;" FontSize="15" />
+                                            <TextBlock Text="Connection Tester" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </Button>
+                                    <Button Classes="toolButton"
                                         Command="{Binding OpenSshEndpointTestTabCommand}"
-                                        ToolTip.Tip="Test SSH endpoint performance" />
-                                    <Button Content="GPG Key Manager" Classes="toolButton"
+                                        ToolTip.Tip="Test SSH endpoint performance">
+                                        <StackPanel Orientation="Horizontal" Spacing="10">
+                                            <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="&#xE9E4;" FontSize="15" />
+                                            <TextBlock Text="SSH Endpoint Test" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </Button>
+                                    <Button Classes="toolButton"
                                         Command="{Binding OpenGpgTabCommand}"
-                                        ToolTip.Tip="Manage GPG keys and export/import" />
-                                    <Button Content="Fingerprint Utilities" Classes="toolButton"
+                                        ToolTip.Tip="Manage GPG keys and export/import">
+                                        <StackPanel Orientation="Horizontal" Spacing="10">
+                                            <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="&#xE897;" FontSize="15" />
+                                            <TextBlock Text="GPG Key Manager" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </Button>
+                                    <Button Classes="toolButton"
                                         Command="{Binding OpenFingerprintTabCommand}"
-                                        ToolTip.Tip="Calculate and compare file/text fingerprints" />
-                                    <Button Content="DNS Inspector" Classes="toolButton"
+                                        ToolTip.Tip="Calculate and compare file/text fingerprints">
+                                        <StackPanel Orientation="Horizontal" Spacing="10">
+                                            <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="&#xE90D;" FontSize="15" />
+                                            <TextBlock Text="Fingerprint Utilities" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </Button>
+                                    <Button Classes="toolButton"
                                         Command="{Binding OpenDnsTabCommand}"
-                                        ToolTip.Tip="Inspect DNS records for domains" />
-                                    <Button Content="Server Stats" Classes="toolButton"
+                                        ToolTip.Tip="Inspect DNS records for domains">
+                                        <StackPanel Orientation="Horizontal" Spacing="10">
+                                            <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="&#xE875;" FontSize="15" />
+                                            <TextBlock Text="DNS Inspector" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </Button>
+                                    <Button Classes="toolButton"
                                         Command="{Binding OpenServerStatsTabCommand}"
-                                        ToolTip.Tip="View CPU, memory, process, and disk stats over SSH" />
+                                        ToolTip.Tip="View CPU, memory, process, and disk stats over SSH">
+                                        <StackPanel Orientation="Horizontal" Spacing="10">
+                                            <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="&#xE26B;" FontSize="15" />
+                                            <TextBlock Text="Server Stats" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </Button>
                                     </WrapPanel>
-                                    </Border>
                                 </StackPanel>
                             </ScrollViewer>
                         <ScrollViewer VerticalScrollBarVisibility="Auto"
@@ -775,131 +859,121 @@
 
                             <DataTemplate DataType="vm:PortScannerTabViewModel">
                                 <ScrollViewer VerticalScrollBarVisibility="Auto">
-                                <Grid Background="#1e1e1e" RowDefinitions="Auto,Auto,Auto">
-                                    <Border Grid.Row="0" Background="#252526" Padding="28,24"
-                                        BorderBrush="#333" BorderThickness="0,0,0,1">
-                                        <Grid ColumnDefinitions="*,Auto">
-                                            <StackPanel Spacing="6">
+                                    <Border Background="#1e1e1e" Padding="28">
+                                        <StackPanel Spacing="16" MaxWidth="900">
+                                            <StackPanel Spacing="4">
                                                 <TextBlock Text="Port Scanner" FontSize="{StaticResource TermoxPageTitleFontSize}"
                                                     FontWeight="SemiBold" Foreground="{StaticResource TermoxPageTitleBrush}" />
                                                 <TextBlock Text="Inspect TCP reachability across a host with clear, focused results."
                                                     Foreground="{StaticResource TermoxPageSubtitleBrush}" FontSize="13" />
                                             </StackPanel>
-                                            <Border Grid.Column="1" Background="#173c4a" CornerRadius="18"
-                                                Padding="14,8" VerticalAlignment="Center">
-                                                <TextBlock Text="TCP" Foreground="#5bd6e6"
-                                                    FontWeight="SemiBold" FontSize="12" />
+
+                                            <Border Background="#252526" BorderBrush="#3a3a3a"
+                                                BorderThickness="1" CornerRadius="7" Padding="20">
+                                                <Grid RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="14">
+                                                    <StackPanel Grid.Row="0" Spacing="3">
+                                                        <TextBlock Text="Scan configuration" Foreground="#e5e5e5"
+                                                            FontSize="15" FontWeight="SemiBold" />
+                                                        <TextBlock Text="Choose a saved session or localhost, then specify the TCP ports to inspect."
+                                                            Foreground="#888" FontSize="11" />
+                                                    </StackPanel>
+
+                                                    <StackPanel Grid.Row="1" Spacing="5">
+                                                        <TextBlock Text="Target host" Foreground="#aaa"
+                                                            FontSize="11" FontWeight="SemiBold" />
+                                                        <ComboBox ItemsSource="{Binding HostOptions}"
+                                                            SelectedItem="{Binding SelectedHost}"
+                                                            Background="#1e1e1e" Foreground="#e5e5e5"
+                                                            BorderBrush="#555" Padding="10" MinHeight="44"
+                                                            HorizontalContentAlignment="Stretch" CornerRadius="4">
+                                                            <ComboBox.ItemTemplate>
+                                                                <DataTemplate>
+                                                                    <StackPanel Spacing="3" Margin="2,3">
+                                                                        <TextBlock Text="{Binding DisplayName}"
+                                                                            Foreground="#e5e5e5" FontSize="13" />
+                                                                        <TextBlock Text="{Binding Host}"
+                                                                            Foreground="#888" FontSize="11" />
+                                                                    </StackPanel>
+                                                                </DataTemplate>
+                                                            </ComboBox.ItemTemplate>
+                                                        </ComboBox>
+                                                    </StackPanel>
+
+                                                    <Grid Grid.Row="2" ColumnDefinitions="*,Auto" ColumnSpacing="20">
+                                                        <StackPanel Grid.Column="0" Spacing="5">
+                                                            <TextBlock Text="Ports to scan" Foreground="#aaa"
+                                                                FontSize="11" FontWeight="SemiBold" />
+                                                            <TextBox Text="{Binding ScanPorts}" PlaceholderText="22, 80, 443"
+                                                                Padding="10" />
+                                                        </StackPanel>
+                                                        <Button Grid.Column="1" Content="Start Scan"
+                                                            Command="{Binding ScanPortsCommand}"
+                                                            Classes="primaryButton"
+                                                            Padding="22,9" CornerRadius="4" FontSize="12"
+                                                            VerticalAlignment="Bottom" IsEnabled="{Binding !IsScanning}" />
+                                                    </Grid>
+
+                                                    <Border Grid.Row="3" Background="#1e1e1e" CornerRadius="4"
+                                                        Padding="12,9" BorderBrush="#333" BorderThickness="1">
+                                                        <Grid ColumnDefinitions="Auto,*">
+                                                            <TextBlock Text="STATUS" Foreground="#777" FontSize="10"
+                                                                FontWeight="SemiBold" VerticalAlignment="Center" />
+                                                            <TextBlock Grid.Column="1" Text="{Binding ScanStatus}"
+                                                                Foreground="#8fbed0" FontSize="12" Margin="12,0,0,0"
+                                                                VerticalAlignment="Center" />
+                                                        </Grid>
+                                                    </Border>
+                                                </Grid>
                                             </Border>
-                                        </Grid>
-                                    </Border>
 
-        <Border Grid.Row="1" Margin="24,20,24,16" Padding="20"
-            Background="#252526" BorderBrush="#3a3a3a"
-            BorderThickness="1" CornerRadius="7">
-            <Grid RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="14">
-                <StackPanel Grid.Row="0" Spacing="3">
-                    <TextBlock Text="Scan configuration" Foreground="#e5e5e5"
-                        FontSize="15" FontWeight="SemiBold" />
-                    <TextBlock Text="Choose a saved session or localhost, then specify the TCP ports to inspect."
-                        Foreground="#888" FontSize="11" />
-                </StackPanel>
-
-                <StackPanel Grid.Row="1" Spacing="5">
-                    <TextBlock Text="Target host" Foreground="#aaa"
-                        FontSize="11" FontWeight="SemiBold" />
-                    <ComboBox ItemsSource="{Binding HostOptions}"
-                        SelectedItem="{Binding SelectedHost}"
-                        Background="#1e1e1e" Foreground="#e5e5e5"
-                        BorderBrush="#555" Padding="10" MinHeight="44"
-                        HorizontalContentAlignment="Stretch" CornerRadius="4">
-                        <ComboBox.ItemTemplate>
-                            <DataTemplate>
-                                <StackPanel Spacing="3" Margin="2,3">
-                                    <TextBlock Text="{Binding DisplayName}"
-                                        Foreground="#e5e5e5" FontSize="13" />
-                                    <TextBlock Text="{Binding Host}"
-                                        Foreground="#888" FontSize="11" />
-                                </StackPanel>
-                            </DataTemplate>
-                        </ComboBox.ItemTemplate>
-                    </ComboBox>
-                </StackPanel>
-
-                <Grid Grid.Row="2" ColumnDefinitions="*,Auto" ColumnSpacing="20">
-                    <StackPanel Grid.Column="0" Spacing="5">
-                        <TextBlock Text="Ports to scan" Foreground="#aaa"
-                            FontSize="11" FontWeight="SemiBold" />
-                        <TextBox Text="{Binding ScanPorts}" PlaceholderText="22, 80, 443"
-                            Padding="10" />
-                    </StackPanel>
-                    <Button Grid.Column="1" Content="Start Scan"
-                        Command="{Binding ScanPortsCommand}"
-                        Classes="primaryButton"
-                        Padding="22,9" CornerRadius="4" FontSize="12"
-                        VerticalAlignment="Bottom" IsEnabled="{Binding !IsScanning}" />
-                </Grid>
-
-                <Border Grid.Row="3" Background="#1e1e1e" CornerRadius="4"
-                    Padding="12,9" BorderBrush="#333" BorderThickness="1">
-                    <Grid ColumnDefinitions="Auto,*">
-                        <TextBlock Text="STATUS" Foreground="#777" FontSize="10"
-                            FontWeight="SemiBold" VerticalAlignment="Center" />
-                        <TextBlock Grid.Column="1" Text="{Binding ScanStatus}"
-                            Foreground="#8fbed0" FontSize="12" Margin="12,0,0,0"
-                            VerticalAlignment="Center" />
-                    </Grid>
-                </Border>
-            </Grid>
-        </Border>
-
-                                    <Border Grid.Row="2" Margin="24,0,24,24" Padding="20"
-                                        Background="#252526" BorderBrush="#3a3a3a"
-                                        BorderThickness="1" CornerRadius="7">
-                                        <Grid RowDefinitions="Auto,Auto,*" RowSpacing="12">
-                                            <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
-                                                <StackPanel Spacing="3">
-                                                    <TextBlock Text="Scan results" Foreground="#e5e5e5"
-                                                        FontSize="15" FontWeight="SemiBold" />
-                                                    <TextBlock Text="Open ports are highlighted in green."
-                                                        Foreground="#888" FontSize="11" />
-                                                </StackPanel>
-                                                <TextBlock Grid.Column="1" Text="{Binding ScanResults.Count, StringFormat='{}{0} results'}"
-                                                    Foreground="#888" FontSize="11" VerticalAlignment="Center" />
-                                            </Grid>
-                                            <Border Grid.Row="1" Padding="12,8" Background="#1e1e1e">
-                                            <Grid ColumnDefinitions="100,*,100"
-                                                Background="#1e1e1e">
-                                                <TextBlock Text="PORT" Foreground="#777" FontSize="10"
-                                                    FontWeight="SemiBold" />
-                                                <TextBlock Grid.Column="1" Text="PROTOCOL" Foreground="#777"
-                                                    FontSize="10" FontWeight="SemiBold" />
-                                                <TextBlock Grid.Column="2" Text="STATUS" Foreground="#777"
-                                                    FontSize="10" FontWeight="SemiBold" HorizontalAlignment="Right" />
-                                            </Grid>
+                                            <Border Background="#252526" BorderBrush="#3a3a3a"
+                                                BorderThickness="1" CornerRadius="7" Padding="20">
+                                                <Grid RowDefinitions="Auto,Auto,*" RowSpacing="12">
+                                                    <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
+                                                        <StackPanel Spacing="3">
+                                                            <TextBlock Text="Scan results" Foreground="#e5e5e5"
+                                                                FontSize="15" FontWeight="SemiBold" />
+                                                            <TextBlock Text="Open ports are highlighted in green."
+                                                                Foreground="#888" FontSize="11" />
+                                                        </StackPanel>
+                                                        <TextBlock Grid.Column="1" Text="{Binding ScanResults.Count, StringFormat='{}{0} results'}"
+                                                            Foreground="#888" FontSize="11" VerticalAlignment="Center" />
+                                                    </Grid>
+                                                    <Border Grid.Row="1" Padding="12,8" Background="#1e1e1e">
+                                                        <Grid ColumnDefinitions="100,*,100"
+                                                            Background="#1e1e1e">
+                                                            <TextBlock Text="PORT" Foreground="#777" FontSize="10"
+                                                                FontWeight="SemiBold" />
+                                                            <TextBlock Grid.Column="1" Text="PROTOCOL" Foreground="#777"
+                                                                FontSize="10" FontWeight="SemiBold" />
+                                                            <TextBlock Grid.Column="2" Text="STATUS" Foreground="#777"
+                                                                FontSize="10" FontWeight="SemiBold" HorizontalAlignment="Right" />
+                                                        </Grid>
+                                                    </Border>
+                                                    <ListBox Grid.Row="2" ItemsSource="{Binding ScanResults}"
+                                                        Background="#1a1a1a" BorderBrush="#333" BorderThickness="1"
+                                                        MinHeight="260">
+                                                        <ListBox.ItemTemplate>
+                                                            <DataTemplate>
+                                                                <Border Padding="12,9" BorderBrush="#2d2d2d"
+                                                                    BorderThickness="0,0,0,1">
+                                                                    <Grid ColumnDefinitions="100,*,100">
+                                                                        <TextBlock Text="{Binding Port}" Foreground="#ddd"
+                                                                            FontWeight="SemiBold" />
+                                                                        <TextBlock Grid.Column="1" Text="TCP"
+                                                                            Foreground="#888" />
+                                                                        <TextBlock Grid.Column="2" Text="{Binding Status}"
+                                                                            Foreground="{Binding StatusColor}"
+                                                                            FontWeight="SemiBold" HorizontalAlignment="Right" />
+                                                                    </Grid>
+                                                                </Border>
+                                                            </DataTemplate>
+                                                        </ListBox.ItemTemplate>
+                                                    </ListBox>
+                                                </Grid>
                                             </Border>
-                                            <ListBox Grid.Row="2" ItemsSource="{Binding ScanResults}"
-                                                Background="#1a1a1a" BorderBrush="#333" BorderThickness="1"
-                                                MinHeight="260">
-                                                <ListBox.ItemTemplate>
-                                                    <DataTemplate>
-                                                        <Border Padding="12,9" BorderBrush="#2d2d2d"
-                                                            BorderThickness="0,0,0,1">
-                                                            <Grid ColumnDefinitions="100,*,100">
-                                                                <TextBlock Text="{Binding Port}" Foreground="#ddd"
-                                                                    FontWeight="SemiBold" />
-                                                                <TextBlock Grid.Column="1" Text="TCP"
-                                                                    Foreground="#888" />
-                                                                <TextBlock Grid.Column="2" Text="{Binding Status}"
-                                                                    Foreground="{Binding StatusColor}"
-                                                                    FontWeight="SemiBold" HorizontalAlignment="Right" />
-                                                            </Grid>
-                                                        </Border>
-                                                    </DataTemplate>
-                                                </ListBox.ItemTemplate>
-                                            </ListBox>
-                                        </Grid>
+                                        </StackPanel>
                                     </Border>
-                                </Grid>
                                 </ScrollViewer>
                             </DataTemplate>
 
@@ -2288,7 +2362,8 @@
                                 </TabControl>
                             </DataTemplate>
                             <DataTemplate DataType="vm:ChatTabViewModel">
-                                <Grid Background="#1e1e1e" RowDefinitions="Auto,Auto,*,Auto,Auto" Margin="8">
+                                <Panel Background="#1e1e1e" Margin="8" Loaded="ChatTabRoot_Loaded">
+                                <Grid RowDefinitions="Auto,*,Auto,Auto">
                                     <!-- Header -->
                                     <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto,Auto,Auto,Auto" Margin="2,0,2,8">
                                         <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8"
@@ -2298,141 +2373,38 @@
                                             <TextBlock Text="your SSH &amp; SFTP copilot" Foreground="#777777"
                                                 FontSize="12" VerticalAlignment="Center" />
                                         </StackPanel>
-                                        <Button Grid.Column="1" Content="Stop"
-                                            Command="{Binding CancelStreamingCommand}"
-                                            IsVisible="{Binding IsStreaming}"
-                                            Classes="toolButton" Padding="7,4" FontSize="10.5" Margin="0,0,4,0" />
-                                        <Button Grid.Column="2" Content="+"
+                                        <Button Grid.Column="2"
                                             Command="{Binding NewChatCommand}"
-                                            Classes="toolButton" Padding="8,4" FontSize="12" Margin="0,0,4,0"
-                                            ToolTip.Tip="New chat" />
-                                        <Button Grid.Column="3" Content="🕘"
+                                            Classes="toolButton" Padding="9,5" Margin="0,0,5,0"
+                                            ToolTip.Tip="New chat">
+                                            <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="&#xE266;" FontSize="13" />
+                                        </Button>
+                                        <Button Grid.Column="3"
                                             Command="{Binding OpenHistoryCommand}"
-                                            Classes="toolButton" Padding="7,4" FontSize="11" Margin="0,0,4,0"
-                                            ToolTip.Tip="Chat history" />
-                                        <Button Grid.Column="4" Content="⌫"
+                                            Classes="toolButton" Padding="8,5" Margin="0,0,5,0"
+                                            ToolTip.Tip="Chat history">
+                                            <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="&#xE889;" FontSize="13" />
+                                        </Button>
+                                        <Button Grid.Column="4"
                                             Command="{Binding ClearTranscriptCommand}"
-                                            Classes="toolButton" Padding="7,4" FontSize="11" Margin="0,0,4,0"
-                                            ToolTip.Tip="Clear transcript" />
-                                        <Button Grid.Column="5" Content="⚙"
+                                            Classes="toolButton" Padding="8,5" Margin="0,0,5,0"
+                                            ToolTip.Tip="Clear transcript">
+                                            <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="&#xE92E;" FontSize="13" />
+                                        </Button>
+                                        <Button Grid.Column="5"
                                             Command="{Binding OpenSettingsCommand}"
-                                            Classes="toolButton" Padding="7,4" FontSize="12" Margin="0"
-                                            ToolTip.Tip="Settings" />
+                                            Classes="toolButton" Padding="8,5" Margin="0"
+                                            ToolTip.Tip="Settings">
+                                            <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="&#xE8B8;" FontSize="13" />
+                                        </Button>
                                     </Grid>
-
-                                    <!-- Settings drawer -->
-                                    <Border Grid.Row="1" IsVisible="{Binding IsSettingsPanelOpen}"
-                                        Background="#161616" BorderBrush="#333" BorderThickness="1"
-                                        CornerRadius="4" Padding="12" Margin="0,0,0,8">
-                                        <StackPanel Spacing="8">
-                                            <TextBlock Text="Inference endpoint" Foreground="#e0e0e0"
-                                                FontWeight="SemiBold" FontSize="12" />
-                                            <TextBlock Text="Base URL (OpenAI-compatible, e.g. https://api.openai.com/v1)"
-                                                Foreground="#aaaaaa" FontSize="11" />
-                                            <TextBox Text="{Binding BaseUrl}"
-                                                PlaceholderText="https://api.openai.com/v1" />
-                                            <TextBlock Text="Model" Foreground="#aaaaaa" FontSize="11" />
-                                            <ComboBox ItemsSource="{Binding ModelOptions}"
-                                                SelectedItem="{Binding SelectedModel}"
-                                                HorizontalAlignment="Stretch">
-                                                <ComboBox.ItemTemplate>
-                                                    <DataTemplate DataType="services:ChatModelInfo">
-                                                        <TextBlock Text="{Binding Label}" />
-                                                    </DataTemplate>
-                                                </ComboBox.ItemTemplate>
-                                            </ComboBox>
-                                            <TextBox Text="{Binding CustomModelId}"
-                                                IsVisible="{Binding IsCustomModelSelected}"
-                                                PlaceholderText="custom-model-id" />
-                                            <TextBlock Text="This model isn't in the known list — tool calling support isn't guaranteed."
-                                                Foreground="#f39c12" FontSize="11" TextWrapping="Wrap"
-                                                IsVisible="{Binding IsModelUnrecognized}" />
-                                            <TextBlock Text="API Key" Foreground="#aaaaaa" FontSize="11" />
-                                            <TextBox Text="{Binding ApiKey}" PasswordChar="•" />
-                                            <TextBlock Text="Temperature" Foreground="#aaaaaa" FontSize="11" />
-                                            <NumericUpDown Value="{Binding Temperature}"
-                                                Minimum="0" Maximum="2" Increment="0.1"
-                                                HorizontalAlignment="Left" Width="140" />
-                                            <TextBlock Text="Context window (tokens)"
-                                                Foreground="#aaaaaa" FontSize="11" />
-                                            <TextBlock Text="How much conversation history to send per request. Picking a known model above fills this in automatically."
-                                                Foreground="#777777" FontSize="10" TextWrapping="Wrap" />
-                                            <NumericUpDown Value="{Binding ContextWindowTokens}"
-                                                Minimum="1000" Maximum="2000000" Increment="1000"
-                                                FormatString="0"
-                                                HorizontalAlignment="Left" Width="160" />
-                                            <CheckBox Content="Auto-approve read-only tools"
-                                                IsChecked="{Binding AutoApproveReadOnlyTools}"
-                                                Foreground="#ccc" FontSize="12" />
-                                            <StackPanel Orientation="Horizontal" Spacing="8">
-                                                <Button Content="Save" Command="{Binding SaveSettingsCommand}"
-                                                    Classes="primaryButton" Padding="12,7" CornerRadius="4"
-                                                    FontSize="12" />
-                                                <Button Content="Close" Command="{Binding CloseSettingsCommand}"
-                                                    Classes="toolButton" Padding="12,7" FontSize="12" Margin="0" />
-                                            </StackPanel>
-                                        </StackPanel>
-                                    </Border>
-
-                                    <!-- History drawer -->
-                                    <Border Grid.Row="1" IsVisible="{Binding IsHistoryPanelOpen}"
-                                        Background="#161616" BorderBrush="#333" BorderThickness="1"
-                                        CornerRadius="4" Padding="12" Margin="0,0,0,8" MaxHeight="360">
-                                        <Grid RowDefinitions="Auto,*,Auto">
-                                            <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,8">
-                                                <TextBlock Grid.Column="0" Text="Chat history" Foreground="#e0e0e0"
-                                                    FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center" />
-                                                <Button Grid.Column="1" Content="+ New Chat"
-                                                    Command="{Binding NewChatCommand}"
-                                                    Classes="toolButton" Padding="8,4" FontSize="11" Margin="0" />
-                                            </Grid>
-                                            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
-                                                HorizontalScrollBarVisibility="Disabled">
-                                                <ItemsControl ItemsSource="{Binding HistorySessions}">
-                                                    <ItemsControl.ItemTemplate>
-                                                        <DataTemplate DataType="models:ChatSessionSummary">
-                                                            <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,4">
-                                                                <Button Grid.Column="0"
-                                                                    Command="{Binding $parent[ItemsControl].((vm:ChatTabViewModel)DataContext).LoadSessionCommand}"
-                                                                    CommandParameter="{Binding}"
-                                                                    HorizontalAlignment="Stretch"
-                                                                    HorizontalContentAlignment="Left"
-                                                                    Classes="toolButton" Padding="8,6" FontSize="12" Margin="0">
-                                                                    <StackPanel Spacing="1">
-                                                                        <TextBlock Text="{Binding Title}"
-                                                                            Foreground="#e0e0e0" FontSize="12"
-                                                                            TextTrimming="CharacterEllipsis" />
-                                                                        <TextBlock Text="{Binding UpdatedAt, StringFormat='{}{0:MMM d, HH:mm}'}"
-                                                                            Foreground="#777777" FontSize="10" />
-                                                                    </StackPanel>
-                                                                </Button>
-                                                                <Button Grid.Column="1" Content="🗑"
-                                                                    Command="{Binding $parent[ItemsControl].((vm:ChatTabViewModel)DataContext).DeleteSessionCommand}"
-                                                                    CommandParameter="{Binding}"
-                                                                    Classes="toolButton" Padding="8,6" FontSize="13"
-                                                                    Margin="4,0,0,0" VerticalAlignment="Stretch"
-                                                                    VerticalContentAlignment="Center"
-                                                                    HorizontalContentAlignment="Center"
-                                                                    ToolTip.Tip="Delete this session" />
-                                                            </Grid>
-                                                        </DataTemplate>
-                                                    </ItemsControl.ItemTemplate>
-                                                </ItemsControl>
-                                            </ScrollViewer>
-                                            <TextBlock Grid.Row="1" Text="No saved chats yet — send a message to start one."
-                                                Foreground="#666666" FontSize="12" TextWrapping="Wrap"
-                                                IsVisible="{Binding !HistorySessions.Count}" Margin="0,4,0,0" />
-                                            <Button Grid.Row="2" Content="Close" Command="{Binding CloseHistoryCommand}"
-                                                Classes="toolButton" Padding="12,7" FontSize="12" Margin="0,8,0,0" />
-                                        </Grid>
-                                    </Border>
 
                                     <!-- Transcript: styled after the Claude Code VS Code extension — a flat,
                                          linear log rather than chat bubbles. User turns get a subtle bordered
                                          box; everything else (assistant prose, tool calls, tool results) flows
                                          inline, separated by hairlines, with tool activity rendered the way
                                          Claude Code's own CLI narrates it: "● tool(args)" then "⎿ result". -->
-                                    <Grid Grid.Row="2">
+                                    <Grid Grid.Row="1">
                                         <ScrollViewer VerticalScrollBarVisibility="Auto"
                                             HorizontalScrollBarVisibility="Disabled"
                                             Loaded="ChatTranscript_Loaded" Unloaded="ChatTranscript_Unloaded">
@@ -2570,30 +2542,30 @@
                                              as "ready and here's what I can do" instead of a blank void. -->
                                         <StackPanel IsVisible="{Binding !HasMessages}"
                                             HorizontalAlignment="Center" VerticalAlignment="Center"
-                                            Spacing="6" MaxWidth="360">
-                                            <TextBlock Text="⎈" FontSize="30" Foreground="#5bc0de"
+                                            Spacing="7" MaxWidth="380">
+                                            <TextBlock Text="⎈" FontSize="32" Foreground="#5bc0de"
                                                 HorizontalAlignment="Center" Margin="0,0,0,6" />
-                                            <TextBlock Text="Hi, I'm Helm" FontWeight="SemiBold" FontSize="16"
+                                            <TextBlock Text="Hi, I'm Helm" FontWeight="SemiBold" FontSize="17.5"
                                                 Foreground="#e0e0e0" HorizontalAlignment="Center" />
                                             <TextBlock
                                                 Text="I can inspect and operate on your saved SSH &amp; SFTP connections — run commands, browse files, check DNS, and more."
-                                                Foreground="#8a8a8a" FontSize="12.5" TextWrapping="Wrap"
+                                                Foreground="#8a8a8a" FontSize="13.5" TextWrapping="Wrap"
                                                 TextAlignment="Center" HorizontalAlignment="Center" Margin="0,0,0,8" />
                                             <Button Classes="toolButton" HorizontalAlignment="Stretch"
                                                 HorizontalContentAlignment="Center" Margin="0,0,0,0"
-                                                Content="List my saved connections" FontSize="12.5"
+                                                Content="List my saved connections" FontSize="13.5"
                                                 Command="{Binding UseSuggestedPromptCommand}"
                                                 CommandParameter="List my saved connections." />
                                             <Button Classes="toolButton" HorizontalAlignment="Stretch"
                                                 HorizontalContentAlignment="Center" Margin="0,0,0,0"
-                                                Content="Check disk usage and memory on my server" FontSize="12.5"
+                                                Content="Check disk usage and memory on my server" FontSize="13.5"
                                                 Command="{Binding UseSuggestedPromptCommand}"
                                                 CommandParameter="Check disk usage and memory on my server." />
                                         </StackPanel>
                                     </Grid>
 
                                     <!-- Tool-call approval banner -->
-                                    <Border Grid.Row="3" IsVisible="{Binding HasPendingApproval}"
+                                    <Border Grid.Row="2" IsVisible="{Binding HasPendingApproval}"
                                         BorderBrush="#f39c12" BorderThickness="0,0,0,0" Margin="0,8,0,0">
                                         <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="10"
                                             Background="#1f1a14">
@@ -2605,22 +2577,24 @@
                                             <Button Grid.Column="2" Content="Approve"
                                                 Command="{Binding ApproveToolCallCommand}"
                                                 Classes="primaryButton" Padding="10,5" CornerRadius="4"
-                                                FontSize="11.5" Margin="0" VerticalAlignment="Center" />
+                                                FontSize="11.5" Margin="0,8" VerticalAlignment="Center"
+                                                HorizontalContentAlignment="Center" VerticalContentAlignment="Center" />
                                             <Button Grid.Column="3" Content="Deny"
                                                 Command="{Binding DenyToolCallCommand}"
                                                 Classes="neutralButton" Padding="10,5" CornerRadius="4"
-                                                FontSize="11.5" Margin="0,0,8,0" VerticalAlignment="Center" />
+                                                FontSize="11.5" Margin="0,8,10,8" VerticalAlignment="Center"
+                                                HorizontalContentAlignment="Center" VerticalContentAlignment="Center" />
                                         </Grid>
                                     </Border>
 
                                     <!-- Input row -->
-                                    <StackPanel Grid.Row="4" Margin="0,8,0,0" Spacing="0">
+                                    <StackPanel Grid.Row="3" Margin="0,8,0,0" Spacing="0">
                                         <!-- Server picker: an inline panel, not a Flyout/Popup — those anchor and
                                              size relative to their trigger, which fought being flush and
                                              full-width against the composer below it. As a plain sibling in this
                                              same StackPanel it matches the composer's width automatically and
                                              sits directly on top of it with zero gap, like one continuous block. -->
-                                        <Border IsVisible="{Binding IsServerPickerOpen}"
+                                        <Border Name="ServerPickerPanel" IsVisible="{Binding IsServerPickerOpen}"
                                             Background="#1e1e1e" BorderBrush="#3a3a3a" BorderThickness="1"
                                             CornerRadius="8" Padding="6" Margin="0,0,0,8">
                                             <Border.Styles>
@@ -2715,7 +2689,7 @@
                                                     <Setter Property="Background" Value="Transparent" />
                                                     <Setter Property="BorderThickness" Value="0" />
                                                     <Setter Property="Padding" Value="6,3" />
-                                                    <Setter Property="FontSize" Value="10.5" />
+                                                    <Setter Property="FontSize" Value="11.5" />
                                                     <Setter Property="CornerRadius" Value="5" />
                                                     <Setter Property="Margin" Value="0" />
                                                 </Style>
@@ -2773,7 +2747,7 @@
                                                         </StackPanel>
                                                     </Button>
                                                     <TextBlock Grid.Column="1" Text="{Binding SelectedModel.Label}"
-                                                        Foreground="#5a5a5a" FontSize="10.5"
+                                                        Foreground="#5a5a5a" FontSize="11.5"
                                                         VerticalAlignment="Center" Margin="6,0,0,0" />
                                                     <Button Grid.Column="3" Content="↑" Classes="chatSendBtn"
                                                         Command="{Binding SendMessageCommand}"
@@ -2786,6 +2760,145 @@
                                         </Border>
                                     </StackPanel>
                                 </Grid>
+
+                                <!-- Settings and History float above the transcript/composer
+                                     instead of being laid out in the Grid's row flow, which
+                                     used to push everything below them down the page whenever
+                                     either was opened. -->
+                                <Border IsVisible="{Binding IsSettingsPanelOpen}"
+                                    HorizontalAlignment="Right" VerticalAlignment="Top"
+                                    Width="380" MaxHeight="480" Margin="0,46,0,0"
+                                    Background="#161616" BorderBrush="#333" BorderThickness="1"
+                                    CornerRadius="12" Padding="12" ZIndex="10"
+                                    BoxShadow="0 8 24 0 #66000000">
+                                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                        <StackPanel Spacing="8">
+                                            <TextBlock Text="Inference endpoint" Foreground="#e0e0e0"
+                                                FontWeight="SemiBold" FontSize="12" />
+                                            <TextBlock Text="Base URL (OpenAI-compatible, e.g. https://api.openai.com/v1)"
+                                                Foreground="#aaaaaa" FontSize="11" />
+                                            <TextBox Text="{Binding BaseUrl}"
+                                                PlaceholderText="https://api.openai.com/v1" />
+                                            <TextBlock Text="Model" Foreground="#aaaaaa" FontSize="11" />
+                                            <ComboBox ItemsSource="{Binding ModelOptions}"
+                                                SelectedItem="{Binding SelectedModel}"
+                                                HorizontalAlignment="Stretch">
+                                                <ComboBox.ItemTemplate>
+                                                    <DataTemplate DataType="services:ChatModelInfo">
+                                                        <TextBlock Text="{Binding Label}" />
+                                                    </DataTemplate>
+                                                </ComboBox.ItemTemplate>
+                                            </ComboBox>
+                                            <TextBox Text="{Binding CustomModelId}"
+                                                IsVisible="{Binding IsCustomModelSelected}"
+                                                PlaceholderText="custom-model-id" />
+                                            <TextBlock Text="This model isn't in the known list — tool calling support isn't guaranteed."
+                                                Foreground="#f39c12" FontSize="11" TextWrapping="Wrap"
+                                                IsVisible="{Binding IsModelUnrecognized}" />
+                                            <TextBlock Text="API Key" Foreground="#aaaaaa" FontSize="11" />
+                                            <TextBox Text="{Binding ApiKey}" PasswordChar="•" />
+                                            <TextBlock Text="Temperature" Foreground="#aaaaaa" FontSize="11" />
+                                            <NumericUpDown Value="{Binding Temperature}"
+                                                Minimum="0" Maximum="2" Increment="0.1"
+                                                HorizontalAlignment="Left" Width="140" />
+                                            <TextBlock Text="Context window (tokens)"
+                                                Foreground="#aaaaaa" FontSize="11" />
+                                            <TextBlock Text="How much conversation history to send per request. Picking a known model above fills this in automatically."
+                                                Foreground="#777777" FontSize="10" TextWrapping="Wrap" />
+                                            <NumericUpDown Value="{Binding ContextWindowTokens}"
+                                                Minimum="1000" Maximum="2000000" Increment="1000"
+                                                FormatString="0"
+                                                HorizontalAlignment="Left" Width="160" />
+                                            <CheckBox Content="Auto-approve read-only tools"
+                                                IsChecked="{Binding AutoApproveReadOnlyTools}"
+                                                Foreground="#ccc" FontSize="12" />
+                                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                                <Button Content="Save" Command="{Binding SaveSettingsCommand}"
+                                                    Classes="primaryButton" Padding="12,7" CornerRadius="4"
+                                                    FontSize="12" />
+                                                <Button Content="Close" Command="{Binding CloseSettingsCommand}"
+                                                    Classes="toolButton" Padding="12,7" FontSize="12" Margin="0" />
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </ScrollViewer>
+                                </Border>
+
+                                <Border IsVisible="{Binding IsHistoryPanelOpen}"
+                                    Background="#161616" BorderBrush="#333" BorderThickness="1"
+                                    CornerRadius="12" Padding="12" MaxHeight="400"
+                                    Width="400" HorizontalAlignment="Right" VerticalAlignment="Top"
+                                    Margin="0,46,0,0" ZIndex="10" BoxShadow="0 8 24 0 #66000000">
+                                    <Grid RowDefinitions="Auto,Auto,*,Auto">
+                                        <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,8">
+                                            <TextBlock Grid.Column="0" Text="Chat history" Foreground="#e0e0e0"
+                                                FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center" />
+                                            <Button Grid.Column="1" Content="+ New Chat"
+                                                Command="{Binding NewChatCommand}"
+                                                Classes="toolButton" Padding="8,4" FontSize="11" Margin="0" />
+                                        </Grid>
+                                        <TextBox Grid.Row="1" Text="{Binding HistorySearchQuery}"
+                                            PlaceholderText="Search sessions…" Padding="8,6" FontSize="12"
+                                            Margin="0,0,0,8" />
+                                        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto"
+                                            HorizontalScrollBarVisibility="Disabled">
+                                            <ItemsControl ItemsSource="{Binding HistorySessions}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate DataType="models:ChatSessionSummary">
+                                                        <Grid ColumnDefinitions="*,Auto,Auto" Margin="0,0,0,4">
+                                                            <Panel Grid.Column="0">
+                                                                <Button IsVisible="{Binding !IsEditing}"
+                                                                    Command="{Binding $parent[ItemsControl].((vm:ChatTabViewModel)DataContext).LoadSessionCommand}"
+                                                                    CommandParameter="{Binding}"
+                                                                    HorizontalAlignment="Stretch"
+                                                                    HorizontalContentAlignment="Left"
+                                                                    Classes="toolButton" Padding="8,6" FontSize="12" Margin="0">
+                                                                    <Grid ColumnDefinitions="*,Auto">
+                                                                        <TextBlock Grid.Column="0" Text="{Binding Title}"
+                                                                            Foreground="#e0e0e0" FontSize="12"
+                                                                            TextTrimming="CharacterEllipsis" />
+                                                                        <TextBlock Grid.Column="1" Text="{Binding UpdatedAt, Converter={x:Static services:RelativeTimeConverter.Instance}}"
+                                                                            Foreground="#777777" FontSize="10.5"
+                                                                            VerticalAlignment="Center" Margin="8,0,0,0" />
+                                                                    </Grid>
+                                                                </Button>
+                                                                <TextBox IsVisible="{Binding IsEditing}"
+                                                                    Text="{Binding Title, Mode=TwoWay}"
+                                                                    FontSize="12" Padding="8,6"
+                                                                    Loaded="RenameTitleTextBox_Loaded"
+                                                                    KeyDown="RenameTitleTextBox_KeyDown"
+                                                                    LostFocus="RenameTitleTextBox_LostFocus" />
+                                                            </Panel>
+                                                            <Button Grid.Column="1" IsVisible="{Binding !IsEditing}"
+                                                                Command="{Binding $parent[ItemsControl].((vm:ChatTabViewModel)DataContext).RenameSessionCommand}"
+                                                                CommandParameter="{Binding}"
+                                                                Classes="toolButton" Padding="8,6" Margin="4,0,0,0"
+                                                                VerticalAlignment="Stretch"
+                                                                VerticalContentAlignment="Center"
+                                                                HorizontalContentAlignment="Center"
+                                                                ToolTip.Tip="Rename this session">
+                                                                <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="&#xE3C9;" FontSize="13" />
+                                                            </Button>
+                                                            <Button Grid.Column="2" Content="🗑" IsVisible="{Binding !IsEditing}"
+                                                                Command="{Binding $parent[ItemsControl].((vm:ChatTabViewModel)DataContext).DeleteSessionCommand}"
+                                                                CommandParameter="{Binding}"
+                                                                Classes="toolButton" Padding="8,6" FontSize="13"
+                                                                Margin="4,0,0,0" VerticalAlignment="Stretch"
+                                                                VerticalContentAlignment="Center"
+                                                                HorizontalContentAlignment="Center"
+                                                                ToolTip.Tip="Delete this session" />
+                                                        </Grid>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </ScrollViewer>
+                                        <TextBlock Grid.Row="2" Text="No saved chats yet — send a message to start one."
+                                            Foreground="#666666" FontSize="12" TextWrapping="Wrap"
+                                            IsVisible="{Binding !HistorySessions.Count}" Margin="0,4,0,0" />
+                                        <Button Grid.Row="3" Content="Close" Command="{Binding CloseHistoryCommand}"
+                                            Classes="toolButton" Padding="12,7" FontSize="12" Margin="0,8,0,0" />
+                                    </Grid>
+                                </Border>
+                                </Panel>
                             </DataTemplate>
                     </Grid.DataTemplates>
 
