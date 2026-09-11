@@ -499,6 +499,7 @@ public class MainViewModel : INotifyPropertyChanged
     public ICommand OpenFingerprintTabCommand { get; }
     public ICommand OpenDnsTabCommand { get; }
     public ICommand OpenServerStatsTabCommand { get; }
+    public ICommand OpenCertbotTabCommand { get; }
     public ICommand OpenChatTabCommand { get; }
 
     private readonly ChatSettingsService _chatSettingsService = new();
@@ -609,6 +610,7 @@ public class MainViewModel : INotifyPropertyChanged
         OpenFingerprintTabCommand = new RelayCommand(OpenFingerprintTab);
         OpenDnsTabCommand = new RelayCommand(OpenDnsTab);
         OpenServerStatsTabCommand = new RelayCommand(OpenServerStatsTab);
+        OpenCertbotTabCommand = new RelayCommand(OpenCertbotTab);
         OpenChatTabCommand = new RelayCommand(OpenChatTab);
         ShowAboutDialogCommand = new RelayCommand(() => IsAboutDialogVisible = true);
         ShowUserManualDialogCommand = new RelayCommand(() => IsUserManualDialogVisible = true);
@@ -1433,6 +1435,17 @@ public class MainViewModel : INotifyPropertyChanged
         }, SavedConnections);
         Tabs.Add(statsTab);
         SelectedTab = statsTab;
+    }
+
+    private void OpenCertbotTab()
+    {
+        var certbotTab = new CertbotTabViewModel(tab =>
+        {
+            Tabs.Remove(tab);
+            SaveCurrentSessions();
+        }, SavedConnections);
+        Tabs.Add(certbotTab);
+        SelectedTab = certbotTab;
     }
 
     private void OpenChatTab()

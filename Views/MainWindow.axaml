@@ -570,6 +570,21 @@
                                             </StackPanel>
                                         </Grid>
                                     </Button>
+                                    <Button Classes="toolListItem"
+                                        Command="{Binding OpenCertbotTabCommand}"
+                                        ToolTip.Tip="Issue and renew TLS certificates via certbot over SSH">
+                                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                                            <Border Width="30" Height="30" CornerRadius="7" Background="#1c2733" VerticalAlignment="Center">
+                                                <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="&#xE8E8;" FontSize="15"
+                                                    Foreground="#6ea9d4" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                            </Border>
+                                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
+                                                <TextBlock Text="Certbot" FontSize="12.5" FontWeight="SemiBold" />
+                                                <TextBlock Text="Issue and renew TLS certs via certbot over SSH" FontSize="10.5"
+                                                    Foreground="#8a8f98" TextTrimming="CharacterEllipsis" />
+                                            </StackPanel>
+                                        </Grid>
+                                    </Button>
                                     </StackPanel>
                                 </StackPanel>
                             </ScrollViewer>
@@ -2219,6 +2234,185 @@
                                                     </ListBox>
                                                 </StackPanel>
                                             </Border>
+                                        </StackPanel>
+                                    </Border>
+                                </ScrollViewer>
+                            </DataTemplate>
+
+                            <DataTemplate DataType="vm:CertbotTabViewModel">
+                                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                    <Border Background="#1e1e1e" Padding="28">
+                                        <StackPanel Spacing="16" MaxWidth="900">
+                                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="14">
+                                                <Border Width="42" Height="42" CornerRadius="9" Background="#1c2733" VerticalAlignment="Center">
+                                                    <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="&#xE8E8;" FontSize="21"
+                                                        Foreground="#6ea9d4" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                </Border>
+                                                <StackPanel Grid.Column="1" Spacing="4" VerticalAlignment="Center">
+                                                    <TextBlock Text="Certbot" FontSize="{StaticResource TermoxPageTitleFontSize}"
+                                                        FontWeight="SemiBold" Foreground="{StaticResource TermoxPageTitleBrush}" />
+                                                    <TextBlock Text="Issue, renew, and revoke TLS certificates via certbot on a saved SSH host."
+                                                        Foreground="{StaticResource TermoxPageSubtitleBrush}" FontSize="13" />
+                                                </StackPanel>
+                                            </Grid>
+
+                                            <!-- Target host -->
+                                            <Border Background="#252526" BorderBrush="#3a3a3a"
+                                                BorderThickness="1" CornerRadius="7" Padding="16">
+                                                <StackPanel Spacing="12">
+                                                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                                                        <TextBlock Text="Host:" Foreground="#aaa"
+                                                            VerticalAlignment="Center" FontSize="12"
+                                                            FontWeight="SemiBold" />
+                                                        <ComboBox Grid.Column="1"
+                                                            ItemsSource="{Binding HostProfiles}"
+                                                            SelectedItem="{Binding SelectedProfile}"
+                                                            Background="#1e1e1e" Foreground="#e0e0e0"
+                                                            BorderBrush="#555" Padding="10"
+                                                            HorizontalContentAlignment="Stretch">
+                                                            <ComboBox.ItemTemplate>
+                                                                <DataTemplate>
+                                                                    <StackPanel Spacing="2" Margin="2,3">
+                                                                        <TextBlock Text="{Binding Name}"
+                                                                            Foreground="#e5e5e5" FontSize="13" />
+                                                                        <TextBlock Text="{Binding Host}"
+                                                                            Foreground="#888" FontSize="11" />
+                                                                    </StackPanel>
+                                                                </DataTemplate>
+                                                            </ComboBox.ItemTemplate>
+                                                        </ComboBox>
+                                                    </Grid>
+                                                    <StackPanel Orientation="Horizontal" Spacing="10">
+                                                        <Button Content="Check Status"
+                                                            Command="{Binding CheckStatusCommand}"
+                                                            Classes="primaryButton"
+                                                            Padding="14,8" CornerRadius="4" FontSize="12"
+                                                            IsEnabled="{Binding !IsBusy}" />
+                                                        <Button Content="List Certificates"
+                                                            Command="{Binding ListCertificatesCommand}"
+                                                            Classes="primaryButton"
+                                                            Padding="14,8" CornerRadius="4" FontSize="12"
+                                                            IsEnabled="{Binding !IsBusy}" />
+                                                        <Button Content="Install Certbot"
+                                                            Command="{Binding InstallCommand}"
+                                                            Classes="warningButton"
+                                                            Padding="14,8" CornerRadius="4" FontSize="12"
+                                                            ToolTip.Tip="Detects the host's package manager (apt/dnf/yum/apk/pacman) and installs certbot"
+                                                            IsEnabled="{Binding !IsBusy}" />
+                                                    </StackPanel>
+                                                    <TextBlock Text="{Binding Status}" Foreground="{Binding StatusColor}"
+                                                        FontSize="12" TextTrimming="CharacterEllipsis"
+                                                        ToolTip.Tip="{Binding Status}" />
+                                                </StackPanel>
+                                            </Border>
+
+                                            <!-- Certificate request -->
+                                            <Border Background="#252526" BorderBrush="#3a3a3a"
+                                                BorderThickness="1" CornerRadius="7" Padding="16">
+                                                <StackPanel Spacing="12">
+                                                    <TextBlock Text="Certificate request" Foreground="#e5e5e5"
+                                                        FontSize="15" FontWeight="SemiBold" />
+                                                    <Grid RowDefinitions="Auto,Auto,Auto,Auto" ColumnDefinitions="Auto,*"
+                                                        RowSpacing="12" ColumnSpacing="12">
+                                                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Domains:"
+                                                            Foreground="#aaa" VerticalAlignment="Center"
+                                                            FontSize="12" FontWeight="SemiBold" />
+                                                        <TextBox Grid.Row="0" Grid.Column="1"
+                                                            Text="{Binding DomainsText}"
+                                                            PlaceholderText="example.com, www.example.com"
+                                                            Padding="10" />
+                                                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Email:"
+                                                            Foreground="#aaa" VerticalAlignment="Center"
+                                                            FontSize="12" FontWeight="SemiBold" />
+                                                        <TextBox Grid.Row="1" Grid.Column="1"
+                                                            Text="{Binding Email}"
+                                                            PlaceholderText="admin@example.com"
+                                                            Padding="10" />
+                                                        <TextBlock Grid.Row="2" Grid.Column="0" Text="Plugin:"
+                                                            Foreground="#aaa" VerticalAlignment="Center"
+                                                            FontSize="12" FontWeight="SemiBold" />
+                                                        <StackPanel Grid.Row="2" Grid.Column="1" Spacing="10">
+                                                            <ComboBox ItemsSource="{Binding Plugins}"
+                                                                SelectedItem="{Binding SelectedPlugin}"
+                                                                Background="#1e1e1e" Foreground="#e0e0e0"
+                                                                BorderBrush="#555" HorizontalAlignment="Left" MinWidth="180" />
+                                                            <TextBox Text="{Binding WebrootPath}"
+                                                                PlaceholderText="/var/www/html"
+                                                                Padding="10"
+                                                                IsVisible="{Binding IsWebrootPluginSelected}" />
+                                                        </StackPanel>
+                                                        <StackPanel Grid.Row="3" Grid.Column="1" Spacing="6">
+                                                            <CheckBox Content="Dry run (recommended — doesn't touch Let's Encrypt's rate limits)"
+                                                                IsChecked="{Binding DryRun}" Foreground="#ccc" FontSize="12" />
+                                                            <TextBlock
+                                                                Text="Dry run is off — this will make a real request against Let's Encrypt's production server (rate-limited to 5 certs/domain/week)."
+                                                                Foreground="#f39c12" FontSize="11" TextWrapping="Wrap"
+                                                                IsVisible="{Binding !DryRun}" />
+                                                        </StackPanel>
+                                                    </Grid>
+                                                    <StackPanel Orientation="Horizontal" Spacing="10">
+                                                        <Button Content="Obtain / Renew Certificate"
+                                                            Command="{Binding ObtainCertificateCommand}"
+                                                            Classes="successButton"
+                                                            Padding="14,8" CornerRadius="4" FontSize="12"
+                                                            IsEnabled="{Binding !IsBusy}" />
+                                                        <Button Content="Renew All"
+                                                            Command="{Binding RenewAllCommand}"
+                                                            Classes="primaryButton"
+                                                            Padding="14,8" CornerRadius="4" FontSize="12"
+                                                            IsEnabled="{Binding !IsBusy}" />
+                                                    </StackPanel>
+                                                </StackPanel>
+                                            </Border>
+
+                                            <!-- Revoke -->
+                                            <Border Background="#252526" BorderBrush="#3a3a3a"
+                                                BorderThickness="1" CornerRadius="7" Padding="16">
+                                                <StackPanel Spacing="12">
+                                                    <TextBlock Text="Revoke certificate" Foreground="#e5e5e5"
+                                                        FontSize="15" FontWeight="SemiBold" />
+                                                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                                                        <TextBox Text="{Binding CertNameToRevoke}"
+                                                            PlaceholderText="Certificate name (e.g. example.com)"
+                                                            Padding="10" />
+                                                        <Button Grid.Column="1" Content="Revoke"
+                                                            Command="{Binding RevokeCommand}"
+                                                            Classes="dangerButton"
+                                                            Padding="14,8" CornerRadius="4" FontSize="12"
+                                                            IsEnabled="{Binding !IsBusy}" />
+                                                    </Grid>
+                                                </StackPanel>
+                                            </Border>
+
+                                            <!-- Output -->
+                                            <StackPanel Spacing="10">
+                                                <TextBlock Text="Output" FontSize="14"
+                                                    FontWeight="SemiBold" Foreground="#e0e0e0" />
+                                                <Border Background="#252526" BorderBrush="#333"
+                                                    BorderThickness="1" CornerRadius="4" Padding="12">
+                                                    <Grid RowDefinitions="*,Auto">
+                                                        <TextBox Grid.Row="0"
+                                                            Text="{Binding Output}"
+                                                            Background="#1e1e1e" Foreground="#4caf50"
+                                                            BorderBrush="#333" Padding="10"
+                                                            MinHeight="200" TextWrapping="Wrap"
+                                                            AcceptsReturn="True" IsReadOnly="True"
+                                                            FontFamily="{StaticResource TermoxMonoFontFamily}"
+                                                            FontSize="11" />
+                                                        <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8"
+                                                            HorizontalAlignment="Right" Margin="0,8,0,0">
+                                                            <Button Content="Copy"
+                                                                Command="{Binding CopyOutputCommand}"
+                                                                Classes="infoButton"
+                                                                Padding="12,6" CornerRadius="4" FontSize="11" />
+                                                            <Button Content="Clear"
+                                                                Command="{Binding ClearOutputCommand}"
+                                                                Classes="neutralButton"
+                                                                Padding="12,6" CornerRadius="4" FontSize="11" />
+                                                        </StackPanel>
+                                                    </Grid>
+                                                </Border>
+                                            </StackPanel>
                                         </StackPanel>
                                     </Border>
                                 </ScrollViewer>

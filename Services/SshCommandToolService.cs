@@ -66,24 +66,76 @@ public class SshCommandToolService
         // only elevates the first segment, leaving the rest of a "cmd1 && cmd2" pipeline
         // running unprivileged.
         var escapedCommand = command.Replace("'", "'\\''");
-        using var sshCommand = client.CreateCommand($"sudo -S -p '' sh -c '{escapedCommand}'");
-        sshCommand.CommandTimeout = CommandTimeout;
-
-        var stdin = sshCommand.CreateInputStream();
-        var asyncResult = sshCommand.BeginExecute();
-        await using (var writer = new StreamWriter(stdin, leaveOpen: true))
+        var sshCommand = client.CreateCommand($"sudo -S -p '' sh -c '{escapedCommand}'");
+        try
         {
-            await writer.WriteLineAsync(profile.Password).ConfigureAwait(false);
-            await writer.FlushAsync(cancellationToken).ConfigureAwait(false);
+            sshCommand.CommandTimeout = CommandTimeout;
+
+            // CreateInputStream() requires the channel to already be open — it throws
+            // "The input stream can be used only during execution" otherwise — and the
+            // channel only opens once BeginExecute() actually starts running (it calls
+            // _channel.Open() internally). So BeginExecute() must come first; calling
+            // CreateInputStream() before it (the previous order here) failed every time,
+            // unconditionally, not as an occasional race.
+            var asyncResult = sshCommand.BeginExecute();
+            var stdin = sshCommand.CreateInputStream();
+            try
+            {
+                await using var writer = new StreamWriter(stdin, leaveOpen: true);
+                await writer.WriteLineAsync(profile.Password).ConfigureAwait(false);
+                await writer.FlushAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception) when (!cancellationToken.IsCancellationRequested)
+            {
+                // sudo can exit before our password ever reaches its stdin — e.g. no sudo
+                // binary on the box, "Defaults requiretty" in sudoers, or the account isn't
+                // in sudoers at all (common on minimal Docker sshd images). When that happens
+                // the channel is already closed and this write throws a confusing SSH.NET
+                // stream-state exception ("input stream can be used only during execution")
+                // that has nothing to do with the real cause. Swallow it here so EndExecute
+                // below still runs and the actual stderr from sudo reaches the user.
+            }
+
+            string? result;
+            string error;
+            try
+            {
+                await Task.Run(() => sshCommand.EndExecute(asyncResult), cancellationToken).ConfigureAwait(false);
+                result = sshCommand.Result;
+                error = sshCommand.Error ?? "";
+            }
+            catch (Exception) when (!cancellationToken.IsCancellationRequested)
+            {
+                // SSH.NET's APM pattern re-throws from EndExecute whatever exception the
+                // channel captured internally — including the same stream-state exception
+                // above, since the channel closing early (sudo exiting before reading stdin)
+                // affects both the write and the completion wait. Whatever stdout/stderr the
+                // remote side sent before closing is still captured on the command object;
+                // surface that instead of this internal exception, with a clear fallback if
+                // the server genuinely sent nothing back.
+                result = sshCommand.Result;
+                error = sshCommand.Error ?? "";
+                if (string.IsNullOrWhiteSpace(result) && string.IsNullOrWhiteSpace(error))
+                {
+                    error = "sudo exited before completing, with no output. The account may not have " +
+                        "sudo access, sudo may not be installed on this host, or the server's sudo " +
+                        "configuration may require a real TTY ('Defaults requiretty' in /etc/sudoers).";
+                }
+            }
+
+            // sudo -S echoes nothing to stdout on success, but on a wrong/missing password it
+            // writes "Sorry, try again." / "incorrect password attempts" to stderr — surface
+            // that plainly instead of a confusing empty result.
+            return FormatOutput(result, error);
         }
-
-        await Task.Run(() => sshCommand.EndExecute(asyncResult), cancellationToken).ConfigureAwait(false);
-
-        var error = sshCommand.Error ?? "";
-        // sudo -S echoes nothing to stdout on success, but on a wrong/missing password it
-        // writes "Sorry, try again." / "incorrect password attempts" to stderr — surface
-        // that plainly instead of a confusing empty result.
-        return FormatOutput(sshCommand.Result, error);
+        finally
+        {
+            // Disposing SshCommand also disposes its input stream — which can throw the
+            // same "only during execution" exception as above if the channel already
+            // closed early. Catch it here too rather than let cleanup mask a result we've
+            // already successfully captured and returned above.
+            try { sshCommand.Dispose(); } catch { }
+        }
     }
 
     private static string FormatOutput(string? output, string? error)
