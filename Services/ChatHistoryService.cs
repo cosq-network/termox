@@ -24,6 +24,7 @@ public class ChatHistoryService
     private const string ContentEncryptionKeyId = "chat:history";
 
     private readonly string _connectionString;
+    private readonly ChatContentCipher _cipher;
 
     public ChatHistoryService()
         : this(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Termox", "termox.db"))
@@ -38,6 +39,7 @@ public class ChatHistoryService
 
         _connectionString = new SqliteConnectionStringBuilder { DataSource = dbPath, Pooling = false }.ToString();
         EnsureSchema();
+        _cipher = ResolveContentCipher();
     }
 
     private void EnsureSchema()
@@ -64,7 +66,53 @@ public class ChatHistoryService
                 FOREIGN KEY (session_id) REFERENCES chat_sessions (id)
             );
             CREATE INDEX IF NOT EXISTS idx_chat_messages_session ON chat_messages (session_id, sequence);
+            CREATE TABLE IF NOT EXISTS chat_meta (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            );
             """;
+        command.ExecuteNonQuery();
+    }
+
+    /// <summary>
+    /// Resolves the AES-GCM key used to encrypt every message's content, touching
+    /// CredentialManager/the OS keychain exactly once per service lifetime (not once per
+    /// message — see ChatContentCipher's doc comment for why that distinction matters).
+    /// The key itself never touches disk in the clear: only CredentialManager's own
+    /// encrypted/keychain-pointer reference to it is stored, in chat_meta.
+    /// </summary>
+    private ChatContentCipher ResolveContentCipher()
+    {
+        var storedRef = ReadMeta("content_key_ref");
+        if (!string.IsNullOrEmpty(storedRef))
+        {
+            var rawKeyBase64 = CredentialManager.DecryptCredential(storedRef, ContentEncryptionKeyId);
+            if (!string.IsNullOrEmpty(rawKeyBase64))
+                return new ChatContentCipher(Convert.FromBase64String(rawKeyBase64));
+        }
+
+        var newKey = ChatContentCipher.GenerateKey();
+        var newRef = CredentialManager.EncryptCredential(Convert.ToBase64String(newKey), ContentEncryptionKeyId);
+        WriteMeta("content_key_ref", newRef);
+        return new ChatContentCipher(newKey);
+    }
+
+    private string? ReadMeta(string key)
+    {
+        using var connection = Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT value FROM chat_meta WHERE key = $key";
+        command.Parameters.AddWithValue("$key", key);
+        return command.ExecuteScalar() as string;
+    }
+
+    private void WriteMeta(string key, string value)
+    {
+        using var connection = Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "INSERT OR REPLACE INTO chat_meta (key, value) VALUES ($key, $value)";
+        command.Parameters.AddWithValue("$key", key);
+        command.Parameters.AddWithValue("$value", value);
         command.ExecuteNonQuery();
     }
 
@@ -212,19 +260,23 @@ public class ChatHistoryService
     private static DateTime ParseDate(string value) =>
         DateTime.Parse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind);
 
-    private static string EncryptField(string value) =>
-        string.IsNullOrEmpty(value) ? value : CredentialManager.EncryptCredential(value, ContentEncryptionKeyId);
+    private string EncryptField(string value) =>
+        string.IsNullOrEmpty(value) ? value : _cipher.Encrypt(value);
 
     /// <summary>
-    /// Decrypts a field written by EncryptField. Unlike CredentialManager's normal
-    /// "refuse legacy plaintext" behavior for credentials (correct there, since a
-    /// credential should never have been plaintext), a row written before this field
-    /// was encrypted is legitimate history, not a security smell — so an unprefixed
-    /// value is returned as-is instead of being discarded.
+    /// Decrypts a field written by EncryptField, with two fallbacks for rows written
+    /// before this per-row AES-GCM scheme existed: the old per-message CredentialManager
+    /// scheme (correct for pre-existing Windows rows via DPAPI; pre-existing macOS/Linux
+    /// rows already lost their real content to the keychain-slot-reuse bug this replaced,
+    /// and can't be un-corrupted — this doesn't resurrect that, only stops new corruption),
+    /// and — like CredentialManager's own "refuse legacy plaintext" behavior doesn't apply
+    /// here, since a row written before *any* encryption existed is legitimate history, not
+    /// a security smell — bare unprefixed values are returned as-is.
     /// </summary>
-    private static string DecryptField(string value)
+    private string DecryptField(string value)
     {
         if (string.IsNullOrEmpty(value)) return value;
+        if (value.StartsWith("GCM:", StringComparison.Ordinal)) return _cipher.Decrypt(value);
         return CredentialManager.IsEncrypted(value)
             ? CredentialManager.DecryptCredential(value, ContentEncryptionKeyId)
             : value;
