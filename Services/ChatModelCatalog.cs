@@ -47,4 +47,13 @@ public static class ChatModelCatalog
     }
 
     public static bool IsKnownModel(string? modelId) => Find(modelId) != null;
+
+    /// <summary>Base URL to auto-fill when a user picks a known model, so they only need to add an API key.</summary>
+    public static string? GetDefaultBaseUrl(string provider) => provider switch
+    {
+        "OpenAI" => "https://api.openai.com/v1",
+        "OpenRouter" => "https://openrouter.ai/api/v1",
+        "Ollama" => "http://localhost:11434/v1",
+        _ => null
+    };
 }

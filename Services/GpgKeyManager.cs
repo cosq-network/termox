@@ -181,8 +181,13 @@ public class GpgKeyManager
     /// </summary>
     private static async Task WaitForExitWithTimeoutAsync(Process process, int timeoutSeconds = 30)
     {
-        var exited = await Task.WhenAny(process.WaitForExitAsync(), Task.Delay(TimeSpan.FromSeconds(timeoutSeconds)));
-        if (exited != process.WaitForExitAsync())
+        // Must reuse the same WaitForExitAsync() Task in both the race and the comparison —
+        // calling it a second time returns a different Task instance, so comparing against a
+        // fresh call is a reference-equality check that can spuriously report "timed out"
+        // even when the process already exited (every gpg operation routes through this).
+        var waitForExitTask = process.WaitForExitAsync();
+        var exited = await Task.WhenAny(waitForExitTask, Task.Delay(TimeSpan.FromSeconds(timeoutSeconds)));
+        if (exited != waitForExitTask)
         {
             try { process.Kill(entireProcessTree: true); } catch { }
             throw new TimeoutException($"gpg timed out after {timeoutSeconds} seconds.");

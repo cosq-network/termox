@@ -126,6 +126,9 @@ public class ChatTabViewModel : INotifyPropertyChanged, ITabViewModel
             {
                 _settings.Model = value.Id;
                 ContextWindowTokens = value.ContextWindowTokens;
+                var defaultBaseUrl = ChatModelCatalog.GetDefaultBaseUrl(value.Provider);
+                if (!string.IsNullOrEmpty(defaultBaseUrl))
+                    BaseUrl = defaultBaseUrl;
             }
             OnPropertyChanged(nameof(IsModelUnrecognized));
         }

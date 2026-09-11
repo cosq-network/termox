@@ -67,6 +67,58 @@
     <Application.Styles>
         <FluentTheme />
 
+        <!-- FluentTheme's default ScrollBar renders as a wide classic bar with visible
+             up/down arrow buttons. Setting Width/Height on it directly didn't change the
+             rendered size at all (its template evidently doesn't size off those), so — same
+             fix as the sidebar ListBoxItem CornerRadius earlier — this owns the whole
+             template instead of fighting FluentTheme's opaque one. Track is a real Avalonia
+             primitive (Minimum/Maximum/Value/ViewportSize/Orientation, thumb drag handled
+             internally); the only thing supplied here is a thin, flat Thumb visual and no
+             step buttons. -->
+        <Style Selector="ScrollBar">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ScrollBar">
+                        <Border Background="{TemplateBinding Background}">
+                            <Track Name="PART_Track"
+                                Minimum="{TemplateBinding Minimum}"
+                                Maximum="{TemplateBinding Maximum}"
+                                Value="{TemplateBinding Value, Mode=TwoWay}"
+                                ViewportSize="{TemplateBinding ViewportSize}"
+                                Orientation="{TemplateBinding Orientation}">
+                                <Track.Thumb>
+                                    <Thumb Classes="scrollThumb" />
+                                </Track.Thumb>
+                            </Track>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style Selector="ScrollBar:vertical">
+            <Setter Property="Width" Value="10" />
+            <Setter Property="AllowAutoHide" Value="True" />
+        </Style>
+        <Style Selector="ScrollBar:horizontal">
+            <Setter Property="Height" Value="10" />
+            <Setter Property="AllowAutoHide" Value="True" />
+        </Style>
+        <!-- Thumb's own default template also owns its visuals directly, same reasoning. -->
+        <Style Selector="Thumb.scrollThumb">
+            <Setter Property="Background" Value="#5a5a5a" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Thumb">
+                        <Border Background="{TemplateBinding Background}" CornerRadius="5" Margin="2" />
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style Selector="Thumb.scrollThumb:pointerover">
+            <Setter Property="Background" Value="#7a7a7a" />
+        </Style>
+
         <Style Selector="Button.toolButton">
             <Setter Property="Background" Value="#333337" />
             <Setter Property="Foreground" Value="#e5e7eb" />

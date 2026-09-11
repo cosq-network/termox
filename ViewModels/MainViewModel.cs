@@ -1014,8 +1014,25 @@ public class MainViewModel : INotifyPropertyChanged
         set { _isChatSectionActive = value; OnPropertyChanged(); }
     }
 
+    private bool _isSidebarPanelVisible = true;
+    public bool IsSidebarPanelVisible
+    {
+        get => _isSidebarPanelVisible;
+        set { _isSidebarPanelVisible = value; OnPropertyChanged(); }
+    }
+
+    private string? _activeSidebarSection = "Sessions";
+
     private void SelectSidebarSection(string? section)
     {
+        if (section == _activeSidebarSection)
+        {
+            IsSidebarPanelVisible = !IsSidebarPanelVisible;
+            return;
+        }
+
+        _activeSidebarSection = section;
+        IsSidebarPanelVisible = true;
         IsSessionsSectionActive = section == "Sessions";
         IsBookmarksSectionActive = section == "Bookmarks";
         IsToolsSectionActive = section == "Tools";

@@ -184,8 +184,14 @@ public class DnsRecordInspector
 
         var outputTask = process.StandardOutput.ReadToEndAsync();
         var errorTask = process.StandardError.ReadToEndAsync();
-        var exited = await Task.WhenAny(process.WaitForExitAsync(), Task.Delay(TimeSpan.FromSeconds(15)));
-        if (exited != process.WaitForExitAsync())
+        // Must reuse the same WaitForExitAsync() Task in both the race and the comparison —
+        // calling it a second time returns a different Task instance, so comparing against a
+        // fresh call is a reference-equality check that can spuriously read "timed out" even
+        // when the process exited immediately (this is what was actually breaking DNS
+        // queries, not the output parsing).
+        var waitForExitTask = process.WaitForExitAsync();
+        var exited = await Task.WhenAny(waitForExitTask, Task.Delay(TimeSpan.FromSeconds(15)));
+        if (exited != waitForExitTask)
         {
             try { process.Kill(entireProcessTree: true); } catch { }
             throw new TimeoutException("dig timed out after 15 seconds.");
@@ -222,8 +228,9 @@ public class DnsRecordInspector
 
         var outputTask = process.StandardOutput.ReadToEndAsync();
         var errorTask = process.StandardError.ReadToEndAsync();
-        var exited = await Task.WhenAny(process.WaitForExitAsync(), Task.Delay(TimeSpan.FromSeconds(15)));
-        if (exited != process.WaitForExitAsync())
+        var waitForExitTask = process.WaitForExitAsync();
+        var exited = await Task.WhenAny(waitForExitTask, Task.Delay(TimeSpan.FromSeconds(15)));
+        if (exited != waitForExitTask)
         {
             try { process.Kill(entireProcessTree: true); } catch { }
             throw new TimeoutException("nslookup timed out after 15 seconds.");
@@ -308,72 +315,91 @@ public class DnsRecordInspector
     }
 
     /// <summary>
-    /// Parse nslookup command output.
+    /// Parse nslookup command output. Windows nslookup always prints a resolver header
+    /// ("Server:"/"Address:" for the *local resolver*, not the record being queried)
+    /// followed by a blank line before the real answer — the header's own "Address:" line
+    /// uses the identical label as a genuine A-record answer, so the two can only be told
+    /// apart by that positional boundary, not by matching text (the previous implementation
+    /// matched text and discarded every answer line as a result). Most other record types
+    /// (MX/TXT/NS) don't even print a "Name:" line at all, so they need their own handling
+    /// rather than a single generic "key = value" scan.
     /// </summary>
-    private List<DnsRecord> ParseNslookupOutput(string output, string recordType)
+    internal List<DnsRecord> ParseNslookupOutput(string output, string recordType)
     {
         var records = new List<DnsRecord>();
-
         if (string.IsNullOrWhiteSpace(output))
             return records;
 
-        var lines = output.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
-        var inAnswerSection = false;
+        var allLines = output.Replace("\r\n", "\n").Split('\n');
+        var i = 0;
+        while (i < allLines.Length && allLines[i].Trim().Length > 0) i++; // resolver header
+        while (i < allLines.Length && allLines[i].Trim().Length == 0) i++; // blank separator
+        var answerLines = allLines.Skip(i).Select(l => l.Trim()).Where(l => l.Length > 0).ToList();
 
-        foreach (var line in lines)
+        if (recordType == "TXT")
         {
-            var trimmed = line.Trim();
-
-            // Skip header lines
-            if (trimmed.Contains("Non-authoritative") || trimmed.Contains("Server:") ||
-                trimmed.Contains("Address:") || string.IsNullOrEmpty(trimmed))
-                continue;
-
-            // Detect answer section
-            if (trimmed.StartsWith("Name:") || trimmed.StartsWith(recordType))
-                inAnswerSection = true;
-
-            if (inAnswerSection && !trimmed.StartsWith("Name:"))
+            // Each entry is "<domain>  text =" on one line, then the quoted value on the next.
+            foreach (var line in answerLines)
             {
-                var record = ParseNslookupLine(trimmed, recordType);
-                if (record != null)
-                    records.Add(record);
+                var quoteStart = line.IndexOf('"');
+                var quoteEnd = line.LastIndexOf('"');
+                if (quoteStart < 0 || quoteEnd <= quoteStart) continue;
+                records.Add(new DnsRecord { RecordType = recordType, Value = line[(quoteStart + 1)..quoteEnd] });
             }
+            return records;
+        }
+
+        if (recordType == "MX")
+        {
+            // "google.com    MX preference = 10, mail exchanger = smtp.google.com"
+            foreach (var line in answerLines)
+            {
+                var prefIdx = line.IndexOf("preference =", StringComparison.OrdinalIgnoreCase);
+                var exchIdx = line.IndexOf("mail exchanger =", StringComparison.OrdinalIgnoreCase);
+                if (prefIdx < 0 || exchIdx < 0 || exchIdx <= prefIdx) continue;
+                var priority = line[(prefIdx + "preference =".Length)..exchIdx].Trim().TrimEnd(',').Trim();
+                var exchanger = line[(exchIdx + "mail exchanger =".Length)..].Trim();
+                records.Add(new DnsRecord { RecordType = recordType, Priority = priority, Value = exchanger });
+            }
+            return records;
+        }
+
+        foreach (var line in answerLines)
+        {
+            if (line.StartsWith("Name:", StringComparison.OrdinalIgnoreCase))
+                continue; // label only — the value is the following "Address(es):" line
+
+            if (line.StartsWith("Address", StringComparison.OrdinalIgnoreCase))
+            {
+                // Matches both "Address:" (single result) and "Addresses:" (multiple, one
+                // per line after the colon on Windows nslookup).
+                var colonIndex = line.IndexOf(':');
+                if (colonIndex < 0) continue;
+                var value = line[(colonIndex + 1)..].Trim();
+                if (value.Length > 0)
+                    records.Add(new DnsRecord { RecordType = recordType, Value = value });
+                continue;
+            }
+
+            if (line.StartsWith("*"))
+                continue; // "** server can't find <domain>: NXDOMAIN" style error lines
+
+            var eqIndex = line.LastIndexOf('=');
+            if (eqIndex >= 0)
+            {
+                var eqValue = line[(eqIndex + 1)..].Trim();
+                if (eqValue.Length > 0)
+                    records.Add(new DnsRecord { RecordType = recordType, Value = eqValue });
+                continue;
+            }
+
+            // Bare continuation line — Windows nslookup prints only the first value after
+            // "Addresses:", then any further values indented on their own line with no
+            // label of their own.
+            records.Add(new DnsRecord { RecordType = recordType, Value = line });
         }
 
         return records;
-    }
-
-    /// <summary>
-    /// Parse a single nslookup output line.
-    /// </summary>
-    private DnsRecord? ParseNslookupLine(string line, string recordType)
-    {
-        if (!line.Contains("="))
-            return null;
-
-        var parts = line.Split('=');
-        if (parts.Length < 2)
-            return null;
-
-        var key = parts[0].Trim();
-        var value = string.Join("=", parts.Skip(1)).Trim();
-
-        var record = new DnsRecord { RecordType = recordType };
-
-        if (key.Equals(recordType, StringComparison.OrdinalIgnoreCase) ||
-            key.Equals("Address", StringComparison.OrdinalIgnoreCase) ||
-            key.Equals("internet address", StringComparison.OrdinalIgnoreCase) ||
-            key.Equals("canonical name", StringComparison.OrdinalIgnoreCase) ||
-            key.Equals("mail exchanger", StringComparison.OrdinalIgnoreCase) ||
-            key.Equals("text", StringComparison.OrdinalIgnoreCase) ||
-            key.Equals("nameserver", StringComparison.OrdinalIgnoreCase))
-        {
-            record.Value = value;
-            return record;
-        }
-
-        return null;
     }
 
     /// <summary>

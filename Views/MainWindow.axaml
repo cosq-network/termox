@@ -109,7 +109,15 @@
             </Grid>
 
             <!-- Main Content Area -->
-            <Grid ColumnDefinitions="56, 280, 5, *">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="56" />
+                    <ColumnDefinition
+                        Width="{Binding IsSidebarPanelVisible, Converter={x:Static services:BoolToGridLengthConverter.Instance}, ConverterParameter=280}" />
+                    <ColumnDefinition
+                        Width="{Binding IsSidebarPanelVisible, Converter={x:Static services:BoolToGridLengthConverter.Instance}, ConverterParameter=5}" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
                 <!-- Icon-first nav rail (Sessions/Bookmarks/Tools/Chat) -->
                 <Border Grid.Column="0" Background="{StaticResource TermoxPanelBrush}">
                     <StackPanel>
@@ -136,16 +144,38 @@
                     </StackPanel>
                 </Border>
 
-                <!-- Sidebar panel (Sessions/Tools) -->
-                <Border Grid.Column="1" Background="{StaticResource TermoxSurfaceBrush}"
+                <!-- Sidebar panel (Sessions/Tools) — column width is driven by IsSidebarPanelVisible
+                     via BoolToGridLengthConverter (same pattern as the split-view columns below),
+                     so clicking the active rail icon again collapses it to 0 instead of leaving a gap. -->
+                <Border Grid.Column="1" IsVisible="{Binding IsSidebarPanelVisible}"
+                    Background="{StaticResource TermoxSurfaceBrush}"
                     BorderBrush="{StaticResource TermoxPanelBrush}"
                     BorderThickness="0,0,1,0">
                     <Grid>
                         <Grid.Styles>
-                            <Style Selector="ListBoxItem:pointerover /template/ Border#PART_ContentPresenter">
+                            <!-- FluentTheme's own ListBoxItem template setting CornerRadius on its
+                                 internal PART_ContentPresenter Border wasn't overridable from here
+                                 (its compiled template resource can't be inspected/fought reliably),
+                                 so this owns the whole template instead — guarantees the radius. -->
+                            <Style Selector="ListBoxItem">
+                                <Setter Property="Background" Value="Transparent" />
+                                <Setter Property="Padding" Value="8,6" />
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="ListBoxItem">
+                                            <Border Background="{TemplateBinding Background}"
+                                                CornerRadius="6" Padding="{TemplateBinding Padding}">
+                                                <ContentPresenter Content="{TemplateBinding Content}"
+                                                    ContentTemplate="{TemplateBinding ContentTemplate}" />
+                                            </Border>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                            <Style Selector="ListBoxItem:pointerover">
                                 <Setter Property="Background" Value="{StaticResource TermoxSurfaceHoverBrush}" />
                             </Style>
-                            <Style Selector="ListBoxItem:selected /template/ Border#PART_ContentPresenter">
+                            <Style Selector="ListBoxItem:selected">
                                 <Setter Property="Background" Value="{StaticResource TermoxSelectionBrush}" />
                             </Style>
                         </Grid.Styles>
@@ -154,14 +184,14 @@
                                 <StackPanel Margin="15" Spacing="10">
                                     <TextBlock Text="SESSIONS" FontSize="10" FontWeight="Bold"
                                         Foreground="#6ea9d4" LetterSpacing="1.2" />
-                                    <StackPanel Orientation="Horizontal" Spacing="6">
-                                        <Button Command="{Binding ShowConnectionModalCommand}"
-                                            Classes="newConnectionButton" Padding="12,6"
-                                            CornerRadius="4" FontSize="11"
-                                            HorizontalAlignment="Left">
+                                    <Button Command="{Binding ShowConnectionModalCommand}"
+                                        Classes="primaryButton" HorizontalAlignment="Stretch"
+                                        HorizontalContentAlignment="Center" FontSize="12.5">
+                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                            <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="&#xE145;" FontSize="14" />
                                             <TextBlock Text="New Connection" />
-                                        </Button>
-                                    </StackPanel>
+                                        </StackPanel>
+                                    </Button>
 
                                     <TextBlock Text="Recently Used" FontWeight="SemiBold"
                                         FontSize="13" Foreground="#888" Margin="0,10,0,0"
@@ -206,9 +236,10 @@
                                     </Border>
 
                                     <TextBlock Text="Saved Sessions" FontWeight="SemiBold"
-                                        FontSize="13" Foreground="#888" Margin="0,10,0,0" />
+                                        FontSize="13" Foreground="#888" Margin="0,10,0,0"
+                                        IsVisible="{Binding HasSavedConnections}" />
 
-                                    <Border Classes="cardPanel">
+                                    <Border Classes="cardPanel" IsVisible="{Binding HasSavedConnections}">
                                     <ListBox ItemsSource="{Binding SavedConnections}"
                                         Background="Transparent" BorderThickness="0" Padding="0">
                                         <ListBox.ItemTemplate>
@@ -329,8 +360,9 @@
                                     </Border>
 
                                     <TextBlock Text="Saved Bookmarks" FontWeight="SemiBold"
-                                        FontSize="13" Foreground="#888" />
-                                    <Border Classes="cardPanel">
+                                        FontSize="13" Foreground="#888"
+                                        IsVisible="{Binding HasBookmarks}" />
+                                    <Border Classes="cardPanel" IsVisible="{Binding HasBookmarks}">
                                     <ListBox ItemsSource="{Binding Bookmarks}"
                                         Background="Transparent" BorderThickness="0" Padding="0">
                                         <ListBox.ItemTemplate>
@@ -402,80 +434,143 @@
                                 <StackPanel Margin="15" Spacing="10">
                                     <TextBlock Text="TOOLS" FontSize="10" FontWeight="Bold"
                                         Foreground="#6ea9d4" LetterSpacing="1.2" />
-                                    <WrapPanel Orientation="Horizontal" HorizontalAlignment="Left">
-                                    <Button Classes="toolButton"
+                                    <StackPanel Spacing="4">
+                                    <Button Classes="toolListItem"
                                         Command="{Binding OpenPortScannerTabCommand}"
                                         ToolTip.Tip="Open the dedicated port scanner tab">
-                                        <StackPanel Orientation="Horizontal" Spacing="10">
-                                            <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="&#xE640;" FontSize="15" />
-                                            <TextBlock Text="Port Scanner" VerticalAlignment="Center" />
-                                        </StackPanel>
+                                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                                            <Border Width="30" Height="30" CornerRadius="7" Background="#1c2733" VerticalAlignment="Center">
+                                                <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="&#xE640;" FontSize="15"
+                                                    Foreground="#6ea9d4" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                            </Border>
+                                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
+                                                <TextBlock Text="Port Scanner" FontSize="12.5" FontWeight="SemiBold" />
+                                                <TextBlock Text="Check open TCP ports on a host" FontSize="10.5"
+                                                    Foreground="#8a8f98" TextTrimming="CharacterEllipsis" />
+                                            </StackPanel>
+                                        </Grid>
                                     </Button>
-                                    <Button Classes="toolButton"
+                                    <Button Classes="toolListItem"
                                         Command="{Binding OpenPingTestTabCommand}"
                                         ToolTip.Tip="Open the dedicated ping test tab">
-                                        <StackPanel Orientation="Horizontal" Spacing="10">
-                                            <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="&#xE915;" FontSize="15" />
-                                            <TextBlock Text="Ping Test" VerticalAlignment="Center" />
-                                        </StackPanel>
+                                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                                            <Border Width="30" Height="30" CornerRadius="7" Background="#1c2733" VerticalAlignment="Center">
+                                                <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="&#xE915;" FontSize="15"
+                                                    Foreground="#6ea9d4" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                            </Border>
+                                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
+                                                <TextBlock Text="Ping Test" FontSize="12.5" FontWeight="SemiBold" />
+                                                <TextBlock Text="Measure reachability and latency" FontSize="10.5"
+                                                    Foreground="#8a8f98" TextTrimming="CharacterEllipsis" />
+                                            </StackPanel>
+                                        </Grid>
                                     </Button>
-                                    <Button Classes="toolButton"
+                                    <Button Classes="toolListItem"
                                         Command="{Binding OpenSshKeyGeneratorTabCommand}"
                                         ToolTip.Tip="Open the dedicated SSH key generator tab">
-                                        <StackPanel Orientation="Horizontal" Spacing="10">
-                                            <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="&#xE0DA;" FontSize="15" />
-                                            <TextBlock Text="SSH Key Generator" VerticalAlignment="Center" />
-                                        </StackPanel>
+                                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                                            <Border Width="30" Height="30" CornerRadius="7" Background="#1c2733" VerticalAlignment="Center">
+                                                <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="&#xE0DA;" FontSize="15"
+                                                    Foreground="#6ea9d4" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                            </Border>
+                                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
+                                                <TextBlock Text="SSH Key Generator" FontSize="12.5" FontWeight="SemiBold" />
+                                                <TextBlock Text="Create new OpenSSH key pairs" FontSize="10.5"
+                                                    Foreground="#8a8f98" TextTrimming="CharacterEllipsis" />
+                                            </StackPanel>
+                                        </Grid>
                                     </Button>
-                                    <Button Classes="toolButton"
+                                    <Button Classes="toolListItem"
                                         Command="{Binding OpenConnectionTesterTabCommand}"
                                         ToolTip.Tip="Test all saved connections">
-                                        <StackPanel Orientation="Horizontal" Spacing="10">
-                                            <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="&#xE157;" FontSize="15" />
-                                            <TextBlock Text="Connection Tester" VerticalAlignment="Center" />
-                                        </StackPanel>
+                                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                                            <Border Width="30" Height="30" CornerRadius="7" Background="#1c2733" VerticalAlignment="Center">
+                                                <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="&#xE157;" FontSize="15"
+                                                    Foreground="#6ea9d4" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                            </Border>
+                                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
+                                                <TextBlock Text="Connection Tester" FontSize="12.5" FontWeight="SemiBold" />
+                                                <TextBlock Text="Batch-test all saved connections" FontSize="10.5"
+                                                    Foreground="#8a8f98" TextTrimming="CharacterEllipsis" />
+                                            </StackPanel>
+                                        </Grid>
                                     </Button>
-                                    <Button Classes="toolButton"
+                                    <Button Classes="toolListItem"
                                         Command="{Binding OpenSshEndpointTestTabCommand}"
                                         ToolTip.Tip="Test SSH endpoint performance">
-                                        <StackPanel Orientation="Horizontal" Spacing="10">
-                                            <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="&#xE9E4;" FontSize="15" />
-                                            <TextBlock Text="SSH Endpoint Test" VerticalAlignment="Center" />
-                                        </StackPanel>
+                                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                                            <Border Width="30" Height="30" CornerRadius="7" Background="#1c2733" VerticalAlignment="Center">
+                                                <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="&#xE9E4;" FontSize="15"
+                                                    Foreground="#6ea9d4" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                            </Border>
+                                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
+                                                <TextBlock Text="SSH Endpoint Test" FontSize="12.5" FontWeight="SemiBold" />
+                                                <TextBlock Text="Check SSH endpoint reachability" FontSize="10.5"
+                                                    Foreground="#8a8f98" TextTrimming="CharacterEllipsis" />
+                                            </StackPanel>
+                                        </Grid>
                                     </Button>
-                                    <Button Classes="toolButton"
+                                    <Button Classes="toolListItem"
                                         Command="{Binding OpenGpgTabCommand}"
                                         ToolTip.Tip="Manage GPG keys and export/import">
-                                        <StackPanel Orientation="Horizontal" Spacing="10">
-                                            <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="&#xE897;" FontSize="15" />
-                                            <TextBlock Text="GPG Key Manager" VerticalAlignment="Center" />
-                                        </StackPanel>
+                                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                                            <Border Width="30" Height="30" CornerRadius="7" Background="#1c2733" VerticalAlignment="Center">
+                                                <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="&#xE897;" FontSize="15"
+                                                    Foreground="#6ea9d4" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                            </Border>
+                                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
+                                                <TextBlock Text="GPG Key Manager" FontSize="12.5" FontWeight="SemiBold" />
+                                                <TextBlock Text="Manage, import, and export GPG keys" FontSize="10.5"
+                                                    Foreground="#8a8f98" TextTrimming="CharacterEllipsis" />
+                                            </StackPanel>
+                                        </Grid>
                                     </Button>
-                                    <Button Classes="toolButton"
+                                    <Button Classes="toolListItem"
                                         Command="{Binding OpenFingerprintTabCommand}"
                                         ToolTip.Tip="Calculate and compare file/text fingerprints">
-                                        <StackPanel Orientation="Horizontal" Spacing="10">
-                                            <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="&#xE90D;" FontSize="15" />
-                                            <TextBlock Text="Fingerprint Utilities" VerticalAlignment="Center" />
-                                        </StackPanel>
+                                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                                            <Border Width="30" Height="30" CornerRadius="7" Background="#1c2733" VerticalAlignment="Center">
+                                                <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="&#xE90D;" FontSize="15"
+                                                    Foreground="#6ea9d4" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                            </Border>
+                                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
+                                                <TextBlock Text="Fingerprint Utilities" FontSize="12.5" FontWeight="SemiBold" />
+                                                <TextBlock Text="Hash and compare file/text fingerprints" FontSize="10.5"
+                                                    Foreground="#8a8f98" TextTrimming="CharacterEllipsis" />
+                                            </StackPanel>
+                                        </Grid>
                                     </Button>
-                                    <Button Classes="toolButton"
+                                    <Button Classes="toolListItem"
                                         Command="{Binding OpenDnsTabCommand}"
                                         ToolTip.Tip="Inspect DNS records for domains">
-                                        <StackPanel Orientation="Horizontal" Spacing="10">
-                                            <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="&#xE875;" FontSize="15" />
-                                            <TextBlock Text="DNS Inspector" VerticalAlignment="Center" />
-                                        </StackPanel>
+                                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                                            <Border Width="30" Height="30" CornerRadius="7" Background="#1c2733" VerticalAlignment="Center">
+                                                <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="&#xE875;" FontSize="15"
+                                                    Foreground="#6ea9d4" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                            </Border>
+                                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
+                                                <TextBlock Text="DNS Inspector" FontSize="12.5" FontWeight="SemiBold" />
+                                                <TextBlock Text="Query DNS records for any domain" FontSize="10.5"
+                                                    Foreground="#8a8f98" TextTrimming="CharacterEllipsis" />
+                                            </StackPanel>
+                                        </Grid>
                                     </Button>
-                                    <Button Classes="toolButton"
+                                    <Button Classes="toolListItem"
                                         Command="{Binding OpenServerStatsTabCommand}"
                                         ToolTip.Tip="View CPU, memory, process, and disk stats over SSH">
-                                        <StackPanel Orientation="Horizontal" Spacing="10">
-                                            <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="&#xE26B;" FontSize="15" />
-                                            <TextBlock Text="Server Stats" VerticalAlignment="Center" />
-                                        </StackPanel>
+                                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                                            <Border Width="30" Height="30" CornerRadius="7" Background="#1c2733" VerticalAlignment="Center">
+                                                <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="&#xE26B;" FontSize="15"
+                                                    Foreground="#6ea9d4" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                            </Border>
+                                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
+                                                <TextBlock Text="Server Stats" FontSize="12.5" FontWeight="SemiBold" />
+                                                <TextBlock Text="CPU, memory, and disk stats over SSH" FontSize="10.5"
+                                                    Foreground="#8a8f98" TextTrimming="CharacterEllipsis" />
+                                            </StackPanel>
+                                        </Grid>
                                     </Button>
-                                    </WrapPanel>
+                                    </StackPanel>
                                 </StackPanel>
                             </ScrollViewer>
                         <ScrollViewer VerticalScrollBarVisibility="Auto"
@@ -500,6 +595,7 @@
 
                 <!-- Splitter -->
                 <GridSplitter Grid.Column="2" Background="#333" Width="5"
+                    IsVisible="{Binding IsSidebarPanelVisible}"
                     HorizontalAlignment="Center" VerticalAlignment="Stretch" />
 
                 <!-- Terminal Area with Tab -->
@@ -861,12 +957,18 @@
                                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                                     <Border Background="#1e1e1e" Padding="28">
                                         <StackPanel Spacing="16" MaxWidth="900">
-                                            <StackPanel Spacing="4">
-                                                <TextBlock Text="Port Scanner" FontSize="{StaticResource TermoxPageTitleFontSize}"
-                                                    FontWeight="SemiBold" Foreground="{StaticResource TermoxPageTitleBrush}" />
-                                                <TextBlock Text="Inspect TCP reachability across a host with clear, focused results."
-                                                    Foreground="{StaticResource TermoxPageSubtitleBrush}" FontSize="13" />
-                                            </StackPanel>
+                                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="14">
+                                                <Border Width="42" Height="42" CornerRadius="9" Background="#1c2733" VerticalAlignment="Center">
+                                                    <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="&#xE640;" FontSize="21"
+                                                        Foreground="#6ea9d4" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                </Border>
+                                                <StackPanel Grid.Column="1" Spacing="4" VerticalAlignment="Center">
+                                                    <TextBlock Text="Port Scanner" FontSize="{StaticResource TermoxPageTitleFontSize}"
+                                                        FontWeight="SemiBold" Foreground="{StaticResource TermoxPageTitleBrush}" />
+                                                    <TextBlock Text="Inspect TCP reachability across a host with clear, focused results."
+                                                        Foreground="{StaticResource TermoxPageSubtitleBrush}" FontSize="13" />
+                                                </StackPanel>
+                                            </Grid>
 
                                             <Border Background="#252526" BorderBrush="#3a3a3a"
                                                 BorderThickness="1" CornerRadius="7" Padding="20">
@@ -981,12 +1083,18 @@
                                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                                     <Border Background="#1e1e1e" Padding="28">
                                         <StackPanel Spacing="16" MaxWidth="760">
-                                            <StackPanel Spacing="4">
-                                                <TextBlock Text="Ping Test" FontSize="{StaticResource TermoxPageTitleFontSize}"
-                                                    FontWeight="SemiBold" Foreground="{StaticResource TermoxPageTitleBrush}" />
-                                                <TextBlock Text="Measure network reachability and round-trip response time for a host."
-                                                    Foreground="{StaticResource TermoxPageSubtitleBrush}" FontSize="13" />
-                                            </StackPanel>
+                                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="14">
+                                                <Border Width="42" Height="42" CornerRadius="9" Background="#1c2733" VerticalAlignment="Center">
+                                                    <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="&#xE915;" FontSize="21"
+                                                        Foreground="#6ea9d4" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                </Border>
+                                                <StackPanel Grid.Column="1" Spacing="4" VerticalAlignment="Center">
+                                                    <TextBlock Text="Ping Test" FontSize="{StaticResource TermoxPageTitleFontSize}"
+                                                        FontWeight="SemiBold" Foreground="{StaticResource TermoxPageTitleBrush}" />
+                                                    <TextBlock Text="Measure network reachability and round-trip response time for a host."
+                                                        Foreground="{StaticResource TermoxPageSubtitleBrush}" FontSize="13" />
+                                                </StackPanel>
+                                            </Grid>
                                             <Border Background="#252526" BorderBrush="#3a3a3a"
                                                 BorderThickness="1" CornerRadius="7" Padding="20">
                                                 <Grid RowDefinitions="Auto,Auto,Auto" ColumnDefinitions="*,Auto"
@@ -1037,12 +1145,18 @@
                                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                                     <Border Background="#1e1e1e" Padding="28">
                                         <StackPanel Spacing="16" MaxWidth="860">
-                                            <StackPanel Spacing="4">
-                                                <TextBlock Text="SSH Key Generator" FontSize="{StaticResource TermoxPageTitleFontSize}"
-                                                    FontWeight="SemiBold" Foreground="{StaticResource TermoxPageTitleBrush}" />
-                                                <TextBlock Text="Create an OpenSSH key pair for secure remote access."
-                                                    Foreground="{StaticResource TermoxPageSubtitleBrush}" FontSize="13" />
-                                            </StackPanel>
+                                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="14">
+                                                <Border Width="42" Height="42" CornerRadius="9" Background="#1c2733" VerticalAlignment="Center">
+                                                    <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="&#xE0DA;" FontSize="21"
+                                                        Foreground="#6ea9d4" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                </Border>
+                                                <StackPanel Grid.Column="1" Spacing="4" VerticalAlignment="Center">
+                                                    <TextBlock Text="SSH Key Generator" FontSize="{StaticResource TermoxPageTitleFontSize}"
+                                                        FontWeight="SemiBold" Foreground="{StaticResource TermoxPageTitleBrush}" />
+                                                    <TextBlock Text="Create an OpenSSH key pair for secure remote access."
+                                                        Foreground="{StaticResource TermoxPageSubtitleBrush}" FontSize="13" />
+                                                </StackPanel>
+                                            </Grid>
                                             <Border Background="#252526" BorderBrush="#3a3a3a"
                                                 BorderThickness="1" CornerRadius="7" Padding="20">
                                                 <Grid RowDefinitions="Auto,Auto,Auto" ColumnDefinitions="*,Auto"
@@ -1107,12 +1221,18 @@
                                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                                     <Border Background="#1e1e1e" Padding="28">
                                         <StackPanel Spacing="16">
-                                            <StackPanel Spacing="4">
-                                                <TextBlock Text="Connection Tester" FontSize="{StaticResource TermoxPageTitleFontSize}"
-                                                    FontWeight="SemiBold" Foreground="{StaticResource TermoxPageTitleBrush}" />
-                                                <TextBlock Text="Verify connectivity for every saved SSH connection from one focused view."
-                                                    Foreground="{StaticResource TermoxPageSubtitleBrush}" FontSize="13" />
-                                            </StackPanel>
+                                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="14">
+                                                <Border Width="42" Height="42" CornerRadius="9" Background="#1c2733" VerticalAlignment="Center">
+                                                    <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="&#xE157;" FontSize="21"
+                                                        Foreground="#6ea9d4" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                </Border>
+                                                <StackPanel Grid.Column="1" Spacing="4" VerticalAlignment="Center">
+                                                    <TextBlock Text="Connection Tester" FontSize="{StaticResource TermoxPageTitleFontSize}"
+                                                        FontWeight="SemiBold" Foreground="{StaticResource TermoxPageTitleBrush}" />
+                                                    <TextBlock Text="Verify connectivity for every saved SSH connection from one focused view."
+                                                        Foreground="{StaticResource TermoxPageSubtitleBrush}" FontSize="13" />
+                                                </StackPanel>
+                                            </Grid>
                                             <Border Background="#252526" BorderBrush="#3a3a3a"
                                                 BorderThickness="1" CornerRadius="7" Padding="20">
                                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="20">
@@ -1167,12 +1287,18 @@
                                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                                     <Border Background="#1e1e1e" Padding="28">
                                         <StackPanel Spacing="16" MaxWidth="860">
-                                            <StackPanel Spacing="4">
-                                                <TextBlock Text="SSH Endpoint Test" FontSize="{StaticResource TermoxPageTitleFontSize}"
-                                                    FontWeight="SemiBold" Foreground="{StaticResource TermoxPageTitleBrush}" />
-                                                <TextBlock Text="Measure the responsiveness of an SSH endpoint over an authenticated SFTP session."
-                                                    Foreground="{StaticResource TermoxPageSubtitleBrush}" FontSize="13" />
-                                            </StackPanel>
+                                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="14">
+                                                <Border Width="42" Height="42" CornerRadius="9" Background="#1c2733" VerticalAlignment="Center">
+                                                    <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="&#xE9E4;" FontSize="21"
+                                                        Foreground="#6ea9d4" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                </Border>
+                                                <StackPanel Grid.Column="1" Spacing="4" VerticalAlignment="Center">
+                                                    <TextBlock Text="SSH Endpoint Test" FontSize="{StaticResource TermoxPageTitleFontSize}"
+                                                        FontWeight="SemiBold" Foreground="{StaticResource TermoxPageTitleBrush}" />
+                                                    <TextBlock Text="Measure the responsiveness of an SSH endpoint over an authenticated SFTP session."
+                                                        Foreground="{StaticResource TermoxPageSubtitleBrush}" FontSize="13" />
+                                                </StackPanel>
+                                            </Grid>
                                             <Border Background="#252526" BorderBrush="#3a3a3a"
                                                 BorderThickness="1" CornerRadius="7" Padding="20">
                                                 <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="*,Auto"
@@ -1180,7 +1306,7 @@
                                                     <StackPanel Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2" Spacing="5">
                                                         <TextBlock Text="Target host" Foreground="#aaa"
                                                             FontSize="11" FontWeight="SemiBold" />
-                                                        <TextBox Text="{Binding SpeedTestHost}" PlaceholderText="hostname or IP address"
+                                                        <TextBox Text="{Binding SpeedTestHost}" PlaceholderText="hostname or IP address, e.g. 127.0.0.1:2222"
                                                             Padding="10" MinHeight="42" />
                                                     </StackPanel>
                                                     <TextBlock Grid.Row="1" Grid.Column="0"
@@ -1211,12 +1337,18 @@
                                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                                     <Border Background="#1e1e1e" Padding="28">
                                         <StackPanel Spacing="16" MaxWidth="900">
-                                            <StackPanel Spacing="4">
-                                                <TextBlock Text="GPG Key Manager" FontSize="{StaticResource TermoxPageTitleFontSize}"
-                                                    FontWeight="SemiBold" Foreground="{StaticResource TermoxPageTitleBrush}" />
-                                                <TextBlock Text="Manage your GPG keys, view details, export, and import keys."
-                                                    Foreground="{StaticResource TermoxPageSubtitleBrush}" FontSize="13" />
-                                            </StackPanel>
+                                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="14">
+                                                <Border Width="42" Height="42" CornerRadius="9" Background="#1c2733" VerticalAlignment="Center">
+                                                    <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="&#xE897;" FontSize="21"
+                                                        Foreground="#6ea9d4" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                </Border>
+                                                <StackPanel Grid.Column="1" Spacing="4" VerticalAlignment="Center">
+                                                    <TextBlock Text="GPG Key Manager" FontSize="{StaticResource TermoxPageTitleFontSize}"
+                                                        FontWeight="SemiBold" Foreground="{StaticResource TermoxPageTitleBrush}" />
+                                                    <TextBlock Text="Manage your GPG keys, view details, export, and import keys."
+                                                        Foreground="{StaticResource TermoxPageSubtitleBrush}" FontSize="13" />
+                                                </StackPanel>
+                                            </Grid>
                                             <Border Background="#252526" BorderBrush="#3a3a3a"
                                                 BorderThickness="1" CornerRadius="7" Padding="16">
                                                 <Grid RowDefinitions="Auto,Auto" ColumnSpacing="12">
@@ -1370,15 +1502,21 @@
                                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                                     <Border Background="#1e1e1e" Padding="28">
                                         <StackPanel Spacing="16" MaxWidth="900">
-                                            <StackPanel Spacing="4">
-                                                <TextBlock Text="Fingerprint Utilities" FontSize="{StaticResource TermoxPageTitleFontSize}"
-                                                    FontWeight="SemiBold" Foreground="{StaticResource TermoxPageTitleBrush}" />
-                                                <TextBlock Text="Calculate and compare file or text fingerprints using various hash algorithms."
-                                                    Foreground="{StaticResource TermoxPageSubtitleBrush}" FontSize="13" />
-                                            </StackPanel>
+                                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="14">
+                                                <Border Width="42" Height="42" CornerRadius="9" Background="#1c2733" VerticalAlignment="Center">
+                                                    <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="&#xE90D;" FontSize="21"
+                                                        Foreground="#6ea9d4" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                </Border>
+                                                <StackPanel Grid.Column="1" Spacing="4" VerticalAlignment="Center">
+                                                    <TextBlock Text="Fingerprint Utilities" FontSize="{StaticResource TermoxPageTitleFontSize}"
+                                                        FontWeight="SemiBold" Foreground="{StaticResource TermoxPageTitleBrush}" />
+                                                    <TextBlock Text="Calculate and compare file or text fingerprints using various hash algorithms."
+                                                        Foreground="{StaticResource TermoxPageSubtitleBrush}" FontSize="13" />
+                                                </StackPanel>
+                                            </Grid>
                                             <Border Background="#252526" BorderBrush="#3a3a3a"
                                                 BorderThickness="1" CornerRadius="7" Padding="16">
-                                                <Grid RowDefinitions="Auto,Auto,Auto" ColumnDefinitions="Auto,*"
+                                                <Grid RowDefinitions="Auto,Auto,Auto,Auto" ColumnDefinitions="Auto,*"
                                                     RowSpacing="12" ColumnSpacing="12">
                                                     <TextBlock Grid.Row="0" Grid.Column="0" Text="Algorithm:"
                                                         Foreground="#aaa" VerticalAlignment="Center"
@@ -1401,6 +1539,10 @@
                                                         Classes="primaryButton"
                                                         Padding="14,8" CornerRadius="4"
                                                         IsEnabled="{Binding !IsCalculating}" />
+                                                    <TextBlock Grid.Row="3" Grid.Column="1"
+                                                        Text="{Binding CalculationStatus}"
+                                                        Foreground="{Binding CalculationStatusColor}"
+                                                        FontSize="12" FontWeight="SemiBold" />
                                                 </Grid>
                                             </Border>
                                             <StackPanel Spacing="10">
@@ -1408,45 +1550,54 @@
                                                     FontWeight="SemiBold" Foreground="#e0e0e0" />
                                                 <Border Background="#252526" BorderBrush="#333"
                                                     BorderThickness="1" CornerRadius="4" Padding="12">
-                                                    <StackPanel Spacing="8">
-                                                        <StackPanel>
+                                                    <StackPanel Spacing="14">
+                                                        <StackPanel Spacing="6">
                                                             <TextBlock Text="Raw (uppercase hex):" Foreground="#aaa"
                                                                 FontSize="11" FontWeight="SemiBold" />
                                                             <TextBox Text="{Binding CalculatedFingerprint}"
+                                                                PlaceholderText="Fingerprint will appear here after calculation"
                                                                 Background="#1e1e1e" Foreground="#4caf50"
                                                                 BorderBrush="#333" Padding="8" IsReadOnly="True"
                                                                 TextWrapping="Wrap" />
                                                             <Button Content="Copy"
                                                                 Command="{Binding CopyCalculatedCommand}"
                                                                 Classes="neutralButton"
-                                                                Padding="10,4" CornerRadius="3" Margin="0,4,0,0"
-                                                                HorizontalAlignment="Left" FontSize="11" />
+                                                                Padding="10,4" CornerRadius="3"
+                                                                HorizontalAlignment="Left"
+                                                                HorizontalContentAlignment="Center"
+                                                                VerticalContentAlignment="Center" FontSize="11" />
                                                         </StackPanel>
-                                                        <StackPanel>
+                                                        <StackPanel Spacing="6">
                                                             <TextBlock Text="Formatted (pairs):" Foreground="#aaa"
                                                                 FontSize="11" FontWeight="SemiBold" />
                                                             <TextBox Text="{Binding FormattedFingerprint}"
+                                                                PlaceholderText="Fingerprint will appear here after calculation"
                                                                 Background="#1e1e1e" Foreground="#4caf50"
                                                                 BorderBrush="#333" Padding="8" IsReadOnly="True"
                                                                 TextWrapping="Wrap" />
                                                             <Button Content="Copy"
                                                                 Command="{Binding CopyFormattedCommand}"
                                                                 Classes="neutralButton"
-                                                                Padding="10,4" CornerRadius="3" Margin="0,4,0,0"
-                                                                HorizontalAlignment="Left" FontSize="11" />
+                                                                Padding="10,4" CornerRadius="3"
+                                                                HorizontalAlignment="Left"
+                                                                HorizontalContentAlignment="Center"
+                                                                VerticalContentAlignment="Center" FontSize="11" />
                                                         </StackPanel>
-                                                        <StackPanel>
+                                                        <StackPanel Spacing="6">
                                                             <TextBlock Text="SSH Style (colons):" Foreground="#aaa"
                                                                 FontSize="11" FontWeight="SemiBold" />
                                                             <TextBox Text="{Binding SshStyleFingerprint}"
+                                                                PlaceholderText="Fingerprint will appear here after calculation"
                                                                 Background="#1e1e1e" Foreground="#4caf50"
                                                                 BorderBrush="#333" Padding="8" IsReadOnly="True"
                                                                 TextWrapping="Wrap" />
                                                             <Button Content="Copy"
                                                                 Command="{Binding CopySshStyleCommand}"
                                                                 Classes="neutralButton"
-                                                                Padding="10,4" CornerRadius="3" Margin="0,4,0,0"
-                                                                HorizontalAlignment="Left" FontSize="11" />
+                                                                Padding="10,4" CornerRadius="3"
+                                                                HorizontalAlignment="Left"
+                                                                HorizontalContentAlignment="Center"
+                                                                VerticalContentAlignment="Center" FontSize="11" />
                                                         </StackPanel>
                                                     </StackPanel>
                                                 </Border>
@@ -1458,7 +1609,7 @@
                                                     BorderThickness="1" CornerRadius="4" Padding="12">
                                                     <Grid RowDefinitions="Auto,Auto,Auto" ColumnDefinitions="*"
                                                         RowSpacing="10">
-                                                        <StackPanel Grid.Row="0">
+                                                        <StackPanel Grid.Row="0" Spacing="6">
                                                             <TextBlock Text="Expected Fingerprint:" Foreground="#aaa"
                                                                 FontSize="11" FontWeight="SemiBold" />
                                                             <TextBox Text="{Binding ExpectedFingerprint}"
@@ -1494,12 +1645,18 @@
                                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                                     <Border Background="#1e1e1e" Padding="28">
                                         <StackPanel Spacing="16" MaxWidth="900">
-                                            <StackPanel Spacing="4">
-                                                <TextBlock Text="DNS Record Inspector" FontSize="{StaticResource TermoxPageTitleFontSize}"
-                                                    FontWeight="SemiBold" Foreground="{StaticResource TermoxPageTitleBrush}" />
-                                                <TextBlock Text="Query and inspect DNS records (A, AAAA, CNAME, MX, TXT, NS, SOA, SRV, PTR, CAA) for any domain."
-                                                    Foreground="{StaticResource TermoxPageSubtitleBrush}" FontSize="13" />
-                                            </StackPanel>
+                                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="14">
+                                                <Border Width="42" Height="42" CornerRadius="9" Background="#1c2733" VerticalAlignment="Center">
+                                                    <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="&#xE875;" FontSize="21"
+                                                        Foreground="#6ea9d4" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                </Border>
+                                                <StackPanel Grid.Column="1" Spacing="4" VerticalAlignment="Center">
+                                                    <TextBlock Text="DNS Record Inspector" FontSize="{StaticResource TermoxPageTitleFontSize}"
+                                                        FontWeight="SemiBold" Foreground="{StaticResource TermoxPageTitleBrush}" />
+                                                    <TextBlock Text="Query and inspect DNS records (A, AAAA, CNAME, MX, TXT, NS, SOA, SRV, PTR, CAA) for any domain."
+                                                        Foreground="{StaticResource TermoxPageSubtitleBrush}" FontSize="13" />
+                                                </StackPanel>
+                                            </Grid>
                                             <Border Background="#252526" BorderBrush="#3a3a3a"
                                                 BorderThickness="1" CornerRadius="7" Padding="16">
                                                 <StackPanel Spacing="12">
@@ -1600,12 +1757,18 @@
                                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                                     <Border Background="#1e1e1e" Padding="28">
                                         <StackPanel Spacing="16" MaxWidth="1100">
-                                            <StackPanel Spacing="4">
-                                                <TextBlock Text="Server Stats" FontSize="{StaticResource TermoxPageTitleFontSize}"
-                                                    FontWeight="SemiBold" Foreground="{StaticResource TermoxPageTitleBrush}" />
-                                                <TextBlock Text="CPU, memory, top processes, and disk usage collected over SSH from a saved session."
-                                                    Foreground="{StaticResource TermoxPageSubtitleBrush}" FontSize="13" />
-                                            </StackPanel>
+                                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="14">
+                                                <Border Width="42" Height="42" CornerRadius="9" Background="#1c2733" VerticalAlignment="Center">
+                                                    <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="&#xE26B;" FontSize="21"
+                                                        Foreground="#6ea9d4" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                </Border>
+                                                <StackPanel Grid.Column="1" Spacing="4" VerticalAlignment="Center">
+                                                    <TextBlock Text="Server Stats" FontSize="{StaticResource TermoxPageTitleFontSize}"
+                                                        FontWeight="SemiBold" Foreground="{StaticResource TermoxPageTitleBrush}" />
+                                                    <TextBlock Text="CPU, memory, top processes, and disk usage collected over SSH from a saved session."
+                                                        Foreground="{StaticResource TermoxPageSubtitleBrush}" FontSize="13" />
+                                                </StackPanel>
+                                            </Grid>
 
                                             <!-- Host selection -->
                                             <Border Background="#252526" BorderBrush="#3a3a3a"
@@ -2338,7 +2501,7 @@
                                                         Foreground="#aaaaaa"
                                                         FontSize="12" FontWeight="SemiBold" />
                                                     <TextBox Text="{Binding SpeedTestHost}"
-                                                        PlaceholderText="hostname or IP"
+                                                        PlaceholderText="hostname or IP, e.g. 127.0.0.1:2222"
                                                         Margin="0,0,0,10" />
                                                     <Button Content="Test SSH Endpoint"
                                                         Command="{Binding RunSpeedTestCommand}"
@@ -2767,11 +2930,11 @@
                                      either was opened. -->
                                 <Border IsVisible="{Binding IsSettingsPanelOpen}"
                                     HorizontalAlignment="Right" VerticalAlignment="Top"
-                                    Width="380" MaxHeight="480" Margin="0,46,0,0"
+                                    Width="460" MaxHeight="480" Margin="0,46,0,0"
                                     Background="#161616" BorderBrush="#333" BorderThickness="1"
-                                    CornerRadius="12" Padding="12" ZIndex="10"
+                                    CornerRadius="12" Padding="14,12,6,12" ZIndex="10"
                                     BoxShadow="0 8 24 0 #66000000">
-                                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                    <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,0,8,0">
                                         <StackPanel Spacing="8">
                                             <TextBlock Text="Inference endpoint" Foreground="#e0e0e0"
                                                 FontWeight="SemiBold" FontSize="12" />
@@ -2814,10 +2977,11 @@
                                                 Foreground="#ccc" FontSize="12" />
                                             <StackPanel Orientation="Horizontal" Spacing="8">
                                                 <Button Content="Save" Command="{Binding SaveSettingsCommand}"
-                                                    Classes="primaryButton" Padding="12,7" CornerRadius="4"
+                                                    Classes="primaryButton" Padding="14,7" CornerRadius="4"
                                                     FontSize="12" />
                                                 <Button Content="Close" Command="{Binding CloseSettingsCommand}"
-                                                    Classes="toolButton" Padding="12,7" FontSize="12" Margin="0" />
+                                                    Classes="neutralButton" Padding="14,7" CornerRadius="4"
+                                                    FontSize="12" Margin="0" />
                                             </StackPanel>
                                         </StackPanel>
                                     </ScrollViewer>
@@ -2825,7 +2989,7 @@
 
                                 <Border IsVisible="{Binding IsHistoryPanelOpen}"
                                     Background="#161616" BorderBrush="#333" BorderThickness="1"
-                                    CornerRadius="12" Padding="12" MaxHeight="400"
+                                    CornerRadius="12" Padding="14,12,6,12" MaxHeight="400"
                                     Width="400" HorizontalAlignment="Right" VerticalAlignment="Top"
                                     Margin="0,46,0,0" ZIndex="10" BoxShadow="0 8 24 0 #66000000">
                                     <Grid RowDefinitions="Auto,Auto,*,Auto">
@@ -2840,7 +3004,7 @@
                                             PlaceholderText="Search sessions…" Padding="8,6" FontSize="12"
                                             Margin="0,0,0,8" />
                                         <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto"
-                                            HorizontalScrollBarVisibility="Disabled">
+                                            HorizontalScrollBarVisibility="Disabled" Margin="0,0,8,0">
                                             <ItemsControl ItemsSource="{Binding HistorySessions}">
                                                 <ItemsControl.ItemTemplate>
                                                     <DataTemplate DataType="models:ChatSessionSummary">
