@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Controls.Primitives;
@@ -569,6 +570,109 @@ public partial class MainWindow : Window
         {
             vm.ToggleBookmarkFavoriteCommand.Execute(bookmark);
         }
+    }
+
+    // Tools-list drag-to-reorder. Avalonia 12's DragDrop API is IDataTransfer-based (not
+    // the older IDataObject), and DoDragDropAsync needs the *original* PointerPressedEventArgs
+    // as its trigger — not a later PointerMoved one — so the press handler stashes it and
+    // the move handler reuses it once the drag threshold is crossed.
+    private static readonly DataFormat<string> ToolDragFormat = DataFormat.CreateStringApplicationFormat("TermoxToolMenuItemId");
+
+    private ToolMenuItem? _toolDragItem;
+    private PointerPressedEventArgs? _toolDragStartArgs;
+    private Point _toolDragStartPoint;
+    private Control? _toolDragHandle;
+
+    private void ToolItem_PointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        // sender is the grip handle, but its DataContext is inherited from the row's
+        // DataTemplate root, so it's still the bound ToolMenuItem.
+        if (sender is Control handle && handle.DataContext is ToolMenuItem item &&
+            e.GetCurrentPoint(handle).Properties.IsLeftButtonPressed)
+        {
+            _toolDragItem = item;
+            _toolDragStartArgs = e;
+            _toolDragStartPoint = e.GetPosition(handle);
+            _toolDragHandle = handle;
+        }
+    }
+
+    private async void ToolItem_PointerMoved(object? sender, PointerEventArgs e)
+    {
+        if (_toolDragItem == null || _toolDragStartArgs == null || _toolDragHandle == null) return;
+        if (!e.GetCurrentPoint(_toolDragHandle).Properties.IsLeftButtonPressed) return;
+
+        var delta = e.GetPosition(_toolDragHandle) - _toolDragStartPoint;
+        if (Math.Abs(delta.X) < 4 && Math.Abs(delta.Y) < 4) return;
+
+        var draggedItem = _toolDragItem;
+        var startArgs = _toolDragStartArgs;
+        var row = _toolDragHandle.Parent as Control ?? _toolDragHandle;
+        _toolDragItem = null;
+        _toolDragStartArgs = null;
+        _toolDragHandle = null;
+
+        var transfer = new DataTransfer();
+        transfer.Add(DataTransferItem.Create(ToolDragFormat, draggedItem.Id));
+
+        row.Opacity = 0.5;
+        try
+        {
+            await DragDrop.DoDragDropAsync(startArgs, transfer, DragDropEffects.Move);
+        }
+        finally
+        {
+            row.Opacity = 1.0;
+        }
+    }
+
+    private void ToolsList_DragOver(object? sender, DragEventArgs e)
+    {
+        e.DragEffects = DragDropEffects.Move;
+        if (sender is not ItemsControl itemsControl || DataContext is not MainViewModel mainVm) return;
+
+        var draggedId = GetDraggedToolId(e);
+        if (draggedId == null) return;
+
+        var items = mainVm.ToolMenuItems;
+        var fromIndex = -1;
+        for (var i = 0; i < items.Count; i++)
+        {
+            if (items[i].Id == draggedId) { fromIndex = i; break; }
+        }
+        if (fromIndex < 0) return;
+
+        var toIndex = FindToolDropIndex(itemsControl, e.GetPosition(itemsControl).Y);
+        if (toIndex >= 0 && toIndex != fromIndex)
+            mainVm.ReorderToolMenuItem(fromIndex, toIndex);
+    }
+
+    private void ToolsList_Drop(object? sender, DragEventArgs e)
+    {
+        e.DragEffects = DragDropEffects.Move;
+    }
+
+    private static string? GetDraggedToolId(DragEventArgs e)
+    {
+        foreach (var item in e.DataTransfer.Items)
+        {
+            if (item.TryGetRaw(ToolDragFormat) is string id)
+                return id;
+        }
+        return null;
+    }
+
+    private static int FindToolDropIndex(ItemsControl itemsControl, double pointerY)
+    {
+        for (var i = 0; i < itemsControl.ItemCount; i++)
+        {
+            var container = itemsControl.ContainerFromIndex(i);
+            if (container == null) continue;
+            var topLeft = container.TranslatePoint(new Point(0, 0), itemsControl) ?? default;
+            if (pointerY < topLeft.Y + container.Bounds.Height / 2)
+                return i;
+        }
+        return itemsControl.ItemCount - 1;
     }
 
     private void CancelRename_Click(object? sender, RoutedEventArgs e)

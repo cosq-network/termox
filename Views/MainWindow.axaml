@@ -434,188 +434,51 @@
                                 <StackPanel Margin="15" Spacing="10">
                                     <TextBlock Text="TOOLS" FontSize="10" FontWeight="Bold"
                                         Foreground="#6ea9d4" LetterSpacing="1.2" />
-                                    <StackPanel Spacing="4">
-                                    <Button Classes="toolListItem"
-                                        Command="{Binding OpenPortScannerTabCommand}"
-                                        ToolTip.Tip="Open the dedicated port scanner tab">
-                                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
-                                            <Border Width="30" Height="30" CornerRadius="7" Background="#1c2733" VerticalAlignment="Center">
-                                                <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="&#xE640;" FontSize="15"
-                                                    Foreground="#6ea9d4" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                            </Border>
-                                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
-                                                <TextBlock Text="Port Scanner" FontSize="12.5" FontWeight="SemiBold" />
-                                                <TextBlock Text="Check open TCP ports on a host" FontSize="10.5"
-                                                    Foreground="#8a8f98" TextTrimming="CharacterEllipsis" />
-                                            </StackPanel>
-                                        </Grid>
-                                    </Button>
-                                    <Button Classes="toolListItem"
-                                        Command="{Binding OpenPingTestTabCommand}"
-                                        ToolTip.Tip="Open the dedicated ping test tab">
-                                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
-                                            <Border Width="30" Height="30" CornerRadius="7" Background="#1c2733" VerticalAlignment="Center">
-                                                <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="&#xE915;" FontSize="15"
-                                                    Foreground="#6ea9d4" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                            </Border>
-                                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
-                                                <TextBlock Text="Ping Test" FontSize="12.5" FontWeight="SemiBold" />
-                                                <TextBlock Text="Measure reachability and latency" FontSize="10.5"
-                                                    Foreground="#8a8f98" TextTrimming="CharacterEllipsis" />
-                                            </StackPanel>
-                                        </Grid>
-                                    </Button>
-                                    <Button Classes="toolListItem"
-                                        Command="{Binding OpenSshKeyGeneratorTabCommand}"
-                                        ToolTip.Tip="Open the dedicated SSH key generator tab">
-                                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
-                                            <Border Width="30" Height="30" CornerRadius="7" Background="#1c2733" VerticalAlignment="Center">
-                                                <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="&#xE0DA;" FontSize="15"
-                                                    Foreground="#6ea9d4" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                            </Border>
-                                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
-                                                <TextBlock Text="SSH Key Generator" FontSize="12.5" FontWeight="SemiBold" />
-                                                <TextBlock Text="Create new OpenSSH key pairs" FontSize="10.5"
-                                                    Foreground="#8a8f98" TextTrimming="CharacterEllipsis" />
-                                            </StackPanel>
-                                        </Grid>
-                                    </Button>
-                                    <Button Classes="toolListItem"
-                                        Command="{Binding OpenConnectionTesterTabCommand}"
-                                        ToolTip.Tip="Test all saved connections">
-                                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
-                                            <Border Width="30" Height="30" CornerRadius="7" Background="#1c2733" VerticalAlignment="Center">
-                                                <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="&#xE157;" FontSize="15"
-                                                    Foreground="#6ea9d4" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                            </Border>
-                                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
-                                                <TextBlock Text="Connection Tester" FontSize="12.5" FontWeight="SemiBold" />
-                                                <TextBlock Text="Batch-test all saved connections" FontSize="10.5"
-                                                    Foreground="#8a8f98" TextTrimming="CharacterEllipsis" />
-                                            </StackPanel>
-                                        </Grid>
-                                    </Button>
-                                    <Button Classes="toolListItem"
-                                        Command="{Binding OpenSshEndpointTestTabCommand}"
-                                        ToolTip.Tip="Test SSH endpoint performance">
-                                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
-                                            <Border Width="30" Height="30" CornerRadius="7" Background="#1c2733" VerticalAlignment="Center">
-                                                <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="&#xE9E4;" FontSize="15"
-                                                    Foreground="#6ea9d4" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                            </Border>
-                                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
-                                                <TextBlock Text="SSH Endpoint Test" FontSize="12.5" FontWeight="SemiBold" />
-                                                <TextBlock Text="Check SSH endpoint reachability" FontSize="10.5"
-                                                    Foreground="#8a8f98" TextTrimming="CharacterEllipsis" />
-                                            </StackPanel>
-                                        </Grid>
-                                    </Button>
-                                    <Button Classes="toolListItem"
-                                        Command="{Binding OpenGpgTabCommand}"
-                                        ToolTip.Tip="Manage GPG keys and export/import">
-                                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
-                                            <Border Width="30" Height="30" CornerRadius="7" Background="#1c2733" VerticalAlignment="Center">
-                                                <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="&#xE897;" FontSize="15"
-                                                    Foreground="#6ea9d4" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                            </Border>
-                                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
-                                                <TextBlock Text="GPG Key Manager" FontSize="12.5" FontWeight="SemiBold" />
-                                                <TextBlock Text="Manage, import, and export GPG keys" FontSize="10.5"
-                                                    Foreground="#8a8f98" TextTrimming="CharacterEllipsis" />
-                                            </StackPanel>
-                                        </Grid>
-                                    </Button>
-                                    <Button Classes="toolListItem"
-                                        Command="{Binding OpenFingerprintTabCommand}"
-                                        ToolTip.Tip="Calculate and compare file/text fingerprints">
-                                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
-                                            <Border Width="30" Height="30" CornerRadius="7" Background="#1c2733" VerticalAlignment="Center">
-                                                <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="&#xE90D;" FontSize="15"
-                                                    Foreground="#6ea9d4" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                            </Border>
-                                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
-                                                <TextBlock Text="Fingerprint Utilities" FontSize="12.5" FontWeight="SemiBold" />
-                                                <TextBlock Text="Hash and compare file/text fingerprints" FontSize="10.5"
-                                                    Foreground="#8a8f98" TextTrimming="CharacterEllipsis" />
-                                            </StackPanel>
-                                        </Grid>
-                                    </Button>
-                                    <Button Classes="toolListItem"
-                                        Command="{Binding OpenDnsTabCommand}"
-                                        ToolTip.Tip="Inspect DNS records for domains">
-                                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
-                                            <Border Width="30" Height="30" CornerRadius="7" Background="#1c2733" VerticalAlignment="Center">
-                                                <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="&#xE875;" FontSize="15"
-                                                    Foreground="#6ea9d4" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                            </Border>
-                                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
-                                                <TextBlock Text="DNS Inspector" FontSize="12.5" FontWeight="SemiBold" />
-                                                <TextBlock Text="Query DNS records for any domain" FontSize="10.5"
-                                                    Foreground="#8a8f98" TextTrimming="CharacterEllipsis" />
-                                            </StackPanel>
-                                        </Grid>
-                                    </Button>
-                                    <Button Classes="toolListItem"
-                                        Command="{Binding OpenServerStatsTabCommand}"
-                                        ToolTip.Tip="View CPU, memory, process, and disk stats over SSH">
-                                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
-                                            <Border Width="30" Height="30" CornerRadius="7" Background="#1c2733" VerticalAlignment="Center">
-                                                <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="&#xE26B;" FontSize="15"
-                                                    Foreground="#6ea9d4" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                            </Border>
-                                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
-                                                <TextBlock Text="Server Stats" FontSize="12.5" FontWeight="SemiBold" />
-                                                <TextBlock Text="CPU, memory, and disk stats over SSH" FontSize="10.5"
-                                                    Foreground="#8a8f98" TextTrimming="CharacterEllipsis" />
-                                            </StackPanel>
-                                        </Grid>
-                                    </Button>
-                                    <Button Classes="toolListItem"
-                                        Command="{Binding OpenCertbotTabCommand}"
-                                        ToolTip.Tip="Issue and renew TLS certificates via certbot over SSH">
-                                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
-                                            <Border Width="30" Height="30" CornerRadius="7" Background="#1c2733" VerticalAlignment="Center">
-                                                <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="&#xE8E8;" FontSize="15"
-                                                    Foreground="#6ea9d4" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                            </Border>
-                                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
-                                                <TextBlock Text="Certbot" FontSize="12.5" FontWeight="SemiBold" />
-                                                <TextBlock Text="Issue and renew TLS certs via certbot over SSH" FontSize="10.5"
-                                                    Foreground="#8a8f98" TextTrimming="CharacterEllipsis" />
-                                            </StackPanel>
-                                        </Grid>
-                                    </Button>
-                                    <Button Classes="toolListItem"
-                                        Command="{Binding OpenServerTransferTabCommand}"
-                                        ToolTip.Tip="Transfer a file directly between two saved servers">
-                                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
-                                            <Border Width="30" Height="30" CornerRadius="7" Background="#1c2733" VerticalAlignment="Center">
-                                                <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="&#xE8D4;" FontSize="15"
-                                                    Foreground="#6ea9d4" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                            </Border>
-                                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
-                                                <TextBlock Text="Server Transfer" FontSize="12.5" FontWeight="SemiBold" />
-                                                <TextBlock Text="Move a file directly between two servers" FontSize="10.5"
-                                                    Foreground="#8a8f98" TextTrimming="CharacterEllipsis" />
-                                            </StackPanel>
-                                        </Grid>
-                                    </Button>
-                                    <Button Classes="toolListItem"
-                                        Command="{Binding OpenSystemdServiceTabCommand}"
-                                        ToolTip.Tip="Start, stop, and restart systemd services over SSH">
-                                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
-                                            <Border Width="30" Height="30" CornerRadius="7" Background="#1c2733" VerticalAlignment="Center">
-                                                <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="&#xE8AC;" FontSize="15"
-                                                    Foreground="#6ea9d4" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                            </Border>
-                                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
-                                                <TextBlock Text="Service Manager" FontSize="12.5" FontWeight="SemiBold" />
-                                                <TextBlock Text="Start, stop, restart systemd services over SSH" FontSize="10.5"
-                                                    Foreground="#8a8f98" TextTrimming="CharacterEllipsis" />
-                                            </StackPanel>
-                                        </Grid>
-                                    </Button>
-                                    </StackPanel>
+                                    <TextBlock Text="Drag a row to reorder" FontSize="10"
+                                        Foreground="#666" FontStyle="Italic" Margin="0,-4,0,0" />
+                                    <ItemsControl Name="ToolsItemsControl" ItemsSource="{Binding ToolMenuItems}"
+                                        DragDrop.AllowDrop="True"
+                                        DragDrop.DragOver="ToolsList_DragOver" DragDrop.Drop="ToolsList_Drop">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <StackPanel Spacing="4" />
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="2">
+                                                    <!-- Drag start lives only on this grip — a Button's Click fires on
+                                                         pointer release regardless of what happened during the drag
+                                                         gesture in between, so making the whole row draggable made
+                                                         every drag attempt also open the tool. Separating the drag
+                                                         handle from the clickable area avoids that conflict entirely. -->
+                                                    <Border Grid.Column="0" Width="20" Cursor="SizeAll"
+                                                        Background="Transparent"
+                                                        PointerPressed="ToolItem_PointerPressed"
+                                                        PointerMoved="ToolItem_PointerMoved"
+                                                        ToolTip.Tip="Drag to reorder">
+                                                        <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="&#xE945;" FontSize="14"
+                                                            Foreground="#555" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                    </Border>
+                                                    <Button Grid.Column="1" Classes="toolListItem"
+                                                        Command="{Binding Command}"
+                                                        ToolTip.Tip="{Binding Description}">
+                                                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                                                            <Border Width="30" Height="30" CornerRadius="7" Background="#1c2733" VerticalAlignment="Center">
+                                                                <TextBlock FontFamily="{StaticResource MaterialIconFont}" Text="{Binding IconGlyph}" FontSize="15"
+                                                                    Foreground="#6ea9d4" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                            </Border>
+                                                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
+                                                                <TextBlock Text="{Binding Title}" FontSize="12.5" FontWeight="SemiBold" />
+                                                                <TextBlock Text="{Binding Description}" FontSize="10.5"
+                                                                    Foreground="#8a8f98" TextTrimming="CharacterEllipsis" />
+                                                            </StackPanel>
+                                                        </Grid>
+                                                    </Button>
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
                                 </StackPanel>
                             </ScrollViewer>
                         <ScrollViewer VerticalScrollBarVisibility="Auto"
@@ -2640,6 +2503,21 @@
                                                             PlaceholderText="nginx, docker, postgresql, ..."
                                                             Padding="10" />
                                                     </Grid>
+                                                    <ItemsControl ItemsSource="{Binding CommonUnitNames}">
+                                                        <ItemsControl.ItemsPanel>
+                                                            <ItemsPanelTemplate>
+                                                                <WrapPanel Orientation="Horizontal" />
+                                                            </ItemsPanelTemplate>
+                                                        </ItemsControl.ItemsPanel>
+                                                        <ItemsControl.ItemTemplate>
+                                                            <DataTemplate>
+                                                                <Button Content="{Binding}"
+                                                                    Command="{Binding $parent[ItemsControl].((vm:SystemdServiceTabViewModel)DataContext).SelectUnitNameCommand}"
+                                                                    CommandParameter="{Binding}"
+                                                                    Classes="toolButton" FontSize="11" Padding="10,5" />
+                                                            </DataTemplate>
+                                                        </ItemsControl.ItemTemplate>
+                                                    </ItemsControl>
                                                     <StackPanel Orientation="Horizontal" Spacing="10">
                                                         <Button Content="Status"
                                                             Command="{Binding StatusCommand}"

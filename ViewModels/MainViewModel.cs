@@ -505,6 +505,9 @@ public class MainViewModel : INotifyPropertyChanged
     public ICommand OpenChatTabCommand { get; }
 
     private readonly ChatSettingsService _chatSettingsService = new();
+    private readonly ToolsOrderService _toolsOrderService = new();
+
+    public ObservableCollection<ToolMenuItem> ToolMenuItems { get; } = new();
     private readonly ChatHistoryService _chatHistoryService = new();
 
     private string _configPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Termox", "connections.json");
@@ -619,6 +622,7 @@ public class MainViewModel : INotifyPropertyChanged
         ShowAboutDialogCommand = new RelayCommand(() => IsAboutDialogVisible = true);
         ShowUserManualDialogCommand = new RelayCommand(() => IsUserManualDialogVisible = true);
 
+        BuildToolMenuItems();
         LoadConnections();
         RefreshRecentlyUsedSessions();
         LoadBookmarks();
@@ -720,52 +724,70 @@ public class MainViewModel : INotifyPropertyChanged
             return;
         }
 
-        TestStatus = "Testing connection...";
         TestStatusColor = "#f39c12";
         IsTestSuccessful = false;
 
-        try
+        // A brand-new host's key isn't known yet, so the first attempt always gets
+        // rejected the instant ConfirmNewHostFingerprint posts the confirm modal and
+        // returns false without waiting for it — same as the real Terminal-tab connect
+        // path, which is why that one retries (ConnectionRetryCount times, ConnectionRetryDelayMs
+        // apart) instead of failing outright on attempt one. This mirrors that so the user
+        // gets a real window to click Confirm before a later attempt gives up for good.
+        var maxAttempts = Math.Max(1, ConnectionRetryCount);
+        Exception? lastException = null;
+
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
         {
-            int portNumber = parsedPort;
+            TestStatus = attempt == 1 ? "Testing connection..." : $"Testing connection (attempt {attempt}/{maxAttempts})...";
 
-            var testClient = SshConnectionFactory.CreateSshClient(
-                Host ?? "", portNumber, Username ?? "", Password ?? "",
-                PrivateKeyPath ?? "", PrivateKeyPassphrase);
-
-            SshSecurity.ConfigureHostKeyPolicy(testClient, HostKeyFingerprint,
-                fingerprint => Dispatcher.UIThread.Post(() => HostKeyFingerprint = fingerprint),
-                fingerprint => ConfirmNewHostFingerprint(fingerprint, Host ?? ""));
-
-            var connectTask = Task.Run(() =>
+            try
             {
-                try { testClient.ConnectAsync(CancellationToken.None).GetAwaiter().GetResult(); }
-                finally
+                int portNumber = parsedPort;
+
+                var testClient = SshConnectionFactory.CreateSshClient(
+                    Host ?? "", portNumber, Username ?? "", Password ?? "",
+                    PrivateKeyPath ?? "", PrivateKeyPassphrase);
+
+                SshSecurity.ConfigureHostKeyPolicy(testClient, HostKeyFingerprint,
+                    fingerprint => Dispatcher.UIThread.Post(() => HostKeyFingerprint = fingerprint),
+                    fingerprint => ConfirmNewHostFingerprint(fingerprint, Host ?? ""));
+
+                var connectTask = Task.Run(() =>
                 {
-                    try { testClient.Disconnect(); } catch { }
-                    testClient.Dispose();
-                }
-            });
+                    try { testClient.ConnectAsync(CancellationToken.None).GetAwaiter().GetResult(); }
+                    finally
+                    {
+                        try { testClient.Disconnect(); } catch { }
+                        testClient.Dispose();
+                    }
+                });
 
-            var completed = await Task.WhenAny(connectTask, Task.Delay(TimeSpan.FromSeconds(10)));
-            if (completed != connectTask)
-            {
-                TestStatus = "Test timed out after 10 seconds.";
-                TestStatusColor = "#f39c12";
+                var completed = await Task.WhenAny(connectTask, Task.Delay(TimeSpan.FromSeconds(10)));
+                if (completed != connectTask)
+                {
+                    TestStatus = "Test timed out after 10 seconds.";
+                    TestStatusColor = "#f39c12";
+                    return;
+                }
+
+                await connectTask;
+
+                TestStatus = "Test Successful!";
+                TestStatusColor = "#4caf50";
+                IsTestSuccessful = true;
                 return;
             }
-
-            await connectTask;
-
-            TestStatus = "Test Successful!";
-            TestStatusColor = "#4caf50";
-            IsTestSuccessful = true;
+            catch (Exception ex)
+            {
+                lastException = ex;
+                if (attempt < maxAttempts)
+                    await Task.Delay(Math.Max(0, ConnectionRetryDelayMs));
+            }
         }
-        catch (Exception ex)
-        {
-            TestStatus = "Test Failed: " + ex.Message;
-            TestStatusColor = "#f44336";
-            IsTestSuccessful = false;
-        }
+
+        TestStatus = "Test Failed: " + (lastException?.Message ?? "Unknown error.");
+        TestStatusColor = "#f44336";
+        IsTestSuccessful = false;
     }
 
     private bool ConfirmNewHostFingerprint(string fingerprint, string host)
@@ -1472,6 +1494,55 @@ public class MainViewModel : INotifyPropertyChanged
         }, SavedConnections);
         Tabs.Add(serviceTab);
         SelectedTab = serviceTab;
+    }
+
+    /// <summary>
+    /// Builds the fixed catalog of sidebar Tools rows (id/title/description/icon/command),
+    /// then applies whatever order the user previously dragged them into (falls back to
+    /// this catalog order itself on first run / no saved order / a corrupted save file).
+    /// </summary>
+    private void BuildToolMenuItems()
+    {
+        var catalog = new List<ToolMenuItem>
+        {
+            new() { Id = "PortScanner", Title = "Port Scanner", Description = "Check open TCP ports on a host", IconGlyph = "", Command = OpenPortScannerTabCommand },
+            new() { Id = "PingTest", Title = "Ping Test", Description = "Measure reachability and latency", IconGlyph = "", Command = OpenPingTestTabCommand },
+            new() { Id = "SshKeyGenerator", Title = "SSH Key Generator", Description = "Create new OpenSSH key pairs", IconGlyph = "", Command = OpenSshKeyGeneratorTabCommand },
+            new() { Id = "ConnectionTester", Title = "Connection Tester", Description = "Batch-test all saved connections", IconGlyph = "", Command = OpenConnectionTesterTabCommand },
+            new() { Id = "SshEndpointTest", Title = "SSH Endpoint Test", Description = "Check SSH endpoint reachability", IconGlyph = "", Command = OpenSshEndpointTestTabCommand },
+            new() { Id = "GpgKeyManager", Title = "GPG Key Manager", Description = "Manage, import, and export GPG keys", IconGlyph = "", Command = OpenGpgTabCommand },
+            new() { Id = "FingerprintUtilities", Title = "Fingerprint Utilities", Description = "Hash and compare file/text fingerprints", IconGlyph = "", Command = OpenFingerprintTabCommand },
+            new() { Id = "DnsInspector", Title = "DNS Inspector", Description = "Query DNS records for any domain", IconGlyph = "", Command = OpenDnsTabCommand },
+            new() { Id = "ServerStats", Title = "Server Stats", Description = "CPU, memory, and disk stats over SSH", IconGlyph = "", Command = OpenServerStatsTabCommand },
+            new() { Id = "Certbot", Title = "Certbot", Description = "Issue and renew TLS certs via certbot over SSH", IconGlyph = "", Command = OpenCertbotTabCommand },
+            new() { Id = "ServerTransfer", Title = "Server Transfer", Description = "Move a file directly between two servers", IconGlyph = "", Command = OpenServerTransferTabCommand },
+            new() { Id = "SystemdService", Title = "Service Manager", Description = "Start, stop, restart systemd services over SSH", IconGlyph = "", Command = OpenSystemdServiceTabCommand }
+        };
+
+        var savedOrder = _toolsOrderService.Load();
+        var resolvedOrder = ToolsOrderService.ApplySavedOrder(catalog.Select(t => t.Id).ToList(), savedOrder);
+        var byId = catalog.ToDictionary(t => t.Id);
+
+        ToolMenuItems.Clear();
+        foreach (var id in resolvedOrder)
+            ToolMenuItems.Add(byId[id]);
+    }
+
+    /// <summary>
+    /// Moves a Tools-list row to a new position (drag-and-drop reorder) and persists the
+    /// result. Called from DragOver each time the dragged row crosses into a new slot (so
+    /// the list visually reflows live during the drag), not on every raw pointer-move
+    /// event — bounded by how many rows get crossed in one drag, so the extra disk writes
+    /// are negligible.
+    /// </summary>
+    public void ReorderToolMenuItem(int fromIndex, int toIndex)
+    {
+        if (fromIndex == toIndex || fromIndex < 0 || fromIndex >= ToolMenuItems.Count ||
+            toIndex < 0 || toIndex >= ToolMenuItems.Count)
+            return;
+
+        ToolMenuItems.Move(fromIndex, toIndex);
+        _toolsOrderService.Save(ToolMenuItems.Select(t => t.Id));
     }
 
     private void OpenChatTab()

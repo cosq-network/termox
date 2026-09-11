@@ -201,6 +201,9 @@ public class ServerTransferTabViewModel : INotifyPropertyChanged, ITabViewModel
     /// </summary>
     private static (string Status, string Color) TransferStatus(string result)
     {
+        if (SudoFailureDetector.IsSudoFailure(result, out var sudoReason))
+            return (sudoReason, "#f44336");
+
         if (result.Contains("Connection refused", StringComparison.OrdinalIgnoreCase) ||
             result.Contains("Connection closed", StringComparison.OrdinalIgnoreCase) ||
             result.Contains("Connection timed out", StringComparison.OrdinalIgnoreCase) ||

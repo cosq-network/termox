@@ -43,6 +43,20 @@ public class SystemdServiceTabViewModel : INotifyPropertyChanged, ITabViewModel
         set { _unitName = value; OnPropertyChanged(); }
     }
 
+    /// <summary>
+    /// Common service names across distros, shown as quick-select chips below the unit
+    /// name field — unit names vary (nginx is always nginx, but SSH is "ssh" on Debian/
+    /// Ubuntu and "sshd" on RHEL/Fedora/Arch), so this is a starting point, not a fixed
+    /// list — the field stays free text.
+    /// </summary>
+    public string[] CommonUnitNames { get; } =
+    {
+        "nginx", "apache2", "httpd", "docker", "mysql", "mariadb", "postgresql",
+        "redis-server", "mongod", "ssh", "sshd", "cron", "postfix", "php-fpm"
+    };
+
+    public ICommand SelectUnitNameCommand { get; }
+
     private bool _isBusy;
     public bool IsBusy
     {
@@ -108,6 +122,7 @@ public class SystemdServiceTabViewModel : INotifyPropertyChanged, ITabViewModel
         RestartCommand = new RelayCommand(() => Run("Restarting...", p => _systemdService.RestartAsync(p, UnitName), "Restarted."), () => !IsBusy);
         EnableCommand = new RelayCommand(() => Run("Enabling...", p => _systemdService.EnableAsync(p, UnitName), "Enabled."), () => !IsBusy);
         DisableCommand = new RelayCommand(() => Run("Disabling...", p => _systemdService.DisableAsync(p, UnitName), "Disabled."), () => !IsBusy);
+        SelectUnitNameCommand = new RelayCommand<string>(name => UnitName = name ?? "");
         CloseTabCommand = new RelayCommand(() => _onClose(this));
     }
 

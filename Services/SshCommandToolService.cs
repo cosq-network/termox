@@ -27,7 +27,13 @@ public class SshCommandToolService
         {
             await client.ConnectAsync(cancellationToken).ConfigureAwait(false);
 
-            if (!sudo)
+            // The root account already has full privileges and often has no `sudo` binary
+            // at all on minimal images (this is why "sudo: command not found" could show up
+            // even though the actual permission the caller wanted was already there) — so a
+            // profile logged in as root runs the plain command either way, sudo or not.
+            var needsSudo = sudo && !string.Equals(profile.Username, "root", StringComparison.Ordinal);
+
+            if (!needsSudo)
             {
                 using var sshCommand = client.CreateCommand(command);
                 sshCommand.CommandTimeout = CommandTimeout;

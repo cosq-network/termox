@@ -48,6 +48,7 @@ public class SystemdServiceCommandTests
     [InlineData("Sorry, try again.")]
     [InlineData("sudo: a password is required")]
     [InlineData("sudo: apt: command not found")]
+    [InlineData("sh: systemctl: not found")]
     public void SudoFailureDetector_KnownFailurePhrases_Detected(string output)
     {
         Assert.True(SudoFailureDetector.IsSudoFailure(output, out var reason));
