@@ -151,7 +151,8 @@ Release packages are self-contained and do not require a separate .NET runtime.
 
 ### Windows
 
-Download and run the Windows installer, then launch Termox from the Start menu.
+Download and run the Windows installer (EXE), or use the MSI or MSIX package.
+The release workflow builds all three formats automatically.
 
 ### macOS
 
@@ -166,6 +167,8 @@ Install the Debian package on Debian-based systems:
 ```bash
 sudo apt install ./Termox-X.Y.Z-linux-x64.deb
 ```
+
+The release workflow also builds an RPM package for RPM-based distributions.
 
 Alternatively, extract the portable tar archive:
 
@@ -218,13 +221,15 @@ by SSH.NET. Automated tests are located in `tests/Termox.Tests`.
 
 ## CI/CD and releases
 
-GitHub Actions runs CI for pull requests and pushes to `main` or `master`. CI
+GitHub Actions runs CI on a GitFlow branch model: pushes to `main`, `dev`,
+`release/**`, and `hotfix/**`, plus pull requests targeting `main` or `dev`. CI
 restores dependencies, runs tests, builds the application, and uploads coverage
 when available.
 
-The Release workflow is manually started from the default branch. It accepts a
-`patch`, `minor`, or `major` bump, finds the newest `vX.Y.Z` tag, calculates the
-next version, builds Windows, Linux, and macOS packages, verifies artifacts,
+The Release workflow runs automatically on every push to `main` when Conventional
+Commits are present. It calculates the next semantic version from the commits
+since the last release, builds Windows (EXE/MSI/MSIX), Linux (DEB/RPM/tar.gz),
+and macOS (DMG/ZIP) packages, verifies all artifacts, creates a `vX.Y.Z` tag,
 generates `SHA256SUMS.txt`, and publishes a GitHub Release.
 
 See the [CI/CD integration guide](docs/CI-CD-INTEGRATION.md) for repository

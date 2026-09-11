@@ -1,10 +1,35 @@
 name: CI
 
+# ---------------------------------------------------------------------------
+# GitFlow branch model
+#
+#  main          Production branch. Every push here is a released commit.
+#                CI verifies the post-merge state on all three platforms.
+#
+#  dev           Integration branch. All feature branches merge here first.
+#                Full build-and-test matrix runs on every push.
+#
+#  feature/**    Short-lived feature branches. CI runs when a PR is opened
+#                or updated against dev.
+#
+#  release/**    Release preparation branches cut from dev. CI runs on push
+#                to catch regressions before merging to main.
+#
+#  hotfix/**     Emergency fix branches cut from main. CI runs on push so
+#                the fix is verified before it merges back to main and dev.
+# ---------------------------------------------------------------------------
+
 on:
   push:
-    branches: [main, master, dev]
+    branches:
+      - main
+      - dev
+      - 'release/**'
+      - 'hotfix/**'
   pull_request:
-    branches: [main, master, dev]
+    branches:
+      - main
+      - dev
 
 permissions:
   contents: read
@@ -26,6 +51,7 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      # Restore the test project explicitly so its assets file is generated.
       - name: Restore
         run: dotnet restore tests/Termox.Tests/Termox.Tests.csproj
 
@@ -38,11 +64,20 @@ jobs:
       - name: Test
         shell: bash
         run: |
+          TEST_CMD='dotnet test tests/Termox.Tests/Termox.Tests.csproj --no-restore --configuration Release --collect:"XPlat Code Coverage" --results-directory coverage'
           if [ "${{ matrix.os }}" = "ubuntu-latest" ]; then
-            dbus-run-session -- bash -c 'echo -n "ci" | gnome-keyring-daemon --unlock --daemonize; dotnet test tests/Termox.Tests/Termox.Tests.csproj --no-restore --configuration Release'
+            dbus-run-session -- bash -c "echo -n 'ci' | gnome-keyring-daemon --unlock --daemonize; $TEST_CMD"
           else
-            dotnet test tests/Termox.Tests/Termox.Tests.csproj --no-restore --configuration Release
+            eval "$TEST_CMD"
           fi
 
       - name: Build application
         run: dotnet build Termox.csproj --no-restore --configuration Release
+
+      # Upload coverage once (Ubuntu only) to avoid duplicate Codecov reports.
+      - name: Upload coverage
+        if: matrix.os == 'ubuntu-latest'
+        uses: codecov/codecov-action@v5.4.3
+        with:
+          files: coverage/**/coverage.cobertura.xml
+          fail_ci_if_error: false

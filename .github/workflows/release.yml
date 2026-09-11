@@ -1,14 +1,31 @@
 name: Release
 
+# ---------------------------------------------------------------------------
+# Automatic release on every merge to main.
+#
+# Version bump is derived entirely from Conventional Commits in the range
+# since the last vX.Y.Z tag:
+#
+#   BREAKING CHANGE footer  or  type!:  →  major bump  (1.2.3 → 2.0.0)
+#   feat:                               →  minor bump  (1.2.3 → 1.3.0)
+#   fix: / chore: / docs: / refactor:
+#   perf: / test: / build: / ci:        →  patch bump  (1.2.3 → 1.2.4)
+#
+# If no tagged release exists yet the first release is v1.0.0.
+# If the commit range contains no conventional commits the workflow exits
+# cleanly without creating a release (e.g. a pure docs push).
+#
+# GitFlow rules enforced by this workflow:
+#   • Only runs on push to main.
+#   • Reads commits merged in via release/* or hotfix/* branches.
+#   • Prevents double-releases: aborts if the calculated vX.Y.Z tag already
+#     exists.
+# ---------------------------------------------------------------------------
+
 on:
-  workflow_dispatch:
-    inputs:
-      bump:
-        description: Semantic version increment
-        required: true
-        default: patch
-        type: choice
-        options: [patch, minor, major]
+  push:
+    branches:
+      - main
 
 permissions:
   contents: read
@@ -18,59 +35,181 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # -------------------------------------------------------------------------
+  # 1. Calculate the next version from Conventional Commits.
+  # -------------------------------------------------------------------------
   version:
-    name: Calculate release version
+    name: Detect bump and calculate version
     runs-on: ubuntu-latest
     outputs:
-      version: ${{ steps.version.outputs.version }}
+      version:    ${{ steps.semver.outputs.version }}
+      bump:       ${{ steps.semver.outputs.bump }}
+      skip:       ${{ steps.semver.outputs.skip }}
+      changelog:  ${{ steps.semver.outputs.changelog }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with: { fetch-depth: 0 }
-      - name: Increment semantic version
-        id: version
-        env:
-          BUMP: ${{ inputs.bump }}
-          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        with:
+          fetch-depth: 0   # full history needed to walk commits since last tag
+
+      - name: Derive next semantic version from Conventional Commits
+        id: semver
         shell: bash
         run: |
           set -euo pipefail
-          if [[ "$GITHUB_REF_NAME" != "$DEFAULT_BRANCH" ]]; then
-            echo "Releases must run from the default branch ($DEFAULT_BRANCH)." >&2
-            exit 1
+
+          # ── Find the most recent release tag ──────────────────────────────
+          latest_tag="$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' \
+                          --sort=-version:refname | head -n 1 || true)"
+
+          if [[ -n "$latest_tag" ]]; then
+            base_ref="$latest_tag"
+            current="${latest_tag#v}"
+          else
+            # No prior release — treat every commit on main as new.
+            base_ref="$(git rev-list --max-parents=0 HEAD)"
+            current="0.0.0"
           fi
-          latest="$(git tag --list 'v[0-9]*' --sort=-version:refname | head -n 1 || true)"
-          current="${latest#v}"
-          [[ -n "$current" ]] || current=1.0.0
+
           IFS=. read -r major minor patch <<< "$current"
-          case "$BUMP" in
+
+          # ── Walk commits since the base ref ───────────────────────────────
+          # Format: full subject on one line per commit.
+          commits="$(git log "${base_ref}..HEAD" --pretty=format:'%s%n%b' \
+                      --no-merges 2>/dev/null || true)"
+
+          if [[ -z "$commits" ]]; then
+            echo "No new commits since $base_ref — nothing to release."
+            echo "skip=true"  >> "$GITHUB_OUTPUT"
+            echo "version="   >> "$GITHUB_OUTPUT"
+            echo "bump="      >> "$GITHUB_OUTPUT"
+            echo "changelog=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # ── Determine bump level ──────────────────────────────────────────
+          #
+          # Priority: breaking > feat > fix/others
+          #
+          # A commit is a breaking change when:
+          #   • its type ends with !  (e.g. feat!: or fix!:)
+          #   • its body/footer contains the literal text "BREAKING CHANGE"
+          bump="none"
+
+          while IFS= read -r line; do
+            if echo "$line" | grep -qE '^[a-zA-Z]+(\([^)]*\))?!: '; then
+              bump="major"; break
+            fi
+            if [[ "$line" == *"BREAKING CHANGE"* ]]; then
+              bump="major"; break
+            fi
+            if echo "$line" | grep -qE '^feat(\([^)]*\))?: '; then
+              if [[ "$bump" != "major" ]]; then bump="minor"; fi
+            fi
+            if echo "$line" | grep -qE '^(fix|chore|docs|style|refactor|perf|test|build|ci)(\([^)]*\))?: '; then
+              if [[ "$bump" == "none" ]]; then bump="patch"; fi
+            fi
+          done <<< "$commits"
+
+          if [[ "$bump" == "none" ]]; then
+            echo "No conventional commits found since $base_ref — skipping release."
+            echo "skip=true"  >> "$GITHUB_OUTPUT"
+            echo "version="   >> "$GITHUB_OUTPUT"
+            echo "bump=none"  >> "$GITHUB_OUTPUT"
+            echo "changelog=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # ── Calculate new version ─────────────────────────────────────────
+          case "$bump" in
             major) major=$((major + 1)); minor=0; patch=0 ;;
             minor) minor=$((minor + 1)); patch=0 ;;
             patch) patch=$((patch + 1)) ;;
-            *) echo "Unsupported bump: $BUMP" >&2; exit 1 ;;
           esac
-          version="$major.$minor.$patch"
-          git rev-parse "v$version" >/dev/null 2>&1 && { echo "Release tag v$version already exists." >&2; exit 1; }
-          echo "version=$version" >> "$GITHUB_OUTPUT"
+          version="${major}.${minor}.${patch}"
 
+          # ── Guard against duplicate tags ──────────────────────────────────
+          if git rev-parse "v${version}" >/dev/null 2>&1; then
+            echo "Tag v${version} already exists — aborting to prevent duplicate release." >&2
+            exit 1
+          fi
+
+          # ── Build a minimal changelog ─────────────────────────────────────
+          # Collect the subject lines of conventional commits grouped by type.
+          breaking_lines=""
+          feat_lines=""
+          fix_lines=""
+          other_lines=""
+
+          while IFS= read -r line; do
+            if echo "$line" | grep -qE '^[a-zA-Z]+(\([^)]*\))?!: ' || \
+               [[ "$line" == *"BREAKING CHANGE"* ]]; then
+              breaking_lines="${breaking_lines}- ${line}"$'\n'
+            elif echo "$line" | grep -qE '^feat(\([^)]*\))?: '; then
+              feat_lines="${feat_lines}- ${line}"$'\n'
+            elif echo "$line" | grep -qE '^fix(\([^)]*\))?: '; then
+              fix_lines="${fix_lines}- ${line}"$'\n'
+            elif echo "$line" | grep -qE '^(chore|docs|style|refactor|perf|test|build|ci)(\([^)]*\))?: '; then
+              other_lines="${other_lines}- ${line}"$'\n'
+            fi
+          done <<< "$commits"
+
+          changelog=""
+          [[ -n "$breaking_lines" ]] && changelog="${changelog}### ⚠ Breaking Changes"$'\n'"${breaking_lines}"$'\n'
+          [[ -n "$feat_lines" ]]     && changelog="${changelog}### Features"$'\n'"${feat_lines}"$'\n'
+          [[ -n "$fix_lines" ]]      && changelog="${changelog}### Bug Fixes"$'\n'"${fix_lines}"$'\n'
+          [[ -n "$other_lines" ]]    && changelog="${changelog}### Other Changes"$'\n'"${other_lines}"$'\n'
+
+          echo "Bump:    $bump"
+          echo "Version: $version"
+
+          # Multi-line output requires the heredoc syntax for GITHUB_OUTPUT.
+          {
+            echo "skip=false"
+            echo "bump=$bump"
+            echo "version=$version"
+            echo "changelog<<CHANGELOG_EOF"
+            printf '%s' "$changelog"
+            echo "CHANGELOG_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+  # -------------------------------------------------------------------------
+  # 2. Full test matrix — must pass before any packaging starts.
+  # -------------------------------------------------------------------------
   test:
-    name: Release verification
+    name: Release verification (${{ matrix.os }})
     needs: version
-    runs-on: ubuntu-latest
+    if: needs.version.outputs.skip == 'false'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
         with: { dotnet-version: '10.0.x' }
       - run: dotnet restore tests/Termox.Tests/Termox.Tests.csproj
       - name: Set up keyring (Linux)
+        if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
           sudo apt-get install -y gnome-keyring dbus-x11 libsecret-tools
       - name: Test
-        run: dbus-run-session -- bash -c 'echo -n "ci" | gnome-keyring-daemon --unlock --daemonize; dotnet test tests/Termox.Tests/Termox.Tests.csproj --no-restore --configuration Release'
+        shell: bash
+        run: |
+          if [ "${{ matrix.os }}" = "ubuntu-latest" ]; then
+            dbus-run-session -- bash -c 'echo -n "ci" | gnome-keyring-daemon --unlock --daemonize; dotnet test tests/Termox.Tests/Termox.Tests.csproj --no-restore --configuration Release'
+          else
+            dotnet test tests/Termox.Tests/Termox.Tests.csproj --no-restore --configuration Release
+          fi
 
+  # -------------------------------------------------------------------------
+  # 3. Platform packaging jobs — run in parallel after tests pass.
+  # -------------------------------------------------------------------------
   windows:
     name: Windows installer
     needs: [version, test]
+    if: needs.version.outputs.skip == 'false'
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -79,99 +218,225 @@ jobs:
       - name: Show disk space
         shell: powershell
         run: Get-PSDrive -PSProvider FileSystem
-      - name: Install Inno Setup
+      - name: Install Windows packaging tools
         shell: powershell
-        run: choco install innosetup -y --no-progress
+        run: |
+          choco install innosetup -y --no-progress
+          choco install wixtoolset --version=3.14.1.20250415 -y --no-progress
+          $wixBin = Get-ChildItem "${env:ProgramFiles(x86)}" -Directory -Filter 'WiX Toolset v3.*' -ErrorAction SilentlyContinue |
+            Sort-Object Name -Descending |
+            Select-Object -First 1 |
+            Join-Path -ChildPath bin
+          if (-not (Test-Path (Join-Path $wixBin candle.exe))) { throw 'WiX Toolset binaries not found.' }
+          $wixBin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
       - name: Publish Windows application
         shell: powershell
         env:
           VERSION: ${{ needs.version.outputs.version }}
-        run: dotnet publish Termox.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeAllContentForSelfExtract=true -p:Version=$env:VERSION -p:VersionPrefix=$env:VERSION -o artifacts/publish/win-x64
-      - name: Build Windows installer
+        run: >
+          dotnet publish Termox.csproj -c Release -r win-x64 --self-contained true
+          -p:PublishSingleFile=true -p:IncludeAllContentForSelfExtract=true
+          -p:Version=$env:VERSION -p:VersionPrefix=$env:VERSION
+          -o artifacts/publish/win-x64
+      - name: Build Windows installer (EXE)
         shell: powershell
         env:
           VERSION: ${{ needs.version.outputs.version }}
-        run: iscc /DMyAppVersion=$env:VERSION /DSourceDir="$env:GITHUB_WORKSPACE\artifacts\publish\win-x64" /Qp packaging\windows\termox.iss
-      - name: Verify Windows installer
+        run: >
+          iscc /DMyAppVersion=$env:VERSION
+          /DSourceDir="$env:GITHUB_WORKSPACE\artifacts\publish\win-x64"
+          /Qp packaging\windows\termox.iss
+      - name: Build Windows MSI (WiX)
         shell: powershell
         env:
           VERSION: ${{ needs.version.outputs.version }}
-        run: if (-not (Test-Path "artifacts/release/Termox-$env:VERSION-windows-x64.exe")) { throw "Windows installer was not created." }
+        run: |
+          $publish = (Resolve-Path 'artifacts/publish/win-x64').Path
+          $workDir = New-Item -ItemType Directory -Force -Path artifacts/wix
+          $fragment = Join-Path $workDir 'TermoxFiles.wxs'
+          & heat.exe dir $publish -dr INSTALLFOLDER -cg TermoxFiles -var var.SourceDir -srd -sreg -ag -nologo -out $fragment
+          $outDir = "$($workDir.FullName.Replace('/', '\\'))\\"
+          & candle.exe -arch x64 -out $outDir "-dMyAppVersion=$env:VERSION" "-dTermoxRoot=$env:GITHUB_WORKSPACE" "-dSourceDir=$publish" @(
+            'packaging/windows/termox.wxs',
+            $fragment
+          )
+          & light.exe -out "artifacts/release/Termox-$env:VERSION-windows-x64.msi" -b $publish @(
+            (Join-Path $workDir 'termox.wixobj'),
+            (Join-Path $workDir 'TermoxFiles.wixobj')
+          )
+      - name: Build Windows MSIX
+        shell: powershell
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          $publish = (Resolve-Path 'artifacts/publish/win-x64').Path
+          $staging = New-Item -ItemType Directory -Force -Path artifacts/msix-staging
+          Copy-Item -Path "$publish/*" -Destination $staging -Recurse -Force
+          $assets = New-Item -ItemType Directory -Force -Path "$staging/Assets"
+          Copy-Item -Path "$env:GITHUB_WORKSPACE/Assets/Icons/termox-icon.png" -Destination "$assets/termox-icon.png" -Force
+          Copy-Item -Path "$env:GITHUB_WORKSPACE/packaging/windows/AppxManifest.xml" -Destination "$staging/AppxManifest.xml" -Force
+          $manifestText = Get-Content "$staging/AppxManifest.xml" -Raw
+          $manifestText = $manifestText -replace '__PUBLISHER__', 'CN=Termox Project, OID.2.25.311729368913984317654407730594956997722=1'
+          $manifestText = $manifestText -replace '__VERSION__', "$env:VERSION.0"
+          $manifestText = $manifestText -replace '__ARCH__', 'x64'
+          Set-Content -Path "$staging/AppxManifest.xml" -Value $manifestText
+          $makeAppx = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter 'makeappx.exe' |
+            Where-Object { $_.FullName -like '*x64*' } |
+            Select-Object -First 1
+          if (-not $makeAppx) { throw 'makeappx.exe (x64) not found.' }
+          & $makeAppx.FullName pack /v /o /d $staging /p "artifacts/release/Termox-$env:VERSION-windows-x64.msix"
+      - name: Verify Windows packages
+        shell: powershell
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          $expected = @(
+            "Termox-$env:VERSION-windows-x64.exe",
+            "Termox-$env:VERSION-windows-x64.msi",
+            "Termox-$env:VERSION-windows-x64.msix"
+          )
+          foreach ($artifact in $expected) {
+            if (-not (Test-Path "artifacts/release/$artifact")) { throw "Windows package not created: $artifact" }
+          }
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: release-windows
-          path: artifacts/release/Termox-*.exe
+          path: artifacts/release/Termox-*
           if-no-files-found: error
       - name: Clean Windows intermediates
         if: always()
         shell: powershell
-        run: Remove-Item -Recurse -Force -ErrorAction SilentlyContinue artifacts/publish, artifacts/release
+        run: Remove-Item -Recurse -Force -ErrorAction SilentlyContinue artifacts/publish, artifacts/msix-staging, artifacts/release
 
   linux:
-    name: Linux packages
+    name: Linux packages (${{ matrix.rid }})
     needs: [version, test]
+    if: needs.version.outputs.skip == 'false'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rid: linux-x64
+            enabled: true
+          # linux-arm64: set to true when arm runners are available or
+          # cross-compilation is configured.
+          - rid: linux-arm64
+            enabled: false
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        if: matrix.enabled
       - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        if: matrix.enabled
         with: { dotnet-version: '10.0.x' }
       - name: Show disk space
+        if: matrix.enabled
         run: df -h .
-      - run: bash packaging/linux/build-linux.sh "${{ needs.version.outputs.version }}" linux-x64
+      - name: Install packaging dependencies
+        if: matrix.enabled
+        run: sudo apt-get update && sudo apt-get install -y rpm
+      - name: Build Linux packages
+        if: matrix.enabled
+        run: bash packaging/linux/build-linux.sh "${{ needs.version.outputs.version }}" ${{ matrix.rid }}
       - name: Verify Linux packages
+        if: matrix.enabled
         env:
           VERSION: ${{ needs.version.outputs.version }}
+          RID: ${{ matrix.rid }}
         run: |
           set -euo pipefail
-          test -s "artifacts/release/Termox-$VERSION-linux-x64.tar.gz"
-          test -s "artifacts/release/Termox-$VERSION-linux-x64.deb"
-          tar -tzf "artifacts/release/Termox-$VERSION-linux-x64.tar.gz" | grep -E '(^|\./)usr/bin/Termox$'
-          dpkg-deb --info "artifacts/release/Termox-$VERSION-linux-x64.deb" >/dev/null
+          test -s "artifacts/release/Termox-$VERSION-$RID.tar.gz"
+          test -s "artifacts/release/Termox-$VERSION-$RID.deb"
+          test -f "artifacts/release/Termox-$VERSION-$RID.rpm"
+          tar -tzf "artifacts/release/Termox-$VERSION-$RID.tar.gz" | grep -E '(^|\./)usr/bin/Termox$'
+          dpkg-deb --info "artifacts/release/Termox-$VERSION-$RID.deb" >/dev/null
+          if command -v rpm >/dev/null 2>&1; then rpm -qip "artifacts/release/Termox-$VERSION-$RID.rpm" >/dev/null; fi
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with: { name: release-linux, path: artifacts/release/Termox-*, if-no-files-found: error }
+        if: matrix.enabled
+        with:
+          name: release-${{ matrix.rid }}
+          path: artifacts/release/Termox-*
+          if-no-files-found: error
 
   macos:
     name: macOS ${{ matrix.rid }}
     needs: [version, test]
+    if: needs.version.outputs.skip == 'false'
     strategy:
       matrix:
         include:
-          - { runner: macos-13, rid: osx-x64 }
           - { runner: macos-14, rid: osx-arm64 }
     runs-on: ${{ matrix.runner }}
+    env:
+      APPLE_CERTIFICATE_P12_BASE64: ${{ secrets.APPLE_CERTIFICATE_P12_BASE64 }}
+      APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+      APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
         with: { dotnet-version: '10.0.x' }
       - name: Show disk space
         run: df -h .
+      # Import the Developer ID certificate into a temporary keychain so that
+      # codesign can locate APPLE_SIGNING_IDENTITY on the fresh runner. Skipped
+      # when the certificate secret is absent, in which case the bundle is
+      # built unsigned (see packaging/macos/build-macos.sh).
+      - name: Import Apple Developer ID certificate
+        if: ${{ env.APPLE_CERTIFICATE_P12_BASE64 != '' }}
+        run: |
+          set -euo pipefail
+          KEYCHAIN_PATH="$RUNNER_TEMP/build.keychain-db"
+          KEYCHAIN_PASSWORD="$(/usr/bin/openssl rand -base64 24)"
+          /usr/bin/security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          /usr/bin/security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          /usr/bin/security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          /usr/bin/security default-keychain -s "$KEYCHAIN_PATH"
+          /usr/bin/security list-keychains -d user -s "$KEYCHAIN_PATH" \
+            $(/usr/bin/security list-keychains -d user | tr -d '"')
+          CERT_PATH="$RUNNER_TEMP/developer-id.p12"
+          printf '%s' "$APPLE_CERTIFICATE_P12_BASE64" | base64 --decode > "$CERT_PATH"
+          /usr/bin/security import "$CERT_PATH" -P "$APPLE_CERTIFICATE_PASSWORD" \
+            -A -f pkcs12 -k "$KEYCHAIN_PATH"
+          /usr/bin/security set-key-partition-list -S apple-tool:,apple: \
+            -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH" > /dev/null
+          rm -f "$CERT_PATH"
       - name: Build macOS artifacts
-        env:
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
         run: bash packaging/macos/build-macos.sh "${{ needs.version.outputs.version }}" "${{ matrix.rid }}"
       - name: Verify macOS bundle
         env:
           RID: ${{ matrix.rid }}
-          HAS_SECRETS: ${{ secrets.APPLE_SIGNING_IDENTITY != '' }}
+          SIGNED: ${{ env.APPLE_SIGNING_IDENTITY != '' }}
+          NOTARIZED: ${{ env.APPLE_ID != '' && env.APPLE_TEAM_ID != '' && env.APPLE_APP_PASSWORD != '' }}
         run: |
           set -euo pipefail
           APP="artifacts/Termox-$RID.app"
+          PLIST="$APP/Contents/Info.plist"
           test -d "$APP"
-          test -f "$APP/Contents/Info.plist"
+          test -f "$PLIST"
           test -f "$APP/Contents/MacOS/Termox"
           test -x "$APP/Contents/MacOS/Termox"
-          bundle_name="$(plutil -extract CFBundleName raw "$APP/Contents/Info.plist" 2>/dev/null || echo "")"
+          bundle_name="$(plutil -extract CFBundleName raw "$PLIST" 2>/dev/null || echo "")"
+          bundle_id="$(plutil -extract CFBundleIdentifier raw "$PLIST" 2>/dev/null || echo "")"
           if [[ -n "$bundle_name" ]]; then
-            test "$bundle_name" = "termox"
+            echo "CFBundleName:       $bundle_name"
+            echo "CFBundleIdentifier: $bundle_id"
+            [[ "$bundle_name" =~ ^[A-Za-z0-9_\ \-\.]+$ ]] || \
+              { echo "Unexpected CFBundleName: $bundle_name" >&2; exit 1; }
+            [[ "$bundle_id" =~ \. ]] || \
+              { echo "CFBundleIdentifier does not look like a reverse-DNS value: $bundle_id" >&2; exit 1; }
           fi
-          if [[ "$HAS_SECRETS" == "true" ]]; then
+          if [[ "$SIGNED" == "true" ]]; then
             codesign --verify --deep --strict "$APP"
+          else
+            echo "Unsigned bundle — skipping codesign verification."
+          fi
+          if [[ "$NOTARIZED" == "true" ]]; then
             xcrun stapler validate "$APP"
           else
-            echo "Unsigned bundle — skipping codesign and stapler verification."
+            echo "Notarization skipped — skipping stapler verification."
           fi
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -181,11 +446,17 @@ jobs:
       - name: Clean macOS intermediates
         if: always()
         shell: bash
-        run: rm -rf -- artifacts/publish artifacts/*.app artifacts/release
+        run: |
+          rm -rf -- artifacts/publish artifacts/*.app artifacts/release
+          /usr/bin/security delete-keychain "$RUNNER_TEMP/build.keychain-db" 2>/dev/null || true
 
+  # -------------------------------------------------------------------------
+  # 4. Tag, checksum, and publish the GitHub Release.
+  # -------------------------------------------------------------------------
   publish:
     name: Publish GitHub release
     needs: [version, windows, linux, macos]
+    if: needs.version.outputs.skip == 'false'
     runs-on: ubuntu-latest
     permissions: { contents: write }
     steps:
@@ -193,43 +464,80 @@ jobs:
         with: { fetch-depth: 0 }
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with: { pattern: release-*, path: artifacts/release, merge-multiple: true }
+
       - name: Verify downloaded artifacts
         env:
           VERSION: ${{ needs.version.outputs.version }}
         run: |
           set -euo pipefail
-          for artifact in "Termox-$VERSION-windows-x64.exe" "Termox-$VERSION-linux-x64.tar.gz" "Termox-$VERSION-linux-x64.deb" "Termox-$VERSION-osx-x64.dmg" "Termox-$VERSION-osx-x64.zip" "Termox-$VERSION-osx-arm64.dmg" "Termox-$VERSION-osx-arm64.zip"; do
-            test -s "artifacts/release/$artifact" || { echo "Missing artifact: $artifact" >&2; exit 1; }
+          for artifact in \
+            "Termox-$VERSION-windows-x64.exe" \
+            "Termox-$VERSION-windows-x64.msi" \
+            "Termox-$VERSION-windows-x64.msix" \
+            "Termox-$VERSION-linux-x64.tar.gz" \
+            "Termox-$VERSION-linux-x64.deb" \
+            "Termox-$VERSION-linux-x64.rpm" \
+            "Termox-$VERSION-osx-arm64.dmg" \
+            "Termox-$VERSION-osx-arm64.zip"; do
+            test -s "artifacts/release/$artifact" || \
+              { echo "Missing artifact: $artifact" >&2; exit 1; }
           done
+
       - name: Create and push release tag
         env:
           VERSION: ${{ needs.version.outputs.version }}
+          BUMP:    ${{ needs.version.outputs.bump }}
         run: |
           set -euo pipefail
-          git config user.name "github-actions[bot]"
+          git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag -a "v$VERSION" -m "Release v$VERSION"
+          if git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" >/dev/null 2>&1; then
+            echo "Tag v$VERSION already exists on remote — aborting to prevent duplicate release." >&2
+            exit 1
+          fi
+          git tag -a "v$VERSION" -m "Release v$VERSION ($BUMP bump)"
           git push origin "v$VERSION"
+
       - name: Generate SHA256 checksums
         working-directory: artifacts/release
         run: sha256sum Termox-* > SHA256SUMS.txt
-      - name: Publish release
+
+      - name: Publish GitHub Release
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           tag_name: v${{ needs.version.outputs.version }}
           name: Termox v${{ needs.version.outputs.version }}
-          generate_release_notes: true
-          files: artifacts/release/*
           body: |
-            Cross-platform Termox release v${{ needs.version.outputs.version }}.
+            ## What's Changed
 
+            ${{ needs.version.outputs.changelog }}
+
+            ---
+            **Bump type:** `${{ needs.version.outputs.bump }}`
             See `SHA256SUMS.txt` for artifact checksums.
-      - name: Clean up failed release tag
+          files: artifacts/release/*
+
+      - name: Clean up on publish failure
         if: failure()
         env:
-          VERSION: ${{ needs.version.outputs.version }}
+          VERSION:  ${{ needs.version.outputs.version }}
           GH_TOKEN: ${{ github.token }}
         run: |
           set +e
-          gh release delete "v$VERSION" --cleanup-tag --yes || true
-          git push origin ":refs/tags/v$VERSION" || true
+          echo "Publish failed — attempting to remove incomplete release and tag v$VERSION..."
+          gh release delete "v$VERSION" --cleanup-tag --yes
+          GH_EXIT=$?
+          if [[ $GH_EXIT -eq 0 ]]; then
+            echo "gh release delete succeeded."
+          else
+            echo "gh release delete failed (exit $GH_EXIT) — release may not exist yet."
+            git push origin ":refs/tags/v$VERSION"
+            TAG_EXIT=$?
+            if [[ $TAG_EXIT -eq 0 ]]; then
+              echo "Remote tag v$VERSION deleted."
+            else
+              echo "WARNING: Could not delete tag v$VERSION (exit $TAG_EXIT)."
+              echo "Delete manually: git push origin :refs/tags/v$VERSION"
+            fi
+          fi
+          exit 0

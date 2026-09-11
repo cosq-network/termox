@@ -8,8 +8,8 @@ troubleshooting for Termox.
 
 | Workflow | Trigger | Purpose |
 | --- | --- | --- |
-| .github/workflows/ci.yml | Pull requests and pushes to main or master | Restores dependencies, runs tests, builds the application, and uploads coverage when available. |
-| .github/workflows/release.yml | Manual workflow dispatch | Calculates a semantic version, validates, packages Windows/Linux/macOS, signs and notarizes macOS, tags, and publishes a GitHub Release. |
+| .github/workflows/ci.yml | Pushes to `main`, `dev`, `release/**`, `hotfix/**` and pull requests targeting `main` or `dev` | Restores dependencies, runs tests, builds the application, and uploads coverage when available. |
+| .github/workflows/release.yml | Automatic on push to `main` | Calculates a semantic version from Conventional Commits, validates, packages Windows/Linux/macOS, signs and notarizes macOS when secrets are present, tags, and publishes a GitHub Release. |
 
 Release outputs are self-contained; end users do not need a separate .NET
 installation.
@@ -36,8 +36,8 @@ permissions:
 
 This permits only the final release job to push the release tag and publish
 the GitHub Release. CI and all packaging jobs use read-only contents access.
-The release workflow also refuses to run unless it was dispatched from the
-repository's default branch.
+The release workflow triggers only on pushes to `main`, so releases are gated
+to the production branch.
 
 ### Branch protection
 
@@ -50,13 +50,18 @@ Protect the default branch and require:
 - No force pushes or branch deletion.
 - Release workflow access limited to trusted maintainers.
 
-The CI workflow recognizes main and master. Update the workflow if the
-repository uses another branch name.
+The CI workflow follows a GitFlow branch model and runs on `main`, `dev`,
+`release/**`, and `hotfix/**`, plus pull requests targeting `main` or `dev`.
+Update the workflow if the repository uses a different branch model.
 
 ## 3. Required GitHub secrets
 
-Windows and Linux builds require no secrets. macOS release jobs require all six
-repository secrets below:
+Windows and Linux builds require no secrets. For a signed and notarized macOS
+build, all six repository secrets below must be configured. When the signing
+secrets are absent the macOS job still succeeds but produces an unsigned,
+un-notarized bundle. The `APPLE_CERTIFICATE_P12_BASE64` value is decoded and
+imported into a temporary keychain on the runner so that `codesign` can locate
+`APPLE_SIGNING_IDENTITY`.
 
 | Secret | Value |
 | --- | --- |
@@ -133,12 +138,12 @@ Before starting:
 
 1. Merge the intended code into the default branch.
 2. Confirm CI is green on the release commit.
-3. Confirm all Apple secrets are present and valid.
+3. Confirm all Apple secrets are present and valid, if signing/notarization is required.
 4. Confirm the signing certificate has not expired.
 5. Confirm no conflicting vX.Y.Z tag already exists.
 
-Run the workflow from Actions → Release → Run workflow on the default branch,
-choose patch, minor, or major, and start it.
+Releases are automatic: when a push to `main` contains conventional commits,
+the release workflow calculates the next version and packages all platforms.
 
 Sequence:
 
@@ -157,12 +162,13 @@ the incomplete release tag when possible.
 
 | Platform | Artifacts |
 | --- | --- |
-| Windows | Termox-X.Y.Z-windows-x64.exe, an Inno Setup installer. |
-| Linux | Termox-X.Y.Z-linux-x64.deb and Termox-X.Y.Z-linux-x64.tar.gz. The packaging script maps linux-x64 to amd64, linux-arm64 to arm64, and linux-arm to armhf. |
-| macOS | Termox-X.Y.Z-osx-x64.dmg and .zip, plus equivalent osx-arm64 files. |
+| Windows | Termox-X.Y.Z-windows-x64.exe (Inno Setup), Termox-X.Y.Z-windows-x64.msi (WiX), Termox-X.Y.Z-windows-x64.msix (MakeAppx). |
+| Linux | Termox-X.Y.Z-linux-x64.tar.gz, Termox-X.Y.Z-linux-x64.deb (dpkg), Termox-X.Y.Z-linux-x64.rpm (rpmbuild). The packaging script maps linux-x64 to amd64, linux-arm64 to arm64, and linux-arm to armhf. |
+| macOS | Termox-X.Y.Z-osx-arm64.dmg and .zip (Apple Silicon only). |
 
-macOS DMGs are signed, notarized, and stapled. ZIPs are created from the
-stapled app bundles. SHA256SUMS.txt contains checksums for every Termox artifact:
+macOS DMGs are signed, notarized, and stapled when Apple secrets are configured.
+ZIPs are created from the stapled app bundles. SHA256SUMS.txt contains checksums
+for every Termox artifact:
 
 ```bash
 sha256sum -c SHA256SUMS.txt --ignore-missing
@@ -197,8 +203,10 @@ The certificate must already be available in the local keychain for codesign.
 
 ### Missing macOS secret
 
-The macOS matrix intentionally fails early when any required secret is absent.
-Check spelling, repository scope, and Actions access.
+When the signing secrets are absent the macOS job builds an unsigned bundle and
+skips notarization rather than failing. For a distributable release, confirm all
+six secrets are set with the correct spelling, repository scope, and Actions
+access, and that the certificate has not expired.
 
 ### codesign cannot find the identity
 
@@ -248,4 +256,4 @@ runner includes it; the .tar.gz archive remains the portable fallback.
 - Review third-party actions and update major versions deliberately.
 - Verify checksums after downloads.
 - Keep published release tags immutable.
-- Test both macOS architectures after native dependency changes.
+- Test the macOS arm64 build after native dependency changes.
