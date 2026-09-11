@@ -500,6 +500,8 @@ public class MainViewModel : INotifyPropertyChanged
     public ICommand OpenDnsTabCommand { get; }
     public ICommand OpenServerStatsTabCommand { get; }
     public ICommand OpenCertbotTabCommand { get; }
+    public ICommand OpenServerTransferTabCommand { get; }
+    public ICommand OpenSystemdServiceTabCommand { get; }
     public ICommand OpenChatTabCommand { get; }
 
     private readonly ChatSettingsService _chatSettingsService = new();
@@ -611,6 +613,8 @@ public class MainViewModel : INotifyPropertyChanged
         OpenDnsTabCommand = new RelayCommand(OpenDnsTab);
         OpenServerStatsTabCommand = new RelayCommand(OpenServerStatsTab);
         OpenCertbotTabCommand = new RelayCommand(OpenCertbotTab);
+        OpenServerTransferTabCommand = new RelayCommand(OpenServerTransferTab);
+        OpenSystemdServiceTabCommand = new RelayCommand(OpenSystemdServiceTab);
         OpenChatTabCommand = new RelayCommand(OpenChatTab);
         ShowAboutDialogCommand = new RelayCommand(() => IsAboutDialogVisible = true);
         ShowUserManualDialogCommand = new RelayCommand(() => IsUserManualDialogVisible = true);
@@ -1446,6 +1450,28 @@ public class MainViewModel : INotifyPropertyChanged
         }, SavedConnections);
         Tabs.Add(certbotTab);
         SelectedTab = certbotTab;
+    }
+
+    private void OpenServerTransferTab()
+    {
+        var transferTab = new ServerTransferTabViewModel(tab =>
+        {
+            Tabs.Remove(tab);
+            SaveCurrentSessions();
+        }, SavedConnections);
+        Tabs.Add(transferTab);
+        SelectedTab = transferTab;
+    }
+
+    private void OpenSystemdServiceTab()
+    {
+        var serviceTab = new SystemdServiceTabViewModel(tab =>
+        {
+            Tabs.Remove(tab);
+            SaveCurrentSessions();
+        }, SavedConnections);
+        Tabs.Add(serviceTab);
+        SelectedTab = serviceTab;
     }
 
     private void OpenChatTab()

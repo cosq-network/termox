@@ -25,6 +25,7 @@ public class ChatToolRegistry
     private readonly DnsRecordInspector _dnsInspector = new();
     private readonly GpgKeyManager _gpgKeyManager = new();
     private readonly CertbotService _certbotService = new();
+    private readonly SystemdService _systemdService = new();
 
     public ChatToolRegistry(ObservableCollection<SshConnectionProfile> savedConnections)
     {
@@ -233,6 +234,145 @@ public class ChatToolRegistry
                     var remotePath = RequireString(json, "remotePath");
                     var message = await _sftpTool.DeleteAsync(profile, remotePath, ct).ConfigureAwait(false);
                     return ChatToolResult.Ok(message);
+                }
+            },
+            new()
+            {
+                Name = "sftp_transfer_between_servers",
+                Description = "Move a file directly between two saved SSH servers, without downloading it to this " +
+                    "machine first. Mode 'relay' streams it through this process (works between any two servers, " +
+                    "no setup needed) — use this by default. Mode 'direct' runs rsync/scp ON the source server " +
+                    "targeting the destination directly; only use this if the user asks for it specifically, since " +
+                    "it requires the source server to already have network access and SSH key trust to the " +
+                    "destination configured — this tool never sends a stored credential into that remote command.",
+                ParametersSchema = ObjectSchema(
+                    optionalNames: new[] { "mode" },
+                    properties: new[]
+                    {
+                        ("sourceProfileId", StringProperty("Saved connection profile id to transfer from. Use list_connections to see available profiles.")),
+                        ("sourceRemotePath", StringProperty("Absolute file path on the source server.")),
+                        ("destProfileId", StringProperty("Saved connection profile id to transfer to.")),
+                        ("destRemotePath", StringProperty("Absolute destination file path on the destination server.")),
+                        ("mode", StringProperty("'relay' (default, recommended) or 'direct' (advanced, requires pre-existing source-to-destination SSH trust)."))
+                    }),
+                RiskLevel = ChatToolRiskLevel.RequiresApproval,
+                Execute = async (args, ct) =>
+                {
+                    var json = ParseArgs(args);
+                    var sourceProfileId = RequireString(json, "sourceProfileId");
+                    var sourceProfile = _savedConnections.FirstOrDefault(p => p.Id == sourceProfileId)
+                        ?? throw new InvalidOperationException($"Unknown connection profile id '{sourceProfileId}'.");
+                    var sourceRemotePath = RequireString(json, "sourceRemotePath");
+                    var destProfileId = RequireString(json, "destProfileId");
+                    var destProfile = _savedConnections.FirstOrDefault(p => p.Id == destProfileId)
+                        ?? throw new InvalidOperationException($"Unknown connection profile id '{destProfileId}'.");
+                    var destRemotePath = RequireString(json, "destRemotePath");
+                    var mode = OptionalString(json, "mode");
+
+                    var output = string.Equals(mode, "direct", StringComparison.OrdinalIgnoreCase)
+                        ? await _sftpTool.TransferDirectAsync(sourceProfile, sourceRemotePath,
+                            destProfile.Host, destProfile.Port, destProfile.Username, destRemotePath, ct).ConfigureAwait(false)
+                        : await _sftpTool.TransferRelayAsync(sourceProfile, sourceRemotePath,
+                            destProfile, destRemotePath, ct).ConfigureAwait(false);
+                    return ChatToolResult.Ok(output);
+                }
+            },
+            new()
+            {
+                Name = "systemd_service_status",
+                Description = "Check the status of a systemd service (unit) on a saved SSH host.",
+                ParametersSchema = ObjectSchema(
+                    WithProfileId(("unitName", StringProperty("Systemd unit name, e.g. nginx, docker, postgresql.")))),
+                RiskLevel = ChatToolRiskLevel.Auto,
+                Execute = async (args, ct) =>
+                {
+                    var json = ParseArgs(args);
+                    var profile = ResolveProfile(json);
+                    var unitName = RequireString(json, "unitName");
+                    var output = await _systemdService.StatusAsync(profile, unitName, ct).ConfigureAwait(false);
+                    return ChatToolResult.Ok(output);
+                }
+            },
+            new()
+            {
+                Name = "systemd_service_start",
+                Description = "Start a systemd service on a saved SSH host. Requires sudo on the target host.",
+                ParametersSchema = ObjectSchema(
+                    WithProfileId(("unitName", StringProperty("Systemd unit name to start.")))),
+                RiskLevel = ChatToolRiskLevel.RequiresApproval,
+                Execute = async (args, ct) =>
+                {
+                    var json = ParseArgs(args);
+                    var profile = ResolveProfile(json);
+                    var unitName = RequireString(json, "unitName");
+                    var output = await _systemdService.StartAsync(profile, unitName, ct).ConfigureAwait(false);
+                    return ChatToolResult.Ok(output);
+                }
+            },
+            new()
+            {
+                Name = "systemd_service_stop",
+                Description = "Stop a systemd service on a saved SSH host. This can cause real downtime for " +
+                    "whatever depends on it — only do this when the user has clearly asked for it. Requires sudo.",
+                ParametersSchema = ObjectSchema(
+                    WithProfileId(("unitName", StringProperty("Systemd unit name to stop.")))),
+                RiskLevel = ChatToolRiskLevel.RequiresApproval,
+                Execute = async (args, ct) =>
+                {
+                    var json = ParseArgs(args);
+                    var profile = ResolveProfile(json);
+                    var unitName = RequireString(json, "unitName");
+                    var output = await _systemdService.StopAsync(profile, unitName, ct).ConfigureAwait(false);
+                    return ChatToolResult.Ok(output);
+                }
+            },
+            new()
+            {
+                Name = "systemd_service_restart",
+                Description = "Restart a systemd service on a saved SSH host. Causes a brief interruption while " +
+                    "the service comes back up. Requires sudo.",
+                ParametersSchema = ObjectSchema(
+                    WithProfileId(("unitName", StringProperty("Systemd unit name to restart.")))),
+                RiskLevel = ChatToolRiskLevel.RequiresApproval,
+                Execute = async (args, ct) =>
+                {
+                    var json = ParseArgs(args);
+                    var profile = ResolveProfile(json);
+                    var unitName = RequireString(json, "unitName");
+                    var output = await _systemdService.RestartAsync(profile, unitName, ct).ConfigureAwait(false);
+                    return ChatToolResult.Ok(output);
+                }
+            },
+            new()
+            {
+                Name = "systemd_service_enable",
+                Description = "Enable a systemd service to start automatically at boot on a saved SSH host. Requires sudo.",
+                ParametersSchema = ObjectSchema(
+                    WithProfileId(("unitName", StringProperty("Systemd unit name to enable.")))),
+                RiskLevel = ChatToolRiskLevel.RequiresApproval,
+                Execute = async (args, ct) =>
+                {
+                    var json = ParseArgs(args);
+                    var profile = ResolveProfile(json);
+                    var unitName = RequireString(json, "unitName");
+                    var output = await _systemdService.EnableAsync(profile, unitName, ct).ConfigureAwait(false);
+                    return ChatToolResult.Ok(output);
+                }
+            },
+            new()
+            {
+                Name = "systemd_service_disable",
+                Description = "Disable a systemd service from starting automatically at boot on a saved SSH host. Requires sudo.",
+                ParametersSchema = ObjectSchema(
+                    WithProfileId(("unitName", StringProperty("Systemd unit name to disable.")))),
+                RiskLevel = ChatToolRiskLevel.RequiresApproval,
+                Execute = async (args, ct) =>
+                {
+                    var json = ParseArgs(args);
+                    var profile = ResolveProfile(json);
+                    var unitName = RequireString(json, "unitName");
+                    var output = await _systemdService.DisableAsync(profile, unitName, ct).ConfigureAwait(false);
+                    return ChatToolResult.Ok(output);
                 }
             },
             new()

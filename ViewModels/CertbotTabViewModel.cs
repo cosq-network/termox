@@ -194,14 +194,8 @@ public class CertbotTabViewModel : INotifyPropertyChanged, ITabViewModel
     /// </summary>
     private static (string Status, string Color) SudoAwareStatus(string result, string successMessage)
     {
-        if (result.Contains("is not in the sudoers file", StringComparison.OrdinalIgnoreCase) ||
-            result.Contains("incorrect password", StringComparison.OrdinalIgnoreCase) ||
-            result.Contains("Sorry, try again", StringComparison.OrdinalIgnoreCase) ||
-            result.Contains("a password is required", StringComparison.OrdinalIgnoreCase) ||
-            result.Contains("command not found", StringComparison.OrdinalIgnoreCase))
-        {
-            return ("Failed: sudo refused this command — see output below.", "#f44336");
-        }
+        if (SudoFailureDetector.IsSudoFailure(result, out var sudoReason))
+            return (sudoReason, "#f44336");
 
         if (result.Contains("Some challenges have failed", StringComparison.OrdinalIgnoreCase) ||
             result.Contains("Certbot failed to authenticate", StringComparison.OrdinalIgnoreCase) ||
