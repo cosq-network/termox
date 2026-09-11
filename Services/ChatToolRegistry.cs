@@ -24,6 +24,7 @@ public class ChatToolRegistry
     private readonly SftpToolService _sftpTool = new();
     private readonly DnsRecordInspector _dnsInspector = new();
     private readonly GpgKeyManager _gpgKeyManager = new();
+    private readonly CertbotService _certbotService = new();
 
     public ChatToolRegistry(ObservableCollection<SshConnectionProfile> savedConnections)
     {
@@ -337,6 +338,126 @@ public class ChatToolRegistry
                     var (success, message) = await _gpgKeyManager.DeleteKeyAsync(keyId).ConfigureAwait(false);
                     return success ? ChatToolResult.Ok(message) : ChatToolResult.Fail(message);
                 }
+            },
+            new()
+            {
+                Name = "certbot_check_status",
+                Description = "Check whether certbot is installed on a saved SSH host, and its version if so.",
+                ParametersSchema = ObjectSchema(WithProfileId()),
+                RiskLevel = ChatToolRiskLevel.Auto,
+                Execute = async (args, ct) =>
+                {
+                    var json = ParseArgs(args);
+                    var profile = ResolveProfile(json);
+                    var output = await _certbotService.CheckStatusAsync(profile, ct).ConfigureAwait(false);
+                    return ChatToolResult.Ok(output);
+                }
+            },
+            new()
+            {
+                Name = "certbot_install",
+                Description = "Install certbot on a saved SSH host, auto-detecting its package manager " +
+                    "(apt/dnf/yum/apk/pacman). Requires sudo on the target host.",
+                ParametersSchema = ObjectSchema(WithProfileId()),
+                RiskLevel = ChatToolRiskLevel.RequiresApproval,
+                Execute = async (args, ct) =>
+                {
+                    var json = ParseArgs(args);
+                    var profile = ResolveProfile(json);
+                    var output = await _certbotService.InstallAsync(profile, ct).ConfigureAwait(false);
+                    return ChatToolResult.Ok(output);
+                }
+            },
+            new()
+            {
+                Name = "certbot_list_certificates",
+                Description = "List TLS certificates certbot already manages on a saved SSH host. Requires sudo.",
+                ParametersSchema = ObjectSchema(WithProfileId()),
+                RiskLevel = ChatToolRiskLevel.RequiresApproval,
+                Execute = async (args, ct) =>
+                {
+                    var json = ParseArgs(args);
+                    var profile = ResolveProfile(json);
+                    var output = await _certbotService.ListCertificatesAsync(profile, ct).ConfigureAwait(false);
+                    return ChatToolResult.Ok(output);
+                }
+            },
+            new()
+            {
+                Name = "certbot_obtain_certificate",
+                Description = "Request a TLS certificate from Let's Encrypt for one or more domains on a saved SSH " +
+                    "host, via certbot. Defaults to a dry run (doesn't touch Let's Encrypt's real rate limits or " +
+                    "issue a real certificate) — only set 'confirmRealRequest' to true when the user has explicitly " +
+                    "asked for a real certificate, since real requests are rate-limited to 5 per domain per week. " +
+                    "The target domain must already point at this host and have port 80 reachable from the " +
+                    "internet (standalone/webroot plugins) or an already-configured web server (nginx/apache).",
+                ParametersSchema = ObjectSchema(
+                    optionalNames: new[] { "webrootPath", "confirmRealRequest" },
+                    properties: WithProfileId(
+                        ("domains", StringProperty("Comma-separated domain names to request the certificate for, e.g. 'example.com, www.example.com'.")),
+                        ("email", StringProperty("Contact email address for the Let's Encrypt account.")),
+                        ("plugin", StringProperty("Challenge plugin: Standalone, Webroot, Nginx, or Apache.")),
+                        ("webrootPath", StringProperty("Webroot directory path — required only when plugin is Webroot.")),
+                        ("confirmRealRequest", BooleanProperty("Set true to make a real request instead of a dry run. Defaults to false (dry run)."))
+                    )),
+                RiskLevel = ChatToolRiskLevel.RequiresApproval,
+                Execute = async (args, ct) =>
+                {
+                    var json = ParseArgs(args);
+                    var profile = ResolveProfile(json);
+                    var domains = RequireString(json, "domains")
+                        .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                    var email = RequireString(json, "email");
+                    var pluginText = RequireString(json, "plugin");
+                    if (!Enum.TryParse<CertbotService.CertbotPlugin>(pluginText, ignoreCase: true, out var plugin))
+                        return ChatToolResult.Fail($"Unsupported certbot plugin '{pluginText}'. Use Standalone, Webroot, Nginx, or Apache.");
+
+                    var request = new CertbotService.CertbotObtainRequest
+                    {
+                        Domains = domains,
+                        Email = email,
+                        Plugin = plugin,
+                        WebrootPath = OptionalString(json, "webrootPath"),
+                        DryRun = !OptionalBool(json, "confirmRealRequest")
+                    };
+                    var output = await _certbotService.ObtainAsync(profile, request, ct).ConfigureAwait(false);
+                    return ChatToolResult.Ok(output);
+                }
+            },
+            new()
+            {
+                Name = "certbot_renew_all",
+                Description = "Renew all of certbot's due certificates on a saved SSH host. Defaults to a dry run — " +
+                    "only set 'confirmRealRequest' to true when the user has explicitly asked for a real renewal.",
+                ParametersSchema = ObjectSchema(
+                    optionalNames: new[] { "confirmRealRequest" },
+                    properties: WithProfileId(
+                        ("confirmRealRequest", BooleanProperty("Set true to make a real renewal instead of a dry run. Defaults to false (dry run).")))),
+                RiskLevel = ChatToolRiskLevel.RequiresApproval,
+                Execute = async (args, ct) =>
+                {
+                    var json = ParseArgs(args);
+                    var profile = ResolveProfile(json);
+                    var dryRun = !OptionalBool(json, "confirmRealRequest");
+                    var output = await _certbotService.RenewAllAsync(profile, dryRun, ct).ConfigureAwait(false);
+                    return ChatToolResult.Ok(output);
+                }
+            },
+            new()
+            {
+                Name = "certbot_revoke_certificate",
+                Description = "Revoke and delete a certificate certbot manages on a saved SSH host. This cannot be undone.",
+                ParametersSchema = ObjectSchema(
+                    WithProfileId(("certName", StringProperty("The certificate name to revoke, e.g. example.com.")))),
+                RiskLevel = ChatToolRiskLevel.Destructive,
+                Execute = async (args, ct) =>
+                {
+                    var json = ParseArgs(args);
+                    var profile = ResolveProfile(json);
+                    var certName = RequireString(json, "certName");
+                    var output = await _certbotService.RevokeAsync(profile, certName, ct).ConfigureAwait(false);
+                    return ChatToolResult.Ok(output);
+                }
             }
         };
     }
@@ -415,6 +536,13 @@ public class ChatToolRegistry
         ["type"] = "boolean",
         ["description"] = description
     };
+
+    private static string OptionalString(JsonElement json, string propertyName)
+    {
+        if (!json.TryGetProperty(propertyName, out var value) || value.ValueKind != JsonValueKind.String)
+            return "";
+        return value.GetString() ?? "";
+    }
 
     private static bool OptionalBool(JsonElement json, string propertyName)
     {
