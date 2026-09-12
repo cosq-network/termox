@@ -477,8 +477,7 @@ jobs:
             "Termox-$VERSION-linux-x64.tar.gz" \
             "Termox-$VERSION-linux-x64.deb" \
             "Termox-$VERSION-linux-x64.rpm" \
-            "Termox-$VERSION-osx-arm64.dmg" \
-            "Termox-$VERSION-osx-arm64.zip"; do
+            "Termox-$VERSION-osx-arm64.dmg"; do
             test -s "artifacts/release/$artifact" || \
               { echo "Missing artifact: $artifact" >&2; exit 1; }
           done

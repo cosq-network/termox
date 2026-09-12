@@ -164,11 +164,10 @@ the incomplete release tag when possible.
 | --- | --- |
 | Windows | Termox-X.Y.Z-windows-x64.exe (Inno Setup), Termox-X.Y.Z-windows-x64.msi (WiX), Termox-X.Y.Z-windows-x64.msix (MakeAppx). |
 | Linux | Termox-X.Y.Z-linux-x64.tar.gz, Termox-X.Y.Z-linux-x64.deb (dpkg), Termox-X.Y.Z-linux-x64.rpm (rpmbuild). The packaging script maps linux-x64 to amd64, linux-arm64 to arm64, and linux-arm to armhf. |
-| macOS | Termox-X.Y.Z-osx-arm64.dmg and .zip (Apple Silicon only). |
+| macOS | Termox-X.Y.Z-osx-arm64.dmg (Apple Silicon only). |
 
 macOS DMGs are signed, notarized, and stapled when Apple secrets are configured.
-ZIPs are created from the stapled app bundles. SHA256SUMS.txt contains checksums
-for every Termox artifact:
+SHA256SUMS.txt contains checksums for every Termox artifact:
 
 ```bash
 sha256sum -c SHA256SUMS.txt --ignore-missing

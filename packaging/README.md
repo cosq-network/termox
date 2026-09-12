@@ -6,7 +6,7 @@ so end users do not need to install .NET separately.
 
 - Windows: Inno Setup installer from `packaging/windows/termox.iss`, WiX MSI from `packaging/windows/termox.wxs`, and an MSIX package built with Windows SDK MakeAppx from `packaging/windows/AppxManifest.xml`.
 - Linux: `.deb` and `.rpm` artifacts, plus a `.tar.gz` archive, from `packaging/linux/build-linux.sh`.
-- macOS: `.app` zip and `.dmg` artifacts from `packaging/macos/build-macos.sh`.
+- macOS: `.dmg` disk image installer from `packaging/macos/build-macos.sh`.
 
 The macOS release workflow requires these GitHub Actions secrets and signs and
 notarizes both architecture-specific DMGs before publishing them:
