@@ -3,274 +3,291 @@
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue.svg)
 
-Termox is a cross-platform SSH terminal and SFTP client for managing remote
-servers from one desktop application. It combines interactive terminal
-sessions, remote file management, saved connection profiles, bookmarks, and
-network diagnostics in a focused Avalonia UI.
+Termox is a cross-platform desktop SSH terminal, remote file manager, server administration workbench, and AI-assisted system operations client. Built with Avalonia UI and .NET 10, it combines high-performance terminal emulation, SFTP file management, in-place remote text editing, systemd and certbot automation, network diagnostics, and an extensible LLM chat assistant ("Helm") in a unified desktop interface.
 
-Termox is developed and maintained by COSQ NETWORK PRIVATE LIMITED.
+Termox is developed and maintained by **COSQ NETWORK PRIVATE LIMITED**.
 
-## Features
+---
 
-### SSH terminal
+## Table of Contents
 
-- Open SSH connections in separate terminal tabs.
-- Save connection profiles with a name, host, port, username, password,
-  optional private-key path, and optional private-key passphrase.
-- Support password and private-key authentication through SSH.NET, with a
-  distinct passphrase for encrypted private keys (never the account password).
-- Test connection details before saving a profile.
-- Restore active terminal and SFTP sessions when the application starts.
-- Open a terminal from a saved session or a bookmark.
-- Use terminal context-menu actions to open SFTP at the current remote
-  directory or add that directory to bookmarks.
-- Display terminal output with ANSI color support and a dark theme.
-- Keep long-idle sessions alive with a configurable SSH keep-alive interval
-  (60 s by default), so NAT, proxy, and `sshd` timeouts do not drop the
-  session.
-- Configure an optional idle timeout that warns in the terminal about 60
-  seconds before disconnecting, giving you a chance to interact; set to
-  `0` to keep sessions open indefinitely (the default).
-- Retry failed connections with a configurable retry count and delay,
-  shown in the connection dialog and persisted per profile.
-- Clear the terminal buffer with Ctrl+L (Cmd+L on macOS).
+- [Key Features](#key-features)
+  - [SSH Terminal](#ssh-terminal)
+  - [SFTP Browser & In-Place Text Editor](#sftp-browser--in-place-text-editor)
+  - [AI Chat Assistant (Helm)](#ai-chat-assistant-helm)
+  - [Server Management Tools](#server-management-tools)
+  - [Network & Diagnostic Utilities](#network--diagnostic-utilities)
+  - [Workspace, Tabs & Split View](#workspace-tabs--split-view)
+  - [Sessions & Bookmarks](#sessions--bookmarks)
+- [Keyboard Shortcuts](#keyboard-shortcuts)
+- [Security Architecture](#security-architecture)
+- [Installation](#installation)
+- [Development & Testing](#development--testing)
+- [CI/CD & Releases](#cicd--releases)
+- [Project Structure](#project-structure)
+- [Contributing](#contributing)
+- [License & Contact](#license--contact)
 
-### SFTP browser
+---
 
-- Browse the remote filesystem and navigate through directories.
-- Keep SFTP tabs separate from terminal tabs.
-- Open SFTP from a saved session or bookmark at a selected path.
-- Upload files through the file picker.
-- Download selected files.
-- Warn before downloading large selections: when the combined size exceeds
-  the configured threshold (100 MB by default), a confirmation dialog
-  lists the largest items before the transfer starts.
-- Rename files and directories.
-- Delete one selected item with confirmation.
-- Delete multiple selected items with bulk-delete confirmation.
-- Edit Unix file permissions.
-- Show file name, type, size, modification time, permissions, and full path.
-- Preview supported text files without downloading them first.
-- Filter the current directory listing with case-insensitive search.
-- Refresh the current directory and navigate to its parent.
-- Use toolbar icons, keyboard shortcuts, and right-click context menus for file
-  operations.
+## Key Features
 
-Drag-and-drop upload and in-place text editing are not currently available.
-File preview is read-only and limited to supported text files.
+### SSH Terminal
 
-### Sessions and bookmarks
+- **Concurrent Tabbed Sessions**: Open multiple independent SSH connections in dedicated tabs.
+- **Flexible Authentication**: Authenticate via password, OpenSSH private key (RSA, ED25519), or both. Encrypted private keys use a dedicated passphrase (never confused with account passwords).
+- **Session Restoration**: Automatically restore active terminal and SFTP sessions between application runs (`sessions.json`).
+- **Keep-Alive Heartbeats**: Configurable keep-alive interval (default 60 seconds) prevents NAT, proxy, and firewall drops.
+- **Idle Timeout Warnings**: Optional idle disconnect timeout warns approximately 60 seconds before disconnect; set to `0` to keep connections open indefinitely.
+- **Connection Retry Policy**: Configurable retry count and delay on connection drops, configurable per profile.
+- **ANSI Terminal Emulation**: Full color terminal buffer rendered with dark theme ergonomics.
+- **Tab Duplication & Quick Launch**: Duplicate the active terminal with `Ctrl+Shift+D` (`Cmd+Shift+D` on macOS).
+- **Terminal Context Actions**: Right-click to Copy, Paste, Duplicate Tab, open an SFTP browser directly at the current remote directory (`pwd`), or bookmark the current remote path with one click.
+- **Buffer Clearing**: Quick buffer clearing with `Ctrl+L` (`Cmd+L` on macOS).
 
-- Store saved sessions in a dedicated Sessions tab.
-- Show a Recently Used list of the ten most recently opened sessions, with
-  one-click access to open them as terminal or SFTP.
-- Store bookmarks in a dedicated Bookmarks tab.
-- Associate each bookmark with its saved session and remote path.
-- Pin bookmarks as favorites with the star icon, or from the right-click
-  menu; favorites appear in a dedicated Favorites section at the top of the
-  Bookmarks tab.
-- Open a bookmark in either a new SSH terminal or a new SFTP tab.
-- Delete bookmarks with confirmation.
-- Persist sessions and bookmarks between application runs.
+### SFTP Browser & In-Place Text Editor
 
-### Network and SSH tools
+- **Remote Filesystem Navigation**: Explore remote directory trees, navigate to parent folders, and refresh with live status.
+- **Directory Search Filter**: Filter visible remote files and directories with instant, case-insensitive text matching.
+- **File Attribute Inspector**: Inspect file names, sizes, file types, last modified dates, full paths, and Unix octal permissions.
+- **Upload & Download**: Upload multiple files via local file pickers or download selections directly to your machine.
+- **Large Transfer Guard**: Automatic threshold warning (configurable, 100 MB default) prompts confirmation and lists the largest files before large transfers start.
+- **In-Place Remote Text Editing**: Open and edit remote configuration files and scripts directly with AvaloniaEdit. Includes dirty-state tracking (`Save*`), save and close, and discard confirmations.
+- **Quick Text Preview**: Read-only preview modal for remote text files with line and character counts and quick clipboard copying.
+- **File & Folder Renaming**: Rename remote items in-line or with `F2`.
+- **Single & Bulk Deletions**: Delete individual items or bulk-delete multiple selections with explicit confirmation modals.
+- **Unix Permissions Editor (chmod)**: Change file and directory permissions via an interactive modal accepting standard 3- or 4-digit octal notation (e.g. `755`, `644`).
+- **Path Confinement & Symlink Safety**: Download paths are strictly sandboxed to destination directories, and directory recursions guard against symlink cycles.
 
-The Tools tab provides the following utilities:
+### AI Chat Assistant (Helm)
 
-- Port Scanner: test TCP reachability for a host and a list of ports.
-- Ping Test: send ICMP requests and display response times.
-- SSH Key Generator: create RSA or ED25519 key pairs using the system
-  `ssh-keygen` command and copy the generated keys.
-- Connection Tester: test all saved SSH connection profiles and report status
-  and response time.
-- SSH Endpoint Test: provide an endpoint testing interface for SSH and SFTP
-  responsiveness.
-- Server Stats: collect live CPU usage, memory usage, the top CPU and
-  memory processes, and per-volume disk usage over SSH from a saved
-  session. Results are shown in sortable tables with human-readable sizes
-  (KB/MB/GB) and color-coded summary cards for CPU, memory, and disk.
-- DNS Record Inspector: query and inspect DNS records (A, AAAA, CNAME, MX,
-  TXT, NS, SOA, SRV, PTR, CAA) for any domain, including query-all and
-  reverse-DNS lookups.
-- GPG Key Manager: list public and secret GPG keys, and export, import, and
-  delete keys using the system `gpg` command.
-- Fingerprint Utilities: calculate MD5, SHA-1, and SHA-2 family fingerprints
-  for text or files, and compare fingerprints with normalized formatting.
+Termox includes an integrated LLM system administrator ("Helm") accessible directly from the sidebar. You provide your own OpenAI-compatible endpoint, and Helm can inspect, diagnose, and manage your servers using Termox's native backend tools.
 
-## Keyboard shortcuts
+- **Custom Inference Endpoints**: Connect to any OpenAI-compatible provider (OpenRouter, OpenAI, Groq, Ollama, LM Studio, etc.) by configuring Base URL, API Key, Model, Temperature, and Context Window.
+- **Live SSE Streaming**: Stream responses token by token with live transcript rendering.
+- **15+ Native Tool Calling Integrations**:
+  - `list_connections`: List all saved connection profiles.
+  - `ssh_run_command`: Execute non-interactive shell commands (with optional elevated `sudo`).
+  - `sftp_list_directory` & `sftp_read_text_file`: Browse and read remote configuration or log files.
+  - `sftp_upload_file` & `sftp_download_file`: Move files between local workstation and remote hosts.
+  - `sftp_rename`, `sftp_chmod`, `sftp_delete`: Remote file management.
+  - `sftp_transfer_between_servers`: Stream or direct-transfer files across two remote servers.
+  - `systemd_service_*`: Query status, start, stop, restart, enable, or disable remote systemd services.
+  - `certbot_*`: Check installation, install certbot, list certificates, obtain Let's Encrypt certificates (dry-run by default), renew, or revoke.
+  - `dns_lookup`: Query DNS records (A, AAAA, MX, TXT, NS, SOA, SRV, PTR, CAA).
+  - `port_scan` & `ping`: Test TCP ports and ICMP reachability.
+  - `calculate_fingerprint`: Hash text or compare fingerprints.
+  - `gpg_list_public_keys` & `gpg_delete_key`: Manage local GPG keyrings.
+- **3-Tier Risk Security Model**:
+  - **Auto**: Read-only queries (DNS, ping, port checks, file reading, directory listing) run immediately.
+  - **RequiresApproval**: State-mutating commands (SSH execution, uploads, chmod, service control, certbot issuance) require explicit user confirmation via an in-chat approval banner.
+  - **Destructive**: Irreversible operations (file deletion, certificate revocation, GPG key deletion) require explicit user approval.
+- **Server Scoping**: Lock the chat session to a single server from the composer picker so the model cannot target unselected hosts.
+- **Fail-Closed Host-Key Pinning**: The assistant structurally refuses to connect to servers that have not been interactively verified by the user.
+- **Encrypted Local Persistence**: Chat sessions and messages are persisted to local SQLite (`termox.db`), with all message contents and tool call payloads encrypted at rest via the platform credential store (`ChatContentCipher`).
+- **First-Party Markdown Engine**: Assistant responses are rendered with a custom visual markdown builder supporting headers, code blocks, tables, bold, and italics.
+- **Sticky Question Header**: When scrolling through long assistant explanations, the original user prompt stays pinned at the top of the transcript for instant context.
 
-| Shortcut | Action |
-| --- | --- |
-| F2 | Rename the selected remote file or directory |
-| Ctrl+U (Cmd+U on macOS) | Upload files |
-| Ctrl+D (Cmd+D on macOS) | Download selected files |
-| Delete | Delete the selected remote item |
-| Ctrl+Delete | Delete the selected remote item |
-| Ctrl+S (Cmd+S on macOS) | Add the current SFTP directory to bookmarks |
-| Ctrl+L (Cmd+L on macOS) | Clear the terminal buffer |
-| Ctrl+Shift+D (Cmd+Shift+D on macOS) | Duplicate the current SSH terminal tab |
+### Server Management Tools
 
-## Security
+Accessible from the sidebar and openable into dedicated tabs:
 
-- SSH host fingerprints are recorded and checked on later connections. When a
-  host is seen for the first time, Termox shows the fingerprint and asks you to
-  confirm before trusting it; the connection is refused until you do.
-- Passwords and private-key passphrases are encrypted at rest with the
-  platform credential store (DPAPI on Windows, Keychain on macOS, Secret
-  Service on Linux) and never written to disk in plain text.
-- Private-key authentication is supported with a distinct, encrypted
-  passphrase — the account password is never used to decrypt a key.
-- Client construction is centralized in
-  [Services/SshConnectionFactory.cs](Services/SshConnectionFactory.cs), so
-  every connection path (terminal, SFTP, editor, server stats, connection
-  test) applies the same host-key policy, timeout, and key handling.
-- Shell commands built from saved paths (for example, opening a terminal at a
-  bookmarked directory) reject control characters and shell metacharacters,
-  so a tampered `sessions.json` cannot inject commands.
-- SFTP downloads are confined to the chosen destination folder, with
-  path-traversal and symlink checks to prevent writes outside it; recursive
-  downloads and deletes also guard against remote symlink cycles.
-- Recursive SFTP operations and transfers are serialized per tab with an
-  operation gate; closing a tab never tears down the gate or cancellation
-  source while background work is still running.
-- External tool calls (dig, nslookup, gpg) run with timeouts so a hung system
-  utility cannot block the application.
-- No analytics or application telemetry is intentionally collected by Termox.
+- **Server Stats**: Collects live CPU load, memory utilization, top CPU/memory process lists, and per-volume disk usage over SSH. Formats output into sortable tables with human-readable sizes (KB/MB/GB) and color-coded resource cards.
+- **Systemd Service Manager**: Inspect and control remote Linux systemd service units over SSH. Includes action buttons for Start, Stop, Restart, Enable, and Disable, along with quick-select chips for common daemons (`nginx`, `apache2`, `docker`, `postgresql`, `mysql`, `ssh`, `redis`, etc.).
+- **Certbot SSL/TLS Manager**: Automate Let's Encrypt certificate management on remote servers over SSH:
+  - Check certbot installation status or install certbot automatically via the host's package manager (`apt`, `dnf`, `yum`, `apk`, `pacman`).
+  - List existing managed certificates and expiration details.
+  - Request certificates using Standalone, Webroot, Nginx, or Apache challenge plugins. Defaults to safe dry runs to protect Let's Encrypt weekly rate limits.
+  - Renew all due certificates or revoke/delete existing certificates.
+- **Server-to-Server File Transfer**: Transfer files directly between two remote SSH servers without downloading them to your local workstation:
+  - **Relay Mode** (Default): Streams data through Termox in memory; works between any two reachable servers without special remote configuration.
+  - **Direct Mode**: Runs `rsync` or `scp` directly on the source server targeting the destination (for high-speed transfers when remote SSH trust is already configured).
 
-Review the security implementation in
-[Services/SshSecurity.cs](Services/SshSecurity.cs),
-[Services/CredentialManager.cs](Services/CredentialManager.cs),
-[Services/SshConnectionFactory.cs](Services/SshConnectionFactory.cs), and
-[Services/LocalPathSafety.cs](Services/LocalPathSafety.cs).
+### Network & Diagnostic Utilities
+
+- **Reorderable Tools List**: Customize the order of the sidebar Tools list via drag-and-drop. Order preferences are automatically saved to disk (`tools_order.json`).
+- **DNS Record Inspector**: Query and analyze DNS records (A, AAAA, CNAME, MX, TXT, NS, SOA, SRV, PTR, CAA) with query-all and reverse DNS support.
+- **GPG Key Manager**: Inspect public and secret keyrings, import/export ASCII-armored keys, and delete keys using the system `gpg` command.
+- **Fingerprint Utilities**: Calculate and compare MD5, SHA-1, SHA-256, SHA-384, and SHA-512 hashes from raw text or local files, featuring format normalization and SSH-style colon-separated display.
+- **Port Scanner**: Fast multi-port TCP connectivity scanner to detect open services on remote hosts.
+- **Ping Test**: Send ICMP echo requests and monitor latency and packet reachability.
+- **SSH Key Generator**: Generate RSA (2048/4096-bit) or ED25519 key pairs using system `ssh-keygen`.
+- **Connection Tester**: Batch-test all saved SSH connection profiles simultaneously and view response times and reachability statuses.
+- **SSH Endpoint Test**: Probe specific SSH and SFTP endpoints for authentication responsiveness and banner negotiation.
+
+### Workspace, Tabs & Split View
+
+- **Side-by-Side Split View**: Pin any tab into a secondary split pane to view two tasks simultaneously (e.g., monitor Server Stats while working in the Terminal, or view SFTP files while using the Chat Assistant).
+- **Browser-Style History Navigation**: Use Back and Forward tab navigation buttons to retrace your tab switching path.
+- **Bulk Tab Operations**: Right-click tab context actions to Close Tab, Close Other Tabs, Close Tabs to the Left, Close Tabs to the Right, or Close All Tabs with confirmation safeguards.
+- **Custom Frameless Title Bar**: Clean, native-looking window header with custom window controls (minimize, maximize/restore, close) and smooth drag behavior.
+
+### Sessions & Bookmarks
+
+- **Profile Manager**: Save host, port, username, credentials, retry policies, and timeouts into organized profiles.
+- **Recently Used Sessions**: Instant one-click access to your 10 most recently opened sessions for Terminal or SFTP launching.
+- **Bookmarks Library**: Store remote directory paths tied to specific connection profiles.
+- **Favorite Pinning**: Star important bookmarks to keep them pinned at the top of the Bookmarks tab.
+- **Launch into Terminal or SFTP**: Open any saved session or bookmark directly into a new SSH shell or SFTP file explorer.
+
+---
+
+## Keyboard Shortcuts
+
+| Shortcut | Context | Action |
+| :--- | :--- | :--- |
+| `Ctrl+Shift+D` (`Cmd+Shift+D`) | SSH Terminal | Duplicate current terminal tab |
+| `Ctrl+L` (`Cmd+L`) | SSH Terminal | Clear terminal buffer |
+| `Ctrl+V` (`Cmd+V`) | SSH Terminal | Paste clipboard into terminal |
+| `F2` | SFTP Browser | Rename selected remote file or directory |
+| `Ctrl+U` (`Cmd+U`) | SFTP Browser | Upload files |
+| `Ctrl+D` (`Cmd+D`) | SFTP Browser | Download selected files |
+| `Delete` | SFTP Browser | Delete selected remote item |
+| `Ctrl+S` (`Cmd+S`) | SFTP Browser | Bookmark current remote directory |
+| `Enter` | Chat Assistant | Send message |
+| `Shift+Enter` | Chat Assistant | Insert newline in chat composer |
+| `Escape` | Global Modals | Dismiss active dialog / preview / modal |
+
+---
+
+## Security Architecture
+
+Security is a primary design tenet of Termox:
+
+- **Host Key Pinning (Trust-on-First-Use)**: Remote host key fingerprints are verified on every connection. The first time a host is contacted, Termox presents the fingerprint for user verification; connections are refused until accepted.
+- **Zero-Plaintext Credential Storage**: Passwords, private-key passphrases, and AI API keys are encrypted at rest using platform-native security APIs:
+  - **Windows**: Data Protection API (`DPAPI` / `ProtectedData`) scoped to the current user.
+  - **macOS**: System Keychain via `/usr/bin/security`.
+  - **Linux**: Freedesktop Secret Service API via `secret-tool`.
+- **Encrypted Chat Database**: SQLite chat history content and tool call parameters are encrypted per-message with `ChatContentCipher` using platform-secured encryption keys.
+- **Centralized Connection Factory**: All SSH/SFTP connections (terminals, SFTP, editor, diagnostics, tools, chat agent) funnel through [`SshConnectionFactory`](Services/SshConnectionFactory.cs) to ensure uniform host-key policy, timeouts, and key handling.
+- **Shell Metacharacter Sanitization**: Remote paths and commands are sanitized to prevent shell injection vulnerabilities.
+- **SFTP Directory Traversal Guards**: Local download destinations are strictly checked with symlink cycle resolution ([`LocalPathSafety`](Services/LocalPathSafety.cs)) to prevent writes outside destination folders.
+- **Zero Telemetry**: Termox does not collect or transmit analytics, crash logs, or application telemetry.
+
+---
 
 ## Installation
 
-Release packages are available on the
-[GitHub Releases page](https://github.com/cosqnetwork/termox/releases).
-Release packages are self-contained and do not require a separate .NET runtime.
+Download self-contained packages from the [GitHub Releases page](https://github.com/cosqnetwork/termox/releases). Self-contained builds include the .NET runtime.
 
 ### Windows
 
-Download and run the Windows installer (EXE), or use the MSI or MSIX package.
-The release workflow builds all three formats automatically.
+Download and run the Windows installer (`.exe`), or install via the `.msi` or `.msix` package.
 
 ### macOS
 
-Download the DMG, open it, and drag Termox to the Applications folder. The
-release workflow signs and notarizes macOS packages when the required Apple
-credentials are configured.
+Download the `.dmg`, open it, and drag Termox to your `Applications` folder.
 
 ### Linux
 
-Install the Debian package on Debian-based systems:
+Install the Debian package on Ubuntu/Debian:
 
 ```bash
 sudo apt install ./Termox-X.Y.Z-linux-x64.deb
 ```
 
-The release workflow also builds an RPM package for RPM-based distributions.
+Install the RPM package on Fedora/RHEL/CentOS:
 
-Alternatively, extract the portable tar archive:
+```bash
+sudo rpm -i ./Termox-X.Y.Z-linux-x64.rpm
+```
+
+Or extract the portable tarball:
 
 ```bash
 tar -xzf Termox-X.Y.Z-linux-x64.tar.gz
+./Termox
 ```
 
-The Linux packaging script supports `linux-x64`, `linux-arm64`, and `linux-arm`
-runtime identifiers. The release workflow currently publishes the x64 package.
+---
 
-## First connection
-
-1. Open the Sessions tab and select New Connection.
-2. Enter a connection name, host, username, and SSH port.
-3. Enter a password, choose a private key, or use both as appropriate. If the
-   private key is encrypted, enter its passphrase in the Private Key Passphrase
-   field.
-4. Optionally configure connection retry (count and delay), SSH keep-alive,
-   and an idle timeout before disconnecting.
-5. Select Test Connection to validate the connection details. The first time
-   you connect to a host, Termox asks you to verify its host-key fingerprint.
-6. Select Save Connection to store the profile.
-7. Open the saved session to create a new SSH terminal tab.
-8. Use Open SFTP Browser from the session menu to create an SFTP tab.
-
-Keep-alive, idle timeout, and retry settings are saved with the profile and
-are used whenever you reconnect from the Sessions or Recently Used lists.
-
-## Development
+## Development & Testing
 
 ### Requirements
 
-- .NET 10.0 SDK
-- Windows, macOS, or Linux
-- A working SSH server for manual connection testing
+- [.NET 10.0 SDK](https://dotnet.microsoft.com/download)
+- Supported OS: Windows 10/11, macOS 12+, or modern Linux distributions (Ubuntu, Fedora, Arch)
+- Optional: An accessible SSH server for manual testing
 
-### Build and test
+### Build and Run
 
 ```bash
+# Clone the repository
 git clone https://github.com/cosqnetwork/termox.git
 cd termox
+
+# Restore dependencies
 dotnet restore tests/Termox.Tests/Termox.Tests.csproj
+
+# Run automated tests
 dotnet test tests/Termox.Tests/Termox.Tests.csproj --configuration Release
+
+# Build and run Termox
 dotnet build Termox.csproj --configuration Release
-dotnet run
+dotnet run --project Termox.csproj
 ```
 
-The project uses MVVM with Avalonia UI. SSH and SFTP functionality is provided
-by SSH.NET. Automated tests are located in `tests/Termox.Tests`.
+---
 
-## CI/CD and releases
+## CI/CD & Releases
 
-GitHub Actions runs CI on a GitFlow branch model: pushes to `main`, `dev`,
-`release/**`, and `hotfix/**`, plus pull requests targeting `main` or `dev`. CI
-restores dependencies, runs tests, builds the application, and uploads coverage
-when available.
+Termox uses GitHub Actions with a GitFlow branch model (`main`, `dev`, `release/**`, `hotfix/**`):
 
-The Release workflow runs automatically on every push to `main` when Conventional
-Commits are present. It calculates the next semantic version from the commits
-since the last release, builds Windows (EXE/MSI/MSIX), Linux (DEB/RPM/tar.gz),
-and macOS (DMG/ZIP) packages, verifies all artifacts, creates a `vX.Y.Z` tag,
-generates `SHA256SUMS.txt`, and publishes a GitHub Release.
+- **Continuous Integration**: Builds and runs unit/integration tests across Windows, macOS, and Linux runners on pull requests and branch pushes.
+- **Automated Releases**: Pushing to `main` evaluates Conventional Commits to determine Semantic Versioning, builds installers for Windows (EXE, MSI, MSIX), macOS (DMG, ZIP), and Linux (DEB, RPM, TAR.GZ), signs macOS binaries when configured, computes `SHA256SUMS.txt`, and publishes a GitHub Release.
 
-See the [CI/CD integration guide](docs/CI-CD-INTEGRATION.md) for repository
-permissions, Apple signing secrets, release procedures, and troubleshooting.
+For more details, see the [CI/CD Integration Guide](docs/CI-CD-INTEGRATION.md).
 
-## Project structure
+---
+
+## Project Structure
 
 ```text
-Views/          Avalonia windows and controls
-ViewModels/     MVVM application and tab logic
-Models/         Connection, bookmark, and remote file models
-Services/       SSH security, credentials, path safety, and tool services
-                (DNS inspection, GPG keys, fingerprints, server stats)
-Assets/         Application icons and font resources
-packaging/      Windows, Linux, and macOS packaging scripts
-tests/          Automated tests
+termox/
+├── Models/                 # Domain models (Profiles, Bookmarks, RemoteFiles, Chat Messages & Tools)
+├── Services/               # Core business logic:
+│   ├── SshConnectionFactory.cs   # Centralized SSH/SFTP client instantiation
+│   ├── SshSecurity.cs            # Host key verification & security policies
+│   ├── CredentialManager.cs      # Native DPAPI / Keychain / Secret Service integration
+│   ├── ChatToolRegistry.cs       # AI function-calling dispatch & safety levels
+│   ├── ChatHistoryService.cs     # Local SQLite session persistence
+│   ├── OpenAiChatClient.cs       # SSE streaming OpenAI-compatible client
+│   ├── CertbotService.cs         # Remote SSL/TLS certificate management
+│   ├── SystemdService.cs         # Remote Linux systemd unit control
+│   ├── ServerStatsService.cs     # Real-time resource metrics collection
+│   ├── SftpToolService.cs        # Stateless SFTP operations & server transfer
+│   └── LocalPathSafety.cs        # Path traversal & symlink recursion protection
+├── ViewModels/             # MVVM ViewModels for application tabs & modal dialogs
+├── Views/                  # Avalonia XAML views (MainWindow.axaml)
+├── Assets/                 # Fonts, branding icons, and application vector assets
+├── packaging/              # Platform packaging configurations (Wix, Debian, macOS plist)
+├── tests/                  # Automated test suite (Termox.Tests)
+└── docs/                   # Developer documentation & CI/CD guides
 ```
+
+---
 
 ## Contributing
 
-1. Fork the repository.
-2. Create a feature branch.
-3. Make the change and add or update tests where appropriate.
-4. Run the build and test commands locally.
-5. Open a pull request with a clear description and testing notes.
+Contributions are welcome! Please follow these steps:
 
-For bug reports, include the operating system, Termox version, connection type,
-steps to reproduce, expected behavior, and actual behavior. Do not include
-passwords, private keys, or other sensitive connection information.
+1. Fork the repository and create a feature branch (`git checkout -b feature/my-feature`).
+2. Implement your changes and add corresponding unit tests in `tests/Termox.Tests`.
+3. Verify that all tests pass: `dotnet test tests/Termox.Tests/Termox.Tests.csproj`.
+4. Commit your changes using [Conventional Commits](https://www.conventionalcommits.org/) (`feat: ...`, `fix: ...`).
+5. Push to your branch and open a Pull Request.
 
-## License
+Please see [CONTRIBUTING.md](CONTRIBUTING.md) for full guidelines.
 
-Termox is released under the MIT License. See [LICENSE](LICENSE) for details.
+---
 
-Copyright 2026 COSQ NETWORK PRIVATE LIMITED.
+## License & Contact
 
-## Contact
+Termox is open-source software licensed under the [MIT License](LICENSE).
 
-COSQ NETWORK PRIVATE LIMITED
+Copyright © 2026 **COSQ NETWORK PRIVATE LIMITED**.
 
-- Website: https://cosqnetwork.com/
-- Address: TC 15/4247-4, 2nd Floor, Horizon Tower, Pattom,
-  Thiruvananthapuram, Kerala 695004
-- Phone: +91 8078078789
+- **Website**: [https://cosqnetwork.com/](https://cosqnetwork.com/)
+- **Address**: TC 15/4247-4, 2nd Floor, Horizon Tower, Pattom, Thiruvananthapuram, Kerala 695004
+- **Phone**: +91 8078078789
