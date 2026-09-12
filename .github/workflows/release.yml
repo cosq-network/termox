@@ -189,7 +189,19 @@ jobs:
       - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
         with: { dotnet-version: '10.0.x' }
       - run: dotnet restore tests/Termox.Tests/Termox.Tests.csproj
-      - run: dotnet test tests/Termox.Tests/Termox.Tests.csproj --no-restore --configuration Release
+      - name: Set up keyring (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gnome-keyring dbus-x11 libsecret-tools
+      - name: Test
+        shell: bash
+        run: |
+          if [ "${{ matrix.os }}" = "ubuntu-latest" ]; then
+            dbus-run-session -- bash -c 'echo -n "ci" | gnome-keyring-daemon --unlock --daemonize; dotnet test tests/Termox.Tests/Termox.Tests.csproj --no-restore --configuration Release'
+          else
+            dotnet test tests/Termox.Tests/Termox.Tests.csproj --no-restore --configuration Release
+          fi
 
   # -------------------------------------------------------------------------
   # 3. Platform packaging jobs — run in parallel after tests pass.

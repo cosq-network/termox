@@ -64,6 +64,20 @@ public class FingerprintTabViewModel : INotifyPropertyChanged, ITabViewModel
         set { _isCalculating = value; OnPropertyChanged(); }
     }
 
+    private string _calculationStatus = "";
+    public string CalculationStatus
+    {
+        get => _calculationStatus;
+        set { _calculationStatus = value; OnPropertyChanged(); }
+    }
+
+    private string _calculationStatusColor = "#999999";
+    public string CalculationStatusColor
+    {
+        get => _calculationStatusColor;
+        set { _calculationStatusColor = value; OnPropertyChanged(); }
+    }
+
     // Comparison properties
     private string _expectedFingerprint = "";
     public string ExpectedFingerprint
@@ -120,12 +134,15 @@ public class FingerprintTabViewModel : INotifyPropertyChanged, ITabViewModel
     {
         if (string.IsNullOrWhiteSpace(InputText))
         {
-            CalculatedFingerprint = "Please enter text to calculate fingerprint";
+            CalculatedFingerprint = "";
             FormattedFingerprint = "";
             SshStyleFingerprint = "";
+            CalculationStatus = "Please enter text to calculate a fingerprint.";
+            CalculationStatusColor = "#ffc107";
             return;
         }
 
+        CalculationStatus = "";
         IsCalculating = true;
         Task.Run(() =>
         {
@@ -145,9 +162,11 @@ public class FingerprintTabViewModel : INotifyPropertyChanged, ITabViewModel
             {
                 Dispatcher.UIThread.Post(() =>
                 {
-                    CalculatedFingerprint = $"Error: {ex.Message}";
+                    CalculatedFingerprint = "";
                     FormattedFingerprint = "";
                     SshStyleFingerprint = "";
+                    CalculationStatus = $"Error: {ex.Message}";
+                    CalculationStatusColor = "#f44336";
                 });
             }
             finally
@@ -192,6 +211,8 @@ public class FingerprintTabViewModel : INotifyPropertyChanged, ITabViewModel
         ComparisonStatus = "";
         ComparisonStatusColor = "#999999";
         FingerprintsMatch = false;
+        CalculationStatus = "";
+        CalculationStatusColor = "#999999";
     }
 
     private FingerprintUtility.HashAlgorithmType ParseAlgorithm(string algorithm)

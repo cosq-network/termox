@@ -55,13 +55,21 @@ jobs:
       - name: Restore
         run: dotnet restore tests/Termox.Tests/Termox.Tests.csproj
 
+      - name: Set up keyring (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gnome-keyring dbus-x11 libsecret-tools
+
       - name: Test
-        run: >
-          dotnet test tests/Termox.Tests/Termox.Tests.csproj
-          --no-restore
-          --configuration Release
-          --collect:"XPlat Code Coverage"
-          --results-directory coverage
+        shell: bash
+        run: |
+          TEST_CMD='dotnet test tests/Termox.Tests/Termox.Tests.csproj --no-restore --configuration Release --collect:"XPlat Code Coverage" --results-directory coverage'
+          if [ "${{ matrix.os }}" = "ubuntu-latest" ]; then
+            dbus-run-session -- bash -c "echo -n 'ci' | gnome-keyring-daemon --unlock --daemonize; $TEST_CMD"
+          else
+            eval "$TEST_CMD"
+          fi
 
       - name: Build application
         run: dotnet build Termox.csproj --no-restore --configuration Release

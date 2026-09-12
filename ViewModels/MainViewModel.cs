@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Collections.Specialized;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -107,11 +109,63 @@ public class MainViewModel : INotifyPropertyChanged
     public bool HasRecentlyUsedSessions => RecentlyUsedSessions.Count > 0;
     public bool HasFavoritedBookmarks => FavoritedBookmarks.Count > 0;
 
+    private readonly TabNavigationHistory _tabHistory = new();
+    private bool _isNavigatingTabHistory;
+
     private ITabViewModel? _selectedTab;
     public ITabViewModel? SelectedTab
     {
         get => _selectedTab;
-        set { _selectedTab = value; OnPropertyChanged(); }
+        set
+        {
+            _selectedTab = value;
+            OnPropertyChanged();
+            if (value != null && !_isNavigatingTabHistory) _tabHistory.Push(value);
+            RefreshTabHistoryState();
+        }
+    }
+
+    public ICommand GoBackCommand { get; }
+    public ICommand GoForwardCommand { get; }
+
+    private bool _canGoBackTabs;
+    public bool CanGoBackTabs
+    {
+        get => _canGoBackTabs;
+        private set { _canGoBackTabs = value; OnPropertyChanged(); }
+    }
+
+    private bool _canGoForwardTabs;
+    public bool CanGoForwardTabs
+    {
+        get => _canGoForwardTabs;
+        private set { _canGoForwardTabs = value; OnPropertyChanged(); }
+    }
+
+    private void RefreshTabHistoryState()
+    {
+        CanGoBackTabs = _tabHistory.CanGoBack;
+        CanGoForwardTabs = _tabHistory.CanGoForward;
+    }
+
+    private void GoBackTabs()
+    {
+        var target = _tabHistory.GoBack();
+        if (target == null) return;
+        _isNavigatingTabHistory = true;
+        SelectedTab = target;
+        _isNavigatingTabHistory = false;
+        RefreshTabHistoryState();
+    }
+
+    private void GoForwardTabs()
+    {
+        var target = _tabHistory.GoForward();
+        if (target == null) return;
+        _isNavigatingTabHistory = true;
+        SelectedTab = target;
+        _isNavigatingTabHistory = false;
+        RefreshTabHistoryState();
     }
 
     private string _connectionName = "New Connection";
@@ -240,6 +294,44 @@ public class MainViewModel : INotifyPropertyChanged
         get => _tabToClose;
         set { _tabToClose = value; OnPropertyChanged(); }
     }
+
+    // Split view: a second pane pinned to one tab, independent of the main tab strip's
+    // SelectedTab, so e.g. Chat and an SFTP session can sit side by side. Just a pinned
+    // reference into the same Tabs collection — not a separate list of tabs.
+    private ITabViewModel? _secondaryTab;
+    public ITabViewModel? SecondaryTab
+    {
+        get => _secondaryTab;
+        set { _secondaryTab = value; OnPropertyChanged(); OnPropertyChanged(nameof(IsSplitViewActive)); }
+    }
+
+    public bool IsSplitViewActive => SecondaryTab != null;
+
+    private bool _isBulkCloseConfirmModalVisible;
+    public bool IsBulkCloseConfirmModalVisible
+    {
+        get => _isBulkCloseConfirmModalVisible;
+        set { _isBulkCloseConfirmModalVisible = value; OnPropertyChanged(); }
+    }
+
+    private string _bulkCloseTitle = "";
+    public string BulkCloseTitle
+    {
+        get => _bulkCloseTitle;
+        set { _bulkCloseTitle = value; OnPropertyChanged(); }
+    }
+
+    private string _bulkCloseMessage = "";
+    public string BulkCloseMessage
+    {
+        get => _bulkCloseMessage;
+        set { _bulkCloseMessage = value; OnPropertyChanged(); }
+    }
+
+    // Which tabs a confirmed bulk-close actually removes — set right before the modal
+    // opens (Close All / Close Others / Close Left / Close Right all funnel through the
+    // same confirm dialog), resolved lazily at confirm time in case Tabs changed meanwhile.
+    private Func<List<ITabViewModel>>? _bulkCloseSelector;
 
     private bool _isRenameModalVisible;
     public bool IsRenameModalVisible
@@ -376,6 +468,14 @@ public class MainViewModel : INotifyPropertyChanged
     public ICommand RequestCloseTabCommand { get; }
     public ICommand ConfirmCloseTabCommand { get; }
     public ICommand CancelCloseTabCommand { get; }
+    public ICommand RequestCloseAllTabsCommand { get; }
+    public ICommand RequestCloseOtherTabsCommand { get; }
+    public ICommand RequestCloseTabsToLeftCommand { get; }
+    public ICommand RequestCloseTabsToRightCommand { get; }
+    public ICommand ConfirmBulkCloseCommand { get; }
+    public ICommand OpenInSplitViewCommand { get; }
+    public ICommand CloseSplitViewCommand { get; }
+    public ICommand CancelBulkCloseCommand { get; }
     public ICommand TestConnectionCommand { get; }
     public ICommand ConfirmHostKeyCommand { get; }
     public ICommand RejectHostKeyCommand { get; }
@@ -399,6 +499,16 @@ public class MainViewModel : INotifyPropertyChanged
     public ICommand OpenFingerprintTabCommand { get; }
     public ICommand OpenDnsTabCommand { get; }
     public ICommand OpenServerStatsTabCommand { get; }
+    public ICommand OpenCertbotTabCommand { get; }
+    public ICommand OpenServerTransferTabCommand { get; }
+    public ICommand OpenSystemdServiceTabCommand { get; }
+    public ICommand OpenChatTabCommand { get; }
+
+    private readonly ChatSettingsService _chatSettingsService = new();
+    private readonly ToolsOrderService _toolsOrderService = new();
+
+    public ObservableCollection<ToolMenuItem> ToolMenuItems { get; } = new();
+    private readonly ChatHistoryService _chatHistoryService = new();
 
     private string _configPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Termox", "connections.json");
     private string _bookmarksPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Termox", "bookmarks.json");
@@ -408,10 +518,34 @@ public class MainViewModel : INotifyPropertyChanged
     {
         SavedConnections.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasSavedConnections));
         Bookmarks.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasBookmarks));
-        Tabs.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasTabs));
+        Tabs.CollectionChanged += (_, e) =>
+        {
+            OnPropertyChanged(nameof(HasTabs));
+            // A tab pinned into the split pane can be closed from the main strip (or any
+            // other close path) without going through CloseSplitViewCommand — drop the
+            // dangling reference instead of leaving the pane showing a removed tab.
+            if (e.Action == NotifyCollectionChangedAction.Remove && e.OldItems != null && SecondaryTab != null &&
+                e.OldItems.Cast<ITabViewModel>().Contains(SecondaryTab))
+            {
+                SecondaryTab = null;
+            }
+        };
 
         ConnectCommand = new RelayCommand(() => Connect());
         DisconnectCommand = new RelayCommand(() => SelectedTab?.DisconnectCommand.Execute(null));
+        // No CanExecute predicate — RelayCommand never re-evaluates it on its own (no
+        // property-change wiring), so the button's IsEnabled is bound directly to
+        // CanGoBackTabs/CanGoForwardTabs in XAML instead; GoBackTabs/GoForwardTabs already
+        // no-op safely if there's nothing to navigate to.
+        GoBackCommand = new RelayCommand(GoBackTabs);
+        GoForwardCommand = new RelayCommand(GoForwardTabs);
+        Tabs.CollectionChanged += (_, e) =>
+        {
+            if (e.OldItems != null)
+                foreach (ITabViewModel removed in e.OldItems)
+                    _tabHistory.Remove(removed);
+            RefreshTabHistoryState();
+        };
         ShowConnectionModalCommand = new RelayCommand(() => { IsConnectionModalVisible = true; TestStatus = ""; TestStatusColor = "#5bc0de"; IsTestSuccessful = false; });
         HideConnectionModalCommand = new RelayCommand(() => IsConnectionModalVisible = false);
         SaveConnectionCommand = new RelayCommand(SaveConnection);
@@ -425,9 +559,42 @@ public class MainViewModel : INotifyPropertyChanged
         RequestCloseTabCommand = new RelayCommand<ITabViewModel>(t => { TabToClose = t; IsCloseConfirmModalVisible = true; });
         ConfirmCloseTabCommand = new RelayCommand(ConfirmCloseTab);
         CancelCloseTabCommand = new RelayCommand(() => IsCloseConfirmModalVisible = false);
+        RequestCloseAllTabsCommand = new RelayCommand(() => BeginBulkClose(
+            "Close All Tabs?",
+            () => $"Are you sure you want to close all {Tabs.Count} open tabs? Any unsaved terminal or SFTP sessions will be disconnected.",
+            () => Tabs.ToList()));
+        RequestCloseOtherTabsCommand = new RelayCommand<ITabViewModel>(t =>
+        {
+            if (t == null) return;
+            BeginBulkClose(
+                "Close Other Tabs?",
+                () => $"Close the other {Tabs.Count(x => x != t)} tab(s), keeping '{t.Title}' open?",
+                () => Tabs.Where(x => x != t).ToList());
+        });
+        RequestCloseTabsToLeftCommand = new RelayCommand<ITabViewModel>(t =>
+        {
+            if (t == null) return;
+            BeginBulkClose(
+                "Close Tabs to the Left?",
+                () => $"Close the {Math.Max(0, Tabs.IndexOf(t))} tab(s) to the left of '{t.Title}'?",
+                () => { var idx = Tabs.IndexOf(t); return idx <= 0 ? new List<ITabViewModel>() : Tabs.Take(idx).ToList(); });
+        });
+        RequestCloseTabsToRightCommand = new RelayCommand<ITabViewModel>(t =>
+        {
+            if (t == null) return;
+            BeginBulkClose(
+                "Close Tabs to the Right?",
+                () => $"Close the {Math.Max(0, Tabs.Count - Tabs.IndexOf(t) - 1)} tab(s) to the right of '{t.Title}'?",
+                () => { var idx = Tabs.IndexOf(t); return idx < 0 ? new List<ITabViewModel>() : Tabs.Skip(idx + 1).ToList(); });
+        });
+        ConfirmBulkCloseCommand = new RelayCommand(ConfirmBulkClose);
+        CancelBulkCloseCommand = new RelayCommand(() => IsBulkCloseConfirmModalVisible = false);
+        OpenInSplitViewCommand = new RelayCommand<ITabViewModel>(t => SecondaryTab = t);
+        CloseSplitViewCommand = new RelayCommand(() => SecondaryTab = null);
         TestConnectionCommand = new RelayCommand(TestConnection);
         ConfirmHostKeyCommand = new RelayCommand(ConfirmHostKey);
         RejectHostKeyCommand = new RelayCommand(() => IsHostKeyConfirmModalVisible = false);
+        SelectSidebarSectionCommand = new RelayCommand<string>(SelectSidebarSection);
         AddBookmarkCommand = new RelayCommand<string>(AddBookmark);
         RemoveBookmarkCommand = new RelayCommand<BookmarkModel>(RequestRemoveBookmark);
         ConfirmRemoveBookmarkCommand = new RelayCommand(ConfirmRemoveBookmark);
@@ -448,8 +615,14 @@ public class MainViewModel : INotifyPropertyChanged
         OpenFingerprintTabCommand = new RelayCommand(OpenFingerprintTab);
         OpenDnsTabCommand = new RelayCommand(OpenDnsTab);
         OpenServerStatsTabCommand = new RelayCommand(OpenServerStatsTab);
+        OpenCertbotTabCommand = new RelayCommand(OpenCertbotTab);
+        OpenServerTransferTabCommand = new RelayCommand(OpenServerTransferTab);
+        OpenSystemdServiceTabCommand = new RelayCommand(OpenSystemdServiceTab);
+        OpenChatTabCommand = new RelayCommand(OpenChatTab);
         ShowAboutDialogCommand = new RelayCommand(() => IsAboutDialogVisible = true);
+        ShowUserManualDialogCommand = new RelayCommand(() => IsUserManualDialogVisible = true);
 
+        BuildToolMenuItems();
         LoadConnections();
         RefreshRecentlyUsedSessions();
         LoadBookmarks();
@@ -551,52 +724,70 @@ public class MainViewModel : INotifyPropertyChanged
             return;
         }
 
-        TestStatus = "Testing connection...";
         TestStatusColor = "#f39c12";
         IsTestSuccessful = false;
 
-        try
+        // A brand-new host's key isn't known yet, so the first attempt always gets
+        // rejected the instant ConfirmNewHostFingerprint posts the confirm modal and
+        // returns false without waiting for it — same as the real Terminal-tab connect
+        // path, which is why that one retries (ConnectionRetryCount times, ConnectionRetryDelayMs
+        // apart) instead of failing outright on attempt one. This mirrors that so the user
+        // gets a real window to click Confirm before a later attempt gives up for good.
+        var maxAttempts = Math.Max(1, ConnectionRetryCount);
+        Exception? lastException = null;
+
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
         {
-            int portNumber = parsedPort;
+            TestStatus = attempt == 1 ? "Testing connection..." : $"Testing connection (attempt {attempt}/{maxAttempts})...";
 
-            var testClient = SshConnectionFactory.CreateSshClient(
-                Host ?? "", portNumber, Username ?? "", Password ?? "",
-                PrivateKeyPath ?? "", PrivateKeyPassphrase);
-
-            SshSecurity.ConfigureHostKeyPolicy(testClient, HostKeyFingerprint,
-                fingerprint => Dispatcher.UIThread.Post(() => HostKeyFingerprint = fingerprint),
-                fingerprint => ConfirmNewHostFingerprint(fingerprint, Host ?? ""));
-
-            var connectTask = Task.Run(() =>
+            try
             {
-                try { testClient.ConnectAsync(CancellationToken.None).GetAwaiter().GetResult(); }
-                finally
+                int portNumber = parsedPort;
+
+                var testClient = SshConnectionFactory.CreateSshClient(
+                    Host ?? "", portNumber, Username ?? "", Password ?? "",
+                    PrivateKeyPath ?? "", PrivateKeyPassphrase);
+
+                SshSecurity.ConfigureHostKeyPolicy(testClient, HostKeyFingerprint,
+                    fingerprint => Dispatcher.UIThread.Post(() => HostKeyFingerprint = fingerprint),
+                    fingerprint => ConfirmNewHostFingerprint(fingerprint, Host ?? ""));
+
+                var connectTask = Task.Run(() =>
                 {
-                    try { testClient.Disconnect(); } catch { }
-                    testClient.Dispose();
-                }
-            });
+                    try { testClient.ConnectAsync(CancellationToken.None).GetAwaiter().GetResult(); }
+                    finally
+                    {
+                        try { testClient.Disconnect(); } catch { }
+                        testClient.Dispose();
+                    }
+                });
 
-            var completed = await Task.WhenAny(connectTask, Task.Delay(TimeSpan.FromSeconds(10)));
-            if (completed != connectTask)
-            {
-                TestStatus = "Test timed out after 10 seconds.";
-                TestStatusColor = "#f39c12";
+                var completed = await Task.WhenAny(connectTask, Task.Delay(TimeSpan.FromSeconds(10)));
+                if (completed != connectTask)
+                {
+                    TestStatus = "Test timed out after 10 seconds.";
+                    TestStatusColor = "#f39c12";
+                    return;
+                }
+
+                await connectTask;
+
+                TestStatus = "Test Successful!";
+                TestStatusColor = "#4caf50";
+                IsTestSuccessful = true;
                 return;
             }
-
-            await connectTask;
-
-            TestStatus = "Test Successful!";
-            TestStatusColor = "#4caf50";
-            IsTestSuccessful = true;
+            catch (Exception ex)
+            {
+                lastException = ex;
+                if (attempt < maxAttempts)
+                    await Task.Delay(Math.Max(0, ConnectionRetryDelayMs));
+            }
         }
-        catch (Exception ex)
-        {
-            TestStatus = "Test Failed: " + ex.Message;
-            TestStatusColor = "#f44336";
-            IsTestSuccessful = false;
-        }
+
+        TestStatus = "Test Failed: " + (lastException?.Message ?? "Unknown error.");
+        TestStatusColor = "#f44336";
+        IsTestSuccessful = false;
     }
 
     private bool ConfirmNewHostFingerprint(string fingerprint, string host)
@@ -736,6 +927,28 @@ public class MainViewModel : INotifyPropertyChanged
         SaveCurrentSessions();
     }
 
+    private void BeginBulkClose(string title, Func<string> messageFactory, Func<List<ITabViewModel>> selector)
+    {
+        BulkCloseTitle = title;
+        BulkCloseMessage = messageFactory();
+        _bulkCloseSelector = selector;
+        IsBulkCloseConfirmModalVisible = true;
+    }
+
+    private void ConfirmBulkClose()
+    {
+        // Each tab type's own CloseTabCommand already handles its proper teardown
+        // (e.g. SftpTabViewModel disconnects async before removing itself) — snapshot
+        // first since every one of these removes itself from Tabs as it runs.
+        var toClose = _bulkCloseSelector?.Invoke() ?? new List<ITabViewModel>();
+        foreach (var tab in toClose)
+            tab.CloseTabCommand.Execute(null);
+
+        IsBulkCloseConfirmModalVisible = false;
+        _bulkCloseSelector = null;
+        SaveCurrentSessions();
+    }
+
     private void Connect(string? profileId = null, string? initialCommand = null)
     {
         if (string.IsNullOrWhiteSpace(Host) || string.IsNullOrWhiteSpace(Username) ||
@@ -783,12 +996,75 @@ public class MainViewModel : INotifyPropertyChanged
     }
 
     public ICommand ShowAboutDialogCommand { get; }
+    public ICommand ShowUserManualDialogCommand { get; }
 
     private bool _isAboutDialogVisible;
     public bool IsAboutDialogVisible
     {
         get => _isAboutDialogVisible;
         set { _isAboutDialogVisible = value; OnPropertyChanged(); }
+    }
+
+    private bool _isUserManualDialogVisible;
+    public bool IsUserManualDialogVisible
+    {
+        get => _isUserManualDialogVisible;
+        set { _isUserManualDialogVisible = value; OnPropertyChanged(); }
+    }
+
+    public ICommand SelectSidebarSectionCommand { get; }
+
+    private bool _isSessionsSectionActive = true;
+    public bool IsSessionsSectionActive
+    {
+        get => _isSessionsSectionActive;
+        set { _isSessionsSectionActive = value; OnPropertyChanged(); }
+    }
+
+    private bool _isBookmarksSectionActive;
+    public bool IsBookmarksSectionActive
+    {
+        get => _isBookmarksSectionActive;
+        set { _isBookmarksSectionActive = value; OnPropertyChanged(); }
+    }
+
+    private bool _isToolsSectionActive;
+    public bool IsToolsSectionActive
+    {
+        get => _isToolsSectionActive;
+        set { _isToolsSectionActive = value; OnPropertyChanged(); }
+    }
+
+    private bool _isChatSectionActive;
+    public bool IsChatSectionActive
+    {
+        get => _isChatSectionActive;
+        set { _isChatSectionActive = value; OnPropertyChanged(); }
+    }
+
+    private bool _isSidebarPanelVisible = true;
+    public bool IsSidebarPanelVisible
+    {
+        get => _isSidebarPanelVisible;
+        set { _isSidebarPanelVisible = value; OnPropertyChanged(); }
+    }
+
+    private string? _activeSidebarSection = "Sessions";
+
+    private void SelectSidebarSection(string? section)
+    {
+        if (section == _activeSidebarSection)
+        {
+            IsSidebarPanelVisible = !IsSidebarPanelVisible;
+            return;
+        }
+
+        _activeSidebarSection = section;
+        IsSidebarPanelVisible = true;
+        IsSessionsSectionActive = section == "Sessions";
+        IsBookmarksSectionActive = section == "Bookmarks";
+        IsToolsSectionActive = section == "Tools";
+        IsChatSectionActive = section == "Chat";
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -1185,6 +1461,99 @@ public class MainViewModel : INotifyPropertyChanged
         }, SavedConnections);
         Tabs.Add(statsTab);
         SelectedTab = statsTab;
+    }
+
+    private void OpenCertbotTab()
+    {
+        var certbotTab = new CertbotTabViewModel(tab =>
+        {
+            Tabs.Remove(tab);
+            SaveCurrentSessions();
+        }, SavedConnections);
+        Tabs.Add(certbotTab);
+        SelectedTab = certbotTab;
+    }
+
+    private void OpenServerTransferTab()
+    {
+        var transferTab = new ServerTransferTabViewModel(tab =>
+        {
+            Tabs.Remove(tab);
+            SaveCurrentSessions();
+        }, SavedConnections);
+        Tabs.Add(transferTab);
+        SelectedTab = transferTab;
+    }
+
+    private void OpenSystemdServiceTab()
+    {
+        var serviceTab = new SystemdServiceTabViewModel(tab =>
+        {
+            Tabs.Remove(tab);
+            SaveCurrentSessions();
+        }, SavedConnections);
+        Tabs.Add(serviceTab);
+        SelectedTab = serviceTab;
+    }
+
+    /// <summary>
+    /// Builds the fixed catalog of sidebar Tools rows (id/title/description/icon/command),
+    /// then applies whatever order the user previously dragged them into (falls back to
+    /// this catalog order itself on first run / no saved order / a corrupted save file).
+    /// </summary>
+    private void BuildToolMenuItems()
+    {
+        var catalog = new List<ToolMenuItem>
+        {
+            new() { Id = "PortScanner", Title = "Port Scanner", Description = "Check open TCP ports on a host", IconGlyph = "", Command = OpenPortScannerTabCommand },
+            new() { Id = "PingTest", Title = "Ping Test", Description = "Measure reachability and latency", IconGlyph = "", Command = OpenPingTestTabCommand },
+            new() { Id = "SshKeyGenerator", Title = "SSH Key Generator", Description = "Create new OpenSSH key pairs", IconGlyph = "", Command = OpenSshKeyGeneratorTabCommand },
+            new() { Id = "ConnectionTester", Title = "Connection Tester", Description = "Batch-test all saved connections", IconGlyph = "", Command = OpenConnectionTesterTabCommand },
+            new() { Id = "SshEndpointTest", Title = "SSH Endpoint Test", Description = "Check SSH endpoint reachability", IconGlyph = "", Command = OpenSshEndpointTestTabCommand },
+            new() { Id = "GpgKeyManager", Title = "GPG Key Manager", Description = "Manage, import, and export GPG keys", IconGlyph = "", Command = OpenGpgTabCommand },
+            new() { Id = "FingerprintUtilities", Title = "Fingerprint Utilities", Description = "Hash and compare file/text fingerprints", IconGlyph = "", Command = OpenFingerprintTabCommand },
+            new() { Id = "DnsInspector", Title = "DNS Inspector", Description = "Query DNS records for any domain", IconGlyph = "", Command = OpenDnsTabCommand },
+            new() { Id = "ServerStats", Title = "Server Stats", Description = "CPU, memory, and disk stats over SSH", IconGlyph = "", Command = OpenServerStatsTabCommand },
+            new() { Id = "Certbot", Title = "Certbot", Description = "Issue and renew TLS certs via certbot over SSH", IconGlyph = "", Command = OpenCertbotTabCommand },
+            new() { Id = "ServerTransfer", Title = "Server Transfer", Description = "Move a file directly between two servers", IconGlyph = "", Command = OpenServerTransferTabCommand },
+            new() { Id = "SystemdService", Title = "Service Manager", Description = "Start, stop, restart systemd services over SSH", IconGlyph = "", Command = OpenSystemdServiceTabCommand }
+        };
+
+        var savedOrder = _toolsOrderService.Load();
+        var resolvedOrder = ToolsOrderService.ApplySavedOrder(catalog.Select(t => t.Id).ToList(), savedOrder);
+        var byId = catalog.ToDictionary(t => t.Id);
+
+        ToolMenuItems.Clear();
+        foreach (var id in resolvedOrder)
+            ToolMenuItems.Add(byId[id]);
+    }
+
+    /// <summary>
+    /// Moves a Tools-list row to a new position (drag-and-drop reorder) and persists the
+    /// result. Called from DragOver each time the dragged row crosses into a new slot (so
+    /// the list visually reflows live during the drag), not on every raw pointer-move
+    /// event — bounded by how many rows get crossed in one drag, so the extra disk writes
+    /// are negligible.
+    /// </summary>
+    public void ReorderToolMenuItem(int fromIndex, int toIndex)
+    {
+        if (fromIndex == toIndex || fromIndex < 0 || fromIndex >= ToolMenuItems.Count ||
+            toIndex < 0 || toIndex >= ToolMenuItems.Count)
+            return;
+
+        ToolMenuItems.Move(fromIndex, toIndex);
+        _toolsOrderService.Save(ToolMenuItems.Select(t => t.Id));
+    }
+
+    private void OpenChatTab()
+    {
+        var chatTab = new ChatTabViewModel(tab =>
+        {
+            Tabs.Remove(tab);
+            SaveCurrentSessions();
+        }, SavedConnections, _chatSettingsService, _chatHistoryService);
+        Tabs.Add(chatTab);
+        SelectedTab = chatTab;
     }
 
     private void RememberHostKey(SshConnectionProfile profile, string fingerprint)

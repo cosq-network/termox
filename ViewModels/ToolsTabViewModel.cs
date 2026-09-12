@@ -517,11 +517,23 @@ public class ToolsTabViewModel : INotifyPropertyChanged, ITabViewModel
         {
             try
             {
+                // Accept "host:port" in the same field — SSH isn't always on the default
+                // port (e.g. a local Docker container's SSH mapped to a host port like 2222),
+                // and there was previously no way to test anything but port 22.
+                var host = SpeedTestHost;
+                var port = 22;
+                var colonIndex = host.LastIndexOf(':');
+                if (colonIndex > 0 && int.TryParse(host[(colonIndex + 1)..], out var parsedPort))
+                {
+                    host = host[..colonIndex];
+                    port = parsedPort;
+                }
+
                 var stopwatch = Stopwatch.StartNew();
                 using var client = new TcpClient();
-                await client.ConnectAsync(SpeedTestHost, 22).WaitAsync(TimeSpan.FromSeconds(10));
+                await client.ConnectAsync(host, port).WaitAsync(TimeSpan.FromSeconds(10));
                 stopwatch.Stop();
-                var result = $"SSH endpoint reachable\nHost: {SpeedTestHost}\nPort: 22\nConnection latency: {stopwatch.ElapsedMilliseconds} ms\n\nAuthenticated SFTP transfer benchmarking requires an active SFTP session.";
+                var result = $"SSH endpoint reachable\nHost: {host}\nPort: {port}\nConnection latency: {stopwatch.ElapsedMilliseconds} ms\n\nAuthenticated SFTP transfer benchmarking requires an active SFTP session.";
                 Dispatcher.UIThread.Post(() => SpeedTestResult = result);
             }
             catch (Exception ex)
